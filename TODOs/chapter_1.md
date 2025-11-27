@@ -7,144 +7,144 @@
 
 ### **1. Base environnement & squelette projet**
 
-* [ ] Vérifier que la structure actuelle du projet est propre et cohérente avec les docs (core, cli, server, web, config).
-* [ ] Vérifier l’environnement Python :
+* [x] Vérifier que la structure actuelle du projet est propre et cohérente avec les docs (core, cli, server, web, config).
+* [x] Vérifier l’environnement Python :
 
-  * [ ] `.venv` fonctionnel
-  * [ ] `requirements.txt` minimal
-* [ ] Ajouter un `requirements-dev.txt` si besoin (pytest, outils de dev).
-* [ ] S’assurer que `python -m jupiter.cli.main --help` fonctionne.
+  * [x] `.venv` fonctionnel
+  * [x] `requirements.txt` minimal
+* [x] Ajouter un `requirements-dev.txt` si besoin (pytest, outils de dev).
+* [x] S’assurer que `python -m jupiter.cli.main --help` fonctionne.
 
 ---
 
 ### **2. Scanner & format de rapport v1 (fondations)**
 
-* [ ] Stabiliser l’implémentation de `scan` dans `jupiter/core/`.
-* [ ] Définir et documenter le **schéma JSON** de rapport v1 :
+* [x] Stabiliser l’implémentation de `scan` dans `jupiter/core/`.
+* [x] Définir et documenter le **schéma JSON** de rapport v1 :
 
-  * [ ] ajouter un champ `version`
-  * [ ] décrire les champs obligatoires (chemin, taille, dates, type de fichier, etc.).
-* [ ] S’assurer que le rapport est :
+  * [x] ajouter un champ `version`
+  * [x] décrire les champs obligatoires (chemin, taille, dates, type de fichier, etc.).
+* [x] S’assurer que le rapport est :
 
-  * [ ] stable,
-  * [ ] lisible,
-  * [ ] prêt à être enrichi (analyse Python, dynamique, etc.).
-* [ ] Mettre à jour `analyze` pour reposer proprement sur ce format.
+  * [x] stable,
+  * [x] lisible,
+  * [x] prêt à être enrichi (analyse Python, dynamique, etc.).
+* [x] Mettre à jour `analyze` pour reposer proprement sur ce format.
 
 ---
 
 ### **3. CLI – Cohérence & UX de base**
 
-* [ ] Repasser sur `jupiter/cli/main.py` :
+* [x] Repasser sur `jupiter/cli/main.py` :
 
-  * [ ] aligner toutes les commandes avec le manuel utilisateur actuel.
-* [ ] Vérifier les options :
+  * [x] aligner toutes les commandes avec le manuel utilisateur actuel.
+* [x] Vérifier les options :
 
-  * [ ] `scan <racine> [...]`
-  * [ ] `analyze <racine> [...]`
-  * [ ] `server <racine> [...]`
-  * [ ] `gui <racine> [...]`
-* [ ] S’assurer que :
+  * [x] `scan <racine> [...]`
+  * [x] `analyze <racine> [...]`
+  * [x] `server <racine> [...]`
+  * [x] `gui <racine> [...]`
+* [x] S’assurer que :
 
-  * [ ] `--ignore`, `--show-hidden` et `.jupiterignore` se combinent correctement.
-  * [ ] les messages d’aide (`--help`) sont clairs.
-* [ ] Remplacer les `print()` de debug par du **logging** quand c’est pertinent.
+  * [x] `--ignore`, `--show-hidden` et `.jupiterignore` se combinent correctement.
+  * [x] les messages d’aide (`--help`) sont clairs.
+* [x] Remplacer les `print()` de debug par du **logging** quand c’est pertinent.
 
 ---
 
 ### **4. Système de configuration (config/)**
 
-* [ ] Introduire une gestion de config centralisée dans `jupiter/config/` :
+* [x] Introduire une gestion de config centralisée dans `jupiter/config/` :
 
-  * [ ] support YAML/JSON (choisir un format principal).
-  * [ ] structurer les clés : `project_root`, `server`, `meeting`, `ui`, etc.
-* [ ] Chargement de la config :
+  * [x] support YAML/JSON (choisir un format principal).
+  * [x] structurer les clés : `project_root`, `server`, `meeting`, `ui`, etc.
+* [x] Chargement de la config :
 
-  * [ ] au lancement de la CLI,
-  * [ ] par défaut + override via arguments CLI.
-* [ ] Préparer les champs pour Meeting :
+  * [x] au lancement de la CLI,
+  * [x] par défaut + override via arguments CLI.
+* [x] Préparer les champs pour Meeting :
 
-  * [ ] `meeting.enabled`
-  * [ ] `meeting.deviceKey`
-* [ ] Prévoir un champ pour **thème UI** et **langue** (même si GUI ne l’utilise pas encore).
+  * [x] `meeting.enabled`
+  * [x] `meeting.deviceKey`
+* [x] Prévoir un champ pour **thème UI** et **langue** (même si GUI ne l’utilise pas encore).
 
 ---
 
 ### **5. Serveur / API – Fondations**
 
-* [ ] Brancher un framework ASGI léger (ex : FastAPI) dans `jupiter/server/api.py`.
-* [ ] Définir les premiers endpoints REST :
+* [x] Brancher un framework ASGI léger (ex : FastAPI) dans `jupiter/server/api.py`.
+* [x] Définir les premiers endpoints REST :
 
-  * [ ] `GET /health` → état du serveur
-  * [ ] `POST /scan` → lance un scan sur `<racine>` et renvoie un rapport
-  * [ ] `GET /analyze` → renvoie un résumé à partir du rapport
-* [ ] Intégrer le système de config :
+  * [x] `GET /health` → état du serveur
+  * [x] `POST /scan` → lance un scan sur `<racine>` et renvoie un rapport
+  * [x] `GET /analyze` → renvoie un résumé à partir du rapport
+* [x] Intégrer le système de config :
 
-  * [ ] host/port
-  * [ ] racine projet par défaut
-* [ ] Mettre en place un **logging serveur** propre (requêtes, erreurs).
+  * [x] host/port
+  * [x] racine projet par défaut
+* [x] Mettre en place un **logging serveur** propre (requêtes, erreurs).
 
 ---
 
 ### **6. GUI – Connexion au backend**
 
-* [ ] Adapter `gui` pour qu’il serve la web UI et parle à l’API :
+* [x] Adapter `gui` pour qu’il serve la web UI et parle à l’API :
 
-  * [ ] remplacer progressivement le fonctionnement “importer un JSON local” par un mode connecté à `/scan`.
-* [ ] Dashboard :
+  * [x] remplacer progressivement le fonctionnement “importer un JSON local” par un mode connecté à `/scan`.
+* [x] Dashboard :
 
-  * [ ] afficher les KPI à partir du rapport reçu de l’API
-  * [ ] montrer la date du dernier scan
-* [ ] Bouton “Scan” :
+  * [x] afficher les KPI à partir du rapport reçu de l’API
+  * [x] montrer la date du dernier scan
+* [x] Bouton “Scan” :
 
-  * [ ] envoyer une requête à l’API `/scan`
-  * [ ] afficher un état “scan en cours”
-  * [ ] rafraîchir les vues dès que le rapport est dispo.
-* [ ] Garder la possibilité de charger un rapport JSON local en mode fallback/offline si utile.
+  * [x] envoyer une requête à l’API `/scan`
+  * [x] afficher un état “scan en cours”
+  * [x] rafraîchir les vues dès que le rapport est dispo.
+* [x] Garder la possibilité de charger un rapport JSON local en mode fallback/offline si utile.
 
 ---
 
 ### **7. Analyse Python – Langage prioritaire**
 
-* [ ] Créer `jupiter/core/language/python.py`.
-* [ ] Ajouter :
+* [x] Créer `jupiter/core/language/python.py`.
+* [x] Ajouter :
 
-  * [ ] extraction des fonctions définies par fichier,
-  * [ ] extraction des fonctions appelées,
-  * [ ] extraction des imports de modules.
-* [ ] Enrichir le rapport JSON :
+  * [x] extraction des fonctions définies par fichier,
+  * [x] extraction des fonctions appelées,
+  * [x] extraction des imports de modules.
+* [x] Enrichir le rapport JSON :
 
-  * [ ] ajouter une section `language.python` avec détails par fichier.
-* [ ] Commencer une **première heuristique** :
+  * [x] ajouter une section `language.python` avec détails par fichier.
+* [x] Commencer une **première heuristique** :
 
-  * [ ] liste de fonctions potentiellement inutilisées (pure statique pour commencer).
+  * [x] liste de fonctions potentiellement inutilisées (pure statique pour commencer).
 
 ---
 
 ### **8. Analyse avancée & agrégation**
 
-* [ ] Modifier `analyze` pour prendre en compte l’analyse Python :
+* [x] Modifier `analyze` pour prendre en compte l’analyse Python :
 
-  * [ ] statistiques sur le nombre de fonctions, ratio utilisées/non utilisées.
-* [ ] Ajouter une liste de **“hotspots”** (gros fichiers, beaucoup de fonctions, etc.).
-* [ ] Préparer les structures pour les futures analyses (qualité, duplication, etc.) sans encore les implémenter.
+  * [x] statistiques sur le nombre de fonctions, ratio utilisées/non utilisées.
+* [x] Ajouter une liste de **“hotspots”** (gros fichiers, beaucoup de fonctions, etc.).
+* [x] Préparer les structures pour les futures analyses (qualité, duplication, etc.) sans encore les implémenter.
 
 ---
 
 ### **9. Watch & Run – Bases de l’analyse dynamique**
 
-* [ ] Implémenter dans `jupiter/core/runner.py` :
+* [x] Implémenter dans `jupiter/core/runner.py` :
 
-  * [ ] exécution d’une commande (`run`) avec capture des logs.
-  * [ ] base pour collecter événements d’exécution (même si stub au début).
-* [ ] Implémenter `jupiter watch` côté CLI :
+  * [x] exécution d’une commande (`run`) avec capture des logs.
+  * [x] base pour collecter événements d’exécution (même si stub au début).
+* [x] Implémenter `jupiter watch` côté CLI :
 
-  * [ ] option `watch` qui, pour l’instant, se contente de surveiller les fichiers (file watcher) et logue les changements.
-* [ ] Sur le serveur :
+  * [x] option `watch` qui, pour l’instant, se contente de surveiller les fichiers (file watcher) et logue les changements.
+* [x] Sur le serveur :
 
-  * [ ] définir un endpoint `/run` (exécuter une commande côté backend)
-  * [ ] prévoir `ws.py` pour diffuser les logs en direct via WebSocket (même si stub).
-* [ ] Préparer la place dans le rapport JSON pour les métadonnées d’exécution (ex: `dynamic.calls`, même vide au début).
+  * [x] définir un endpoint `/run` (exécuter une commande côté backend)
+  * [x] prévoir `ws.py` pour diffuser les logs en direct via WebSocket (même si stub).
+* [x] Préparer la place dans le rapport JSON pour les métadonnées d’exécution (ex: `dynamic.calls`, même vide au début).
 
 ---
 
@@ -171,19 +171,19 @@
 
 ### **11. i18n & Thèmes UI**
 
-* [ ] Mettre en place les fichiers de langue dans `jupiter/web/lang/` :
+* [x] Mettre en place les fichiers de langue dans `jupiter/web/lang/` :
 
-  * [ ] `en.json`
-  * [ ] `fr.json`
-* [ ] Modifier la GUI pour utiliser les clés de traduction à la place des textes en dur.
-* [ ] Ajouter un sélecteur de langue dans le panneau Paramètres :
+  * [x] `en.json`
+  * [x] `fr.json`
+* [x] Modifier la GUI pour utiliser les clés de traduction à la place des textes en dur.
+* [x] Ajouter un sélecteur de langue dans le panneau Paramètres :
 
-  * [ ] appliquer le changement sans recharger toute l’app si possible.
-* [ ] Implémenter le système de thème :
+  * [x] appliquer le changement sans recharger toute l’app si possible.
+* [x] Implémenter le système de thème :
 
-  * [ ] dark par défaut,
-  * [ ] switch vers light,
-  * [ ] persistance du choix (localStorage ou similaire).
+  * [x] dark par défaut,
+  * [x] switch vers light,
+  * [x] persistance du choix (localStorage ou similaire).
 
 ---
 

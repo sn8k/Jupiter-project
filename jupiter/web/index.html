@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Jupiter – Interface</title>
+    <title data-i18n="app_title">Jupiter – Interface</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -13,30 +13,30 @@
           <span class="logo" aria-hidden="true">🪐</span>
           <div>
             <p class="eyebrow">Jupiter</p>
-            <h1>Cartographie &amp; Observabilité</h1>
-            <p class="muted">Interface sombre, minimaliste et extensible</p>
+            <h1 data-i18n="main_title">Cartographie &amp; Observabilité</h1>
+            <p class="muted" data-i18n="main_subtitle">Interface sombre, minimaliste et extensible</p>
           </div>
         </div>
         <div class="header-actions">
           <div class="context">
-            <p class="label">Racine servie</p>
-            <p class="value" id="root-path">Chargement…</p>
+            <p class="label" data-i18n="served_root">Racine servie</p>
+            <p class="value" id="root-path" data-i18n="loading">Chargement…</p>
           </div>
           <div class="actions">
-            <button class="ghost" data-action="load-sample">Exemple</button>
-            <button class="primary" data-action="start-scan">Scan</button>
-            <button class="primary" data-action="start-watch">Watch</button>
+            <button class="ghost" data-action="load-sample" data-i18n="sample_button">Exemple</button>
+            <button class="primary" data-action="start-scan" data-i18n="scan_button">Scan</button>
+            <button class="primary" data-action="start-watch" data-i18n="watch_button">Watch</button>
           </div>
         </div>
       </header>
 
       <div class="app-body">
         <nav class="app-nav" aria-label="Navigation principale">
-          <button class="nav-btn active" data-view="dashboard">Dashboard</button>
-          <button class="nav-btn" data-view="analysis">Analyse</button>
-          <button class="nav-btn" data-view="files">Fichiers</button>
-          <button class="nav-btn" data-view="settings">Paramètres</button>
-          <button class="nav-btn" data-view="plugins">Plugins</button>
+          <button class="nav-btn active" data-view="dashboard" data-i18n="dashboard_view">Dashboard</button>
+          <button class="nav-btn" data-view="analysis" data-i18n="analysis_view">Analyse</button>
+          <button class="nav-btn" data-view="files" data-i18n="files_view">Fichiers</button>
+          <button class="nav-btn" data-view="settings" data-i18n="settings_view">Paramètres</button>
+          <button class="nav-btn" data-view="plugins" data-i18n="plugins_view">Plugins</button>
         </nav>
 
         <main class="content">
@@ -45,9 +45,9 @@
               <section class="panel">
                 <header>
                   <div>
-                    <p class="eyebrow">Panorama</p>
-                    <h2>État rapide du projet</h2>
-                    <p class="muted">Statut, progression et licence Meeting.</p>
+                    <p class="eyebrow" data-i18n="d_pano_eyebrow">Panorama</p>
+                    <h2 data-i18n="d_pano_title">État rapide du projet</h2>
+                    <p class="muted" data-i18n="d_pano_subtitle">Statut, progression et licence Meeting.</p>
                   </div>
                   <div class="badges" id="status-badges"></div>
                 </header>
@@ -57,190 +57,59 @@
               <section class="panel" id="upload-panel">
                 <header>
                   <div>
-                    <p class="eyebrow">Point d'entrée</p>
-                    <h2>Charger un rapport</h2>
-                    <p class="muted">Déposez un fichier <code>.json</code> généré par <code>jupiter scan</code> ou utilisez l'exemple.</p>
+                    <p class="eyebrow" data-i18n="d_upload_eyebrow">Point d'entrée</p>
+                    <h2 data-i18n="d_upload_title">Charger un rapport</h2>
+                    <p class="muted" data-i18n="d_upload_subtitle">Déposez un fichier <code>.json</code> généré par <code>jupiter scan</code> ou utilisez l'exemple.</p>
                   </div>
                 </header>
                 <div class="uploader" id="dropzone">
                   <div>
-                    <p class="muted">Glissez un rapport ou cliquez pour parcourir.</p>
-                    <p class="small">Compatible avec les scans statiques et les futures analyses incrémentales.</p>
+                    <p class="muted" data-i18n="d_upload_prompt">Glissez un rapport ou cliquez pour parcourir.</p>
+                    <p class="small" data-i18n="d_upload_compat">Compatible avec les scans statiques et les futures analyses incrémentales.</p>
                   </div>
                   <input type="file" id="report-input" accept="application/json" />
                 </div>
                 <div class="upload-meta" id="upload-meta"></div>
               </section>
             </div>
-
-            <section class="panel">
-              <header>
-                <div>
-                  <p class="eyebrow">Actions rapides</p>
-                  <h2>Scan, watch &amp; run</h2>
-                  <p class="muted">Déclenchez un scan ou préparez l'exécution. Les appels non câblés utilisent des placeholders.</p>
-                </div>
-              </header>
-              <div class="action-grid">
-                <button class="action-card" data-action="start-scan">
-                  <div class="icon">📡</div>
-                  <div>
-                    <p class="label">Scan</p>
-                    <p class="value">Analyser la racine</p>
-                  </div>
-                </button>
-                <button class="action-card" data-action="start-watch">
-                  <div class="icon">🛰️</div>
-                  <div>
-                    <p class="label">Watch</p>
-                    <p class="value">Suivi temps réel</p>
-                  </div>
-                </button>
-                <button class="action-card" data-action="start-run">
-                  <div class="icon">▶️</div>
-                  <div>
-                    <p class="label">Run</p>
-                    <p class="value">Exécuter une commande</p>
-                  </div>
-                </button>
-                <button class="action-card" data-action="open-settings">
-                  <div class="icon">⚙️</div>
-                  <div>
-                    <p class="label">Réglages</p>
-                    <p class="value">Licence &amp; langue</p>
-                  </div>
-                </button>
-              </div>
-              <div class="live-stream" id="live-stream" aria-live="polite"></div>
-            </section>
-
-            <section class="panel">
-              <header>
-                <div>
-                  <p class="eyebrow">Alertes</p>
-                  <h2>Problèmes détectés</h2>
-                  <p class="muted">Liste non exhaustive des alertes. Les données dynamiques seront branchées ultérieurement.</p>
-                </div>
-              </header>
-              <ul class="alert-list" id="alert-list"></ul>
-            </section>
-          </section>
-
-          <section class="view hidden" data-view="analysis" aria-label="Vue analyse">
-            <section class="panel">
-              <header>
-                <div>
-                  <p class="eyebrow">Synthèse</p>
-                  <h2>Indicateurs analytiques</h2>
-                  <p class="muted">Extensions dominantes, fichiers volumineux, horodatage du dernier scan.</p>
-                </div>
-              </header>
-              <div class="stats-grid" id="analysis-stats"></div>
-            </section>
-
-            <section class="panel">
-              <header>
-                <div>
-                  <p class="eyebrow">Hotspots</p>
-                  <h2>Fonctions et zones à surveiller</h2>
-                  <p class="muted">Placeholders en attendant la collecte d'appels dynamiques.</p>
-                </div>
-              </header>
-              <div class="table-wrapper">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Élément</th>
-                      <th>Raison</th>
-                      <th class="numeric">Priorité</th>
-                    </tr>
-                  </thead>
-                  <tbody id="hotspot-body"></tbody>
-                </table>
-                <p class="empty" id="hotspot-empty">Aucun hotspot disponible sans rapport.</p>
-              </div>
-            </section>
-          </section>
-
-          <section class="view hidden" data-view="files" aria-label="Vue fichiers">
-            <section class="panel">
-              <header>
-                <div>
-                  <p class="eyebrow">Fichiers</p>
-                  <h2>Liste détaillée</h2>
-                  <p class="muted">Tri par taille décroissante. Filtrage dynamique à venir.</p>
-                </div>
-              </header>
-              <div class="table-wrapper">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Chemin</th>
-                      <th class="numeric">Taille</th>
-                      <th class="numeric">Modifié</th>
-                    </tr>
-                  </thead>
-                  <tbody id="files-body"></tbody>
-                </table>
-                <p class="empty" id="files-empty">Aucun rapport chargé.</p>
-              </div>
-            </section>
           </section>
 
           <section class="view hidden" data-view="settings" aria-label="Vue paramètres">
             <section class="panel">
               <header>
                 <div>
-                  <p class="eyebrow">Paramètres</p>
-                  <h2>Options principales</h2>
-                  <p class="muted">Placeholders pour licence Meeting, thème et i18n.</p>
+                  <p class="eyebrow" data-i18n="s_eyebrow">Paramètres</p>
+                  <h2 data-i18n="s_title">Options principales</h2>
+                  <p class="muted" data-i18n="s_subtitle">Gérez la licence, le thème et la langue.</p>
                 </div>
               </header>
               <div class="settings-grid">
                 <div class="setting-card">
-                  <p class="label">Licence Meeting</p>
+                  <p class="label" data-i18n="s_meeting_label">Licence Meeting</p>
                   <p class="value" id="meeting-status">En attente</p>
-                  <p class="small">Le statut réel sera synchronisé via l'adaptateur Meeting.</p>
-                  <button class="ghost" data-action="open-license">Gérer</button>
+                  <p class="small" data-i18n="s_meeting_desc">Le statut réel sera synchronisé via l'adaptateur Meeting.</p>
+                  <button class="ghost" data-action="open-license" data-i18n="s_meeting_button">Gérer</button>
                 </div>
                 <div class="setting-card">
-                  <p class="label">Thème</p>
-                  <p class="value">Mode sombre par défaut</p>
-                  <p class="small">Le basculement clair/sombre est prévu.</p>
-                  <button class="ghost" data-action="toggle-theme">Placeholder</button>
+                  <p class="label" data-i18n="s_theme_label">Thème</p>
+                  <p class="value" id="theme-value" data-i18n="s_theme_value_dark">Sombre</p>
+                  <p class="small" data-i18n="s_theme_desc">Basculez entre le thème clair et sombre.</p>
+                  <button class="ghost" data-action="toggle-theme" data-i18n="s_theme_button">Changer</button>
                 </div>
                 <div class="setting-card">
-                  <p class="label">Langue</p>
-                  <p class="value">Français</p>
-                  <p class="small">Le sélecteur multi-langues sera branché sur les fichiers JSON.</p>
-                  <button class="ghost" data-action="change-language">Bientôt</button>
+                  <p class="label" data-i18n="s_language_label">Langue</p>
+                  <p class="value" id="language-value">Français</p>
+                  <p class="small" data-i18n="s_language_desc">Choisissez la langue de l'interface.</p>
+                  <div class="button-group">
+                    <button class="ghost" data-action="change-language" data-lang="fr">FR</button>
+                    <button class="ghost" data-action="change-language" data-lang="en">EN</button>
+                  </div>
                 </div>
               </div>
             </section>
           </section>
-
-          <section class="view hidden" data-view="plugins" aria-label="Vue plugins">
-            <section class="panel">
-              <header>
-                <div>
-                  <p class="eyebrow">Plugins</p>
-                  <h2>Extensions et modules</h2>
-                  <p class="muted">Activation/désactivation à venir. Les bascules sont pour l'instant non fonctionnelles.</p>
-                </div>
-              </header>
-              <div class="plugin-list" id="plugin-list"></div>
-            </section>
-          </section>
         </main>
       </div>
-
-      <footer class="app-footer">
-        <div>
-          <p class="label">Journal</p>
-          <div class="log-stream" id="log-stream" aria-live="polite"></div>
-        </div>
-        <p class="small muted">Interface web Jupiter — toutes les surfaces sont traduisibles et prêtes pour les flux réels.</p>
-      </footer>
     </div>
     <script type="module" src="app.js"></script>
   </body>

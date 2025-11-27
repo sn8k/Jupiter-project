@@ -1,47 +1,301 @@
 const state = {
+  isScanning: false,
   context: null,
   report: null,
   view: "dashboard",
+  theme: "dark",
+  i18n: {
+    lang: "fr",
+    translations: {},
+  },
   logs: [],
   liveEvents: [],
-  plugins: [
-    {
-      name: "Analyse statique",
-      description: "Inspecte la structure des projets et calcule des métriques de base.",
-      status: "placeholder",
-    },
-    {
-      name: "Watch temps réel",
-      description: "Diffuse les changements de fichiers via WebSocket.",
-      status: "placeholder",
-    },
-    {
-      name: "Meeting",
-      description: "Synchronise la licence et la présence de l'agent Jupiter.",
-      status: "placeholder",
-    },
-    {
-      name: "Plugins IA",
-      description: "Analyse optionnelle par IA, désactivée par défaut.",
-      status: "inactive",
-    },
-  ],
 };
 
-const sampleReport = {
-  root: "~/mon/projet",
-  last_scan_timestamp: 1700000000,
-  files: [
-    { path: "src/main.py", size_bytes: 2400, modified_timestamp: 1700000000 },
-    { path: "docs/readme.md", size_bytes: 1800, modified_timestamp: 1699900000 },
-    { path: "tests/test_core.py", size_bytes: 4600, modified_timestamp: 1699000000 },
-    { path: "jupiter/web/index.html", size_bytes: 8200, modified_timestamp: 1698800000 },
-    { path: "jupiter/web/app.js", size_bytes: 16400, modified_timestamp: 1698700000 },
-    { path: "jupiter/web/styles.css", size_bytes: 9200, modified_timestamp: 1698600000 },
-  ],
-};
+// --- I18n & Theming ---
+
+async function setLanguage(lang) {
+  if (state.i18n.lang === lang && Object.keys(state.i18n.translations).length) return;
+  
+  try {
+    const response = await fetch(`./lang/${lang}.json`);
+    if (!response.ok) throw new Error("Language file not found");
+    state.i18n.translations = await response.json();
+    state.i18n.lang = lang;
+    localStorage.setItem("jupiter-lang", lang);
+    document.documentElement.lang = lang;
+    translateUI();
+    addLog(`Language changed to ${lang.toUpperCase()}`);
+  } catch (error) {
+    console.error("Failed to load language:", error);
+    addLog(`Error loading language ${lang}`);
+  }
+}
+
+const t = (key) => state.i18n.translations[key] || key;
+
+function translateUI() {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  renderReport(state.report);
+}
+
+function setTheme(theme) {
+  state.theme = theme;
+  document.body.classList.remove("theme-light", "theme-dark");
+  document.body.classList.add(`theme-${theme}`);
+  localStorage.setItem("jupiter-theme", theme);
+  addLog(`Theme changed to ${theme} mode`);
+}
+
+// --- Core App Logic ---
+
+async function startScan() {
+  const scanButtons = document.querySelectorAll('[data-action="start-scan"]');
+  if (state.isScanning) return;
+
+  state.isScanning = true;
+  scanButtons.forEach(btn => {
+    btn.disabled = true;
+    const textElement = btn.classList.contains('primary') ? btn : btn.querySelector('.label');
+    if(textElement) textElement.textContent = t("scan_in_progress");
+  });
+  addLog(t("scan_start_log"));
+  pushLiveEvent(t("scan_button"), t("scan_live_event_start"));
+
+  try {
+    const response = await fetch('http://localhost:8000/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ show_hidden: false, ignore_globs: [] }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`${t("scan_error_server")} (${response.status}): ${errorText}`);
+    }
+
+    const report = await response.json();
+    report.last_scan_timestamp = Date.now() / 1000;
+    renderReport(report);
+    addLog(t("scan_complete_log"));
+    pushLiveEvent(t("scan_button"), t("scan_live_event_complete"));
+  } catch (error) {
+    console.error("Error during scan:", error);
+    let errorMessage = error.message;
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+        errorMessage = t("error_fetch");
+    }
+    addLog(`${t("scan_error_log")}: ${errorMessage}`);
+    alert(`${t("scan_failed_alert")}: ${errorMessage}`);
+  } finally {
+    state.isScanning = false;
+    scanButtons.forEach(btn => {
+      btn.disabled = false;
+      const textElement = btn.classList.contains('primary') ? btn : btn.querySelector('.label');
+      if(textElement) textElement.textContent = t("scan_button");
+    });
+  }
+}
+
+function handleAction(action, data) {
+  switch (action) {
+    case "load-sample":
+      renderReport(sampleReport);
+      addLog("Sample report loaded.");
+      break;
+    case "start-scan":
+      startScan();
+      break;
+    case "start-watch":
+      showPlaceholder("Watch");
+      break;
+    case "open-settings":
+      setView("settings");
+      break;
+    case "toggle-theme":
+      setTheme(state.theme === "dark" ? "light" : "dark");
+      break;
+    case "change-language":
+      setLanguage(data.lang);
+      break;
+    default:
+      showPlaceholder(action);
+      break;
+  }
+}
+
+// --- UI Rendering ---
+
+function renderReport(report) {
+  state.report = report;
+  renderStats(report);
+  renderUploadMeta(report);
+  renderFiles(report);
+  renderAnalysis(report);
+  renderHotspots(report);
+  renderAlerts(report);
+  if (report) {
+    addLog("UI updated with new report.");
+  }
+}
+
+function renderStats(report) {
+    const statGrid = document.getElementById("stats-grid");
+    if (!statGrid) return;
+    statGrid.innerHTML = "";
+    if (!report || !report.files) {
+        statGrid.innerHTML = `<p class="muted">${t('analysis_empty')}</p>`;
+        return;
+    }
+    const files = report.files;
+    const totalSize = files.reduce((acc, file) => acc + (file.size_bytes || 0), 0);
+    const lastUpdated = files.length > 0 ? [...files].sort((a, b) => (b.modified_timestamp || 0) - (a.modified_timestamp || 0))[0] : null;
+
+    const stats = [
+        { label: t("files_view"), value: files.length.toLocaleString(state.i18n.lang) },
+        { label: t("analysis_avg_size"), value: bytesToHuman(totalSize) },
+        { label: t("analysis_freshest"), value: lastUpdated ? formatDate(lastUpdated.modified_timestamp) : "-" },
+        { label: "Dernier scan", value: report?.last_scan_timestamp ? formatDate(report.last_scan_timestamp) : "N/A" },
+    ];
+    stats.forEach(stat => {
+        const card = document.createElement("div");
+        card.className = "stat-card";
+        card.innerHTML = `<p class="label">${stat.label}</p><p class="value">${stat.value}</p>`;
+        statGrid.appendChild(card);
+    });
+}
+
+function renderUploadMeta(report) {
+    const container = document.getElementById("upload-meta");
+    if(!container) return;
+    if (!report) {
+        container.textContent = t("alert_no_report_detail");
+        return;
+    }
+    const fileCount = Array.isArray(report.files) ? report.files.length : 0;
+    container.innerHTML = `<p class="small muted">${fileCount} ${t('files_view')} importés — racine : ${report.root || "?"}</p>`;
+}
+
+function renderFiles(report) {
+    const files = Array.isArray(report?.files) ? [...report.files] : [];
+    const body = document.getElementById("files-body");
+    const empty = document.getElementById("files-empty");
+    if(!body || !empty) return;
+    body.innerHTML = "";
+
+    if (!files.length) {
+        empty.style.display = "block";
+        empty.textContent = t("alert_no_report_detail");
+        return;
+    }
+    empty.style.display = "none";
+    files
+        .sort((a, b) => (b.size_bytes || 0) - (a.size_bytes || 0))
+        .slice(0, 200)
+        .forEach((file) => {
+            const row = document.createElement("tr");
+            row.innerHTML = `<td>${file.path}</td><td class="numeric">${bytesToHuman(file.size_bytes || 0)}</td><td class="numeric">${formatDate(file.modified_timestamp)}</td>`;
+            body.appendChild(row);
+        });
+}
+
+function renderAnalysis(report) {
+    const files = Array.isArray(report?.files) ? [...report.files] : [];
+    const container = document.getElementById("analysis-stats");
+    if(!container) return;
+    container.innerHTML = "";
+
+    if (!files.length) {
+        container.innerHTML = `<p class='muted'>${t('analysis_empty')}</p>`;
+        return;
+    }
+
+    const extensionCount = files.reduce((acc, file) => {
+        const ext = file.file_type || "(sans extension)";
+        acc[ext] = (acc[ext] || 0) + 1;
+        return acc;
+    }, {});
+
+    const dominant = Object.entries(extensionCount).sort((a, b) => b[1] - a[1])[0];
+    const avgSize = files.length ? files.reduce((acc, file) => acc + (file.size_bytes || 0), 0) / files.length : 0;
+    const freshest = [...files].sort((a, b) => (b.modified_timestamp || 0) - (a.modified_timestamp || 0))[0];
+
+    const stats = [
+        { label: t("analysis_dominant_ext"), value: dominant ? `${dominant[0]} (${dominant[1]})` : "-" },
+        { label: t("analysis_avg_size"), value: bytesToHuman(avgSize) },
+        { label: t("analysis_freshest"), value: freshest ? freshest.path : "-" },
+        { label: t("analysis_dynamic"), value: t("placeholder_dynamic") },
+    ];
+
+    stats.forEach((stat) => {
+        const card = document.createElement("div");
+        card.className = "stat-card";
+        card.innerHTML = `<p class="label">${stat.label}</p><p class="value">${stat.value}</p>`;
+        container.appendChild(card);
+    });
+}
+
+function renderHotspots(report) {
+    const body = document.getElementById("hotspot-body");
+    const empty = document.getElementById("hotspot-empty");
+    if (!body || !empty) return;
+    body.innerHTML = "";
+
+    if (!report || !report.hotspots || !report.hotspots.most_functions) {
+        empty.style.display = "block";
+        empty.textContent = t('hotspots_empty');
+        return;
+    }
+
+    empty.style.display = "none";
+    const candidates = report.hotspots.most_functions.slice(0, 5);
+
+    candidates.forEach((file, index) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${file.path}</td>
+            <td>${file.details}</td>
+            <td class="numeric">${index + 1}</td>
+        `;
+        body.appendChild(row);
+    });
+}
+
+function renderAlerts(report) {
+    const container = document.getElementById("alert-list");
+    if(!container) return;
+    container.innerHTML = "";
+    const alerts = [];
+
+    if (!report) {
+        alerts.push({
+            title: t("alert_no_report_title"),
+            detail: t("alert_no_report_detail"),
+        });
+    } else {
+        if (report.python_summary && report.python_summary.total_potentially_unused_functions > 0) {
+            alerts.push({
+                title: `${report.python_summary.total_potentially_unused_functions} ${t("alert_unused_title")}`,
+                detail: t("alert_unused_detail"),
+            });
+        }
+        alerts.push({ title: t("alert_meeting_title"), detail: t("alert_meeting_detail") });
+    }
+
+    alerts.forEach((alert) => {
+        const item = document.createElement("li");
+        item.className = "alert-item";
+        item.innerHTML = `<div class="alert-icon">⚠️</div><div><p class="label">${alert.title}</p><p class="muted">${alert.detail}</p></div>`;
+        container.appendChild(item);
+    });
+}
+
+// --- Utility functions ---
 
 const bytesToHuman = (value) => {
+  if (typeof value !== 'number') return "-";
   const units = ["o", "Ko", "Mo", "Go"];
   let size = value;
   let unitIndex = 0;
@@ -55,7 +309,7 @@ const bytesToHuman = (value) => {
 const formatDate = (timestamp) => {
   if (!timestamp) return "-";
   const date = new Date(timestamp * 1000);
-  return new Intl.DateTimeFormat("fr-FR", {
+  return new Intl.DateTimeFormat(state.i18n.lang, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
@@ -66,6 +320,7 @@ function addLog(message) {
   state.logs.unshift(entry);
   state.logs = state.logs.slice(0, 8);
   const container = document.getElementById("log-stream");
+  if (!container) return;
   container.innerHTML = "";
   state.logs.forEach((log) => {
     const item = document.createElement("div");
@@ -80,18 +335,12 @@ function pushLiveEvent(title, detail) {
   state.liveEvents.unshift(entry);
   state.liveEvents = state.liveEvents.slice(0, 5);
   const stream = document.getElementById("live-stream");
+  if (!stream) return;
   stream.innerHTML = "";
   state.liveEvents.forEach((event) => {
     const card = document.createElement("div");
     card.className = "live-card";
-    const header = document.createElement("div");
-    header.className = "live-title";
-    header.textContent = `${event.title} · ${event.timestamp.toLocaleTimeString()}`;
-    const body = document.createElement("p");
-    body.className = "muted";
-    body.textContent = event.detail;
-    card.appendChild(header);
-    card.appendChild(body);
+    card.innerHTML = `<div class="live-title">${event.title} · ${event.timestamp.toLocaleTimeString()}</div><p class="muted">${event.detail}</p>`;
     stream.appendChild(card);
   });
 }
@@ -99,15 +348,13 @@ function pushLiveEvent(title, detail) {
 async function loadContext() {
   try {
     const response = await fetch("/context.json");
-    if (!response.ok) {
-      throw new Error("Réponse réseau inattendue");
-    }
+    if (!response.ok) throw new Error("Network response was not ok");
     const payload = await response.json();
     state.context = payload;
-    document.getElementById("root-path").textContent = payload.root || "(non défini)";
+    document.getElementById("root-path").textContent = payload.root || "(undefined)";
   } catch (error) {
-    console.warn("Impossible de charger le contexte", error);
-    document.getElementById("root-path").textContent = "Non disponible";
+    console.warn("Could not load context", error);
+    document.getElementById("root-path").textContent = "N/A";
   }
 }
 
@@ -122,50 +369,17 @@ function setView(view) {
 }
 
 function showPlaceholder(action) {
-  const detail = `${action} : action non câblée – un appel API sera ajouté ultérieurement.`;
+  const detail = `${action}: This action is a placeholder for future functionality.`;
   addLog(detail);
   pushLiveEvent("Placeholder", detail);
 }
 
-function handleAction(action) {
-  switch (action) {
-    case "load-sample":
-      renderReport(sampleReport);
-      addLog("Rapport exemple chargé.");
-      break;
-    case "start-scan":
-      showPlaceholder("Scan");
-      break;
-    case "start-watch":
-      showPlaceholder("Watch temps réel");
-      break;
-    case "start-run":
-      showPlaceholder("Run commande");
-      break;
-    case "open-settings":
-      setView("settings");
-      pushLiveEvent("Navigation", "Ouverture des paramètres (placeholder)");
-      break;
-    case "open-license":
-      showPlaceholder("Gestion licence Meeting");
-      break;
-    case "toggle-theme":
-      showPlaceholder("Bascule de thème");
-      break;
-    case "change-language":
-      showPlaceholder("Sélecteur de langue");
-      break;
-    default:
-      break;
-  }
-}
-
 function bindActions() {
-  document.querySelectorAll("[data-action]").forEach((element) => {
-    element.addEventListener("click", (event) => {
-      const { action } = event.currentTarget.dataset;
-      handleAction(action);
-    });
+  document.body.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-action]");
+    if (!target) return;
+    const { action, lang } = target.dataset;
+    handleAction(action, { lang });
   });
 
   document.querySelectorAll(".nav-btn").forEach((button) => {
@@ -179,302 +393,47 @@ function bindActions() {
 function bindUpload() {
   const input = document.getElementById("report-input");
   const dropzone = document.getElementById("dropzone");
+  if (!input || !dropzone) return;
 
-  input.addEventListener("change", async (event) => {
-    const [file] = event.target.files;
-    if (!file) return;
+  const handleFile = async (file) => {
+    if (!file || !file.type.includes("json")) {
+        addLog("Invalid file type. Please select a JSON file.");
+        return;
+    }
     const text = await file.text();
     try {
       const payload = JSON.parse(text);
       renderReport(payload);
-      addLog(`Rapport chargé depuis ${file.name}.`);
+      addLog(`Report loaded from ${file.name}.`);
     } catch (error) {
-      alert("Le fichier n'est pas un JSON valide.");
-      console.error("Erreur de parsing", error);
+      alert("The file is not a valid JSON.");
+      console.error("Parsing error", error);
     }
-  });
-
-  dropzone.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    dropzone.classList.add("dragging");
-  });
-
-  dropzone.addEventListener("dragleave", () => {
+  };
+  
+  input.addEventListener("change", (e) => handleFile(e.target.files[0]));
+  dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("dragging"); });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragging"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
     dropzone.classList.remove("dragging");
-  });
-
-  dropzone.addEventListener("drop", async (event) => {
-    event.preventDefault();
-    dropzone.classList.remove("dragging");
-    const [file] = event.dataTransfer.files;
-    if (!file) return;
-    const text = await file.text();
-    try {
-      renderReport(JSON.parse(text));
-      addLog(`Rapport chargé depuis ${file.name}.`);
-    } catch (error) {
-      alert("Le fichier n'est pas un JSON valide.");
-      console.error(error);
-    }
+    handleFile(e.dataTransfer.files[0]);
   });
 }
 
-function renderStatusBadges(report) {
-  const container = document.getElementById("status-badges");
-  container.innerHTML = "";
-  const badges = [];
+// --- Initialization ---
+async function init() {
+  const savedLang = localStorage.getItem("jupiter-lang") || "fr";
+  await setLanguage(savedLang);
+  
+  const savedTheme = localStorage.getItem("jupiter-theme") || "dark";
+  setTheme(savedTheme);
 
-  if (report) {
-    badges.push({ label: "Rapport", value: "chargé" });
-    badges.push({ label: "Mode", value: "Statique" });
-    badges.push({ label: "Meeting", value: "À synchroniser" });
-  } else {
-    badges.push({ label: "Rapport", value: "aucun" });
-    badges.push({ label: "Mode", value: "Attente" });
-  }
-
-  badges.forEach((badge) => {
-    const span = document.createElement("span");
-    span.className = "badge";
-    span.textContent = `${badge.label} : ${badge.value}`;
-    container.appendChild(span);
-  });
-}
-
-function renderStats(report) {
-  const statGrid = document.getElementById("stats-grid");
-  statGrid.innerHTML = "";
-  const files = Array.isArray(report?.files) ? [...report.files] : [];
-  const totalSize = files.reduce((acc, file) => acc + (file.size_bytes || 0), 0);
-  const largest = [...files].sort((a, b) => (b.size_bytes || 0) - (a.size_bytes || 0))[0];
-  const lastUpdated = [...files].sort((a, b) => (b.modified_timestamp || 0) - (a.modified_timestamp || 0))[0];
-
-  const stats = [
-    { label: "Fichiers", value: files.length.toLocaleString("fr-FR") },
-    { label: "Taille totale", value: bytesToHuman(totalSize) },
-    {
-      label: "Dernière modification",
-      value: lastUpdated ? formatDate(lastUpdated.modified_timestamp) : "-",
-    },
-    {
-      label: "Plus gros fichier",
-      value: largest ? `${largest.path} (${bytesToHuman(largest.size_bytes)})` : "-",
-    },
-    {
-      label: "Dernier scan",
-      value: report?.last_scan_timestamp ? formatDate(report.last_scan_timestamp) : "Non fourni",
-    },
-    {
-      label: "Licence Meeting",
-      value: "Placeholder – en attente de l'adaptateur",
-    },
-  ];
-
-  stats.forEach((stat) => {
-    const card = document.createElement("div");
-    card.className = "stat-card";
-    const label = document.createElement("p");
-    label.className = "label";
-    label.textContent = stat.label;
-    const value = document.createElement("p");
-    value.className = "value";
-    value.textContent = stat.value;
-    card.appendChild(label);
-    card.appendChild(value);
-    statGrid.appendChild(card);
-  });
-}
-
-function renderUploadMeta(report) {
-  const container = document.getElementById("upload-meta");
-  if (!report) {
-    container.textContent = "Aucun rapport chargé pour l'instant.";
-    return;
-  }
-  container.innerHTML = "";
-  const info = document.createElement("p");
-  info.className = "small muted";
-  const fileCount = Array.isArray(report.files) ? report.files.length : 0;
-  info.textContent = `${fileCount} éléments importés — racine déclarée : ${report.root || "?"}`;
-  container.appendChild(info);
-}
-
-function renderFiles(report) {
-  const files = Array.isArray(report?.files) ? [...report.files] : [];
-  const body = document.getElementById("files-body");
-  const empty = document.getElementById("files-empty");
-  body.innerHTML = "";
-
-  if (!files.length) {
-    empty.style.display = "block";
-    return;
-  }
-
-  empty.style.display = "none";
-  files
-    .sort((a, b) => (b.size_bytes || 0) - (a.size_bytes || 0))
-    .slice(0, 200)
-    .forEach((file) => {
-      const row = document.createElement("tr");
-      const pathCell = document.createElement("td");
-      pathCell.textContent = file.path;
-      const sizeCell = document.createElement("td");
-      sizeCell.className = "numeric";
-      sizeCell.textContent = bytesToHuman(file.size_bytes || 0);
-      const timeCell = document.createElement("td");
-      timeCell.className = "numeric";
-      timeCell.textContent = file.modified_timestamp ? formatDate(file.modified_timestamp) : "-";
-      row.appendChild(pathCell);
-      row.appendChild(sizeCell);
-      row.appendChild(timeCell);
-      body.appendChild(row);
-    });
-}
-
-function renderAnalysis(report) {
-  const files = Array.isArray(report?.files) ? [...report.files] : [];
-  const statsContainer = document.getElementById("analysis-stats");
-  statsContainer.innerHTML = "";
-
-  if (!files.length) {
-    statsContainer.innerHTML = "<p class='muted'>Chargez un rapport pour alimenter les indicateurs.</p>";
-    return;
-  }
-
-  const extensionCount = files.reduce((acc, file) => {
-    const ext = file.path.includes(".") ? file.path.split(".").pop() : "(sans extension)";
-    acc[ext] = (acc[ext] || 0) + 1;
-    return acc;
-  }, {});
-
-  const dominant = Object.entries(extensionCount).sort((a, b) => b[1] - a[1])[0];
-  const avgSize = files.length ? files.reduce((acc, file) => acc + (file.size_bytes || 0), 0) / files.length : 0;
-  const freshest = [...files].sort((a, b) => (b.modified_timestamp || 0) - (a.modified_timestamp || 0))[0];
-
-  const stats = [
-    { label: "Extension dominante", value: dominant ? `${dominant[0]} (${dominant[1]})` : "-" },
-    { label: "Taille moyenne", value: bytesToHuman(avgSize) },
-    { label: "Fichier le plus récent", value: freshest ? freshest.path : "-" },
-    { label: "Analyse dynamique", value: "Placeholder (à brancher sur run/watch)" },
-  ];
-
-  stats.forEach((stat) => {
-    const card = document.createElement("div");
-    card.className = "stat-card";
-    const label = document.createElement("p");
-    label.className = "label";
-    label.textContent = stat.label;
-    const value = document.createElement("p");
-    value.className = "value";
-    value.textContent = stat.value;
-    card.appendChild(label);
-    card.appendChild(value);
-    statsContainer.appendChild(card);
-  });
-}
-
-function renderHotspots(report) {
-  const body = document.getElementById("hotspot-body");
-  const empty = document.getElementById("hotspot-empty");
-  body.innerHTML = "";
-
-  if (!report || !Array.isArray(report.files) || !report.files.length) {
-    empty.style.display = "block";
-    return;
-  }
-
-  empty.style.display = "none";
-  const candidates = [...report.files]
-    .sort((a, b) => (b.size_bytes || 0) - (a.size_bytes || 0))
-    .slice(0, 5);
-
-  candidates.forEach((file, index) => {
-    const row = document.createElement("tr");
-    const nameCell = document.createElement("td");
-    nameCell.textContent = file.path;
-    const reasonCell = document.createElement("td");
-    reasonCell.textContent = "Placeholder : surveiller la complexité et les usages réels.";
-    const priorityCell = document.createElement("td");
-    priorityCell.className = "numeric";
-    priorityCell.textContent = index + 1;
-    row.appendChild(nameCell);
-    row.appendChild(reasonCell);
-    row.appendChild(priorityCell);
-    body.appendChild(row);
-  });
-}
-
-function renderAlerts(report) {
-  const container = document.getElementById("alert-list");
-  container.innerHTML = "";
-  const alerts = [];
-
-  if (!report) {
-    alerts.push({
-      title: "Aucun rapport chargé",
-      detail: "Importez un JSON produit par `jupiter scan` pour remplir les cartes et tableaux.",
-    });
-  } else {
-    alerts.push({ title: "Meeting", detail: "Synchronisation licence non configurée (placeholder)." });
-    alerts.push({ title: "Watch", detail: "Flux temps réel à activer lors du branchement WebSocket." });
-  }
-
-  alerts.forEach((alert) => {
-    const item = document.createElement("li");
-    item.className = "alert-item";
-    item.innerHTML = `<div class="alert-icon">⚠️</div><div><p class="label">${alert.title}</p><p class="muted">${alert.detail}</p></div>`;
-    container.appendChild(item);
-  });
-}
-
-function renderPlugins() {
-  const container = document.getElementById("plugin-list");
-  container.innerHTML = "";
-  state.plugins.forEach((plugin) => {
-    const card = document.createElement("div");
-    card.className = "plugin-card";
-    const title = document.createElement("p");
-    title.className = "label";
-    title.textContent = plugin.name;
-    const description = document.createElement("p");
-    description.className = "muted";
-    description.textContent = plugin.description;
-    const status = document.createElement("span");
-    status.className = "badge";
-    status.textContent = plugin.status;
-    const button = document.createElement("button");
-    button.className = "ghost";
-    button.textContent = "Activer (placeholder)";
-    button.addEventListener("click", () => showPlaceholder(`Plugin ${plugin.name}`));
-
-    card.appendChild(title);
-    card.appendChild(description);
-    card.appendChild(status);
-    card.appendChild(button);
-    container.appendChild(card);
-  });
-}
-
-function renderReport(report) {
-  state.report = report;
-  renderStatusBadges(report);
-  renderStats(report);
-  renderUploadMeta(report);
-  renderFiles(report);
-  renderAnalysis(report);
-  renderHotspots(report);
-  renderAlerts(report);
-  addLog("Interface mise à jour avec le rapport chargé.");
-}
-
-window.addEventListener("DOMContentLoaded", () => {
   loadContext();
   bindUpload();
   bindActions();
-  renderStatusBadges(null);
-  renderStats(null);
-  renderUploadMeta(null);
-  renderAlerts(null);
-  renderPlugins();
-  pushLiveEvent("Démarrage", "UI prête. Chargez un rapport ou utilisez l'exemple.");
-});
+  renderReport(null);
+  pushLiveEvent("Startup", "UI ready. Load a report or use the sample.");
+}
+
+window.addEventListener("DOMContentLoaded", init);

@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import fnmatch
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, Optional, Dict, Any
+
+from jupiter.core.language.python import analyze_python_source
 
 
 @dataclass(slots=True)
@@ -15,6 +17,8 @@ class FileMetadata:
     path: Path
     size_bytes: int
     modified_timestamp: float
+    file_type: str
+    language_analysis: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_path(cls, path: Path) -> "FileMetadata":
@@ -24,6 +28,7 @@ class FileMetadata:
             path=path,
             size_bytes=path.stat().st_size,
             modified_timestamp=path.stat().st_mtime,
+            file_type=path.suffix.lower().lstrip("."),
         )
 
 
@@ -45,7 +50,14 @@ class ProjectScanner:
         """Yield :class:`FileMetadata` objects for files under ``root``."""
 
         for path in self._walk_files(self.root):
-            yield FileMetadata.from_path(path)
+            metadata = FileMetadata.from_path(path)
+            if metadata.file_type == "py":
+                try:
+                    source = path.read_text(encoding="utf-8")
+                    metadata.language_analysis = analyze_python_source(source)
+                except Exception as e:
+                    metadata.language_analysis = {"error": f"Could not read or parse file: {e}"}
+            yield metadata
 
     def _walk_files(self, root: Path) -> Iterable[Path]:
         """Iterate over files respecting ignore rules."""
@@ -67,24 +79,23 @@ class ProjectScanner:
         return any(fnmatch.fnmatch(relative_str, pattern) for pattern in self.ignore_patterns)
 
     def _resolve_ignore_patterns(self, patterns: list[str] | None, ignore_file: str) -> list[str]:
-        """Load ignore patterns from explicit arguments or an ignore file.
+        """Load ignore patterns from an ignore file and explicit arguments.
 
-        If ``patterns`` is provided, it takes precedence. Otherwise, if an
-        ignore file exists at the project root, patterns are read line by line
-        while skipping comments and empty lines.
+        If an ignore file exists at the project root, its patterns are loaded.
+        Any patterns passed via the ``patterns`` argument are then appended to
+        this list.
         """
 
-        if patterns is not None:
-            return patterns
-
+        all_patterns: list[str] = []
         ignore_path = self.root / ignore_file
-        if not ignore_path.exists():
-            return []
+        if ignore_path.exists():
+            for line in ignore_path.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                all_patterns.append(stripped)
 
-        loaded_patterns: list[str] = []
-        for line in ignore_path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            loaded_patterns.append(stripped)
-        return loaded_patterns
+        if patterns is not None:
+            all_patterns.extend(patterns)
+
+        return all_patterns

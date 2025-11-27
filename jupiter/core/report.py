@@ -15,14 +15,36 @@ class ScanReport:
 
     root: Path
     files: list[FileMetadata]
+    dynamic_analysis: Optional[dict] = None
 
     def to_dict(self) -> dict[str, object]:
-        """Represent the report as a JSON-serializable dictionary."""
+        """Represent the report as a JSON-serializable dictionary.
 
-        return {
+        The schema for this dictionary is:
+        {
+            "report_schema_version": "1.0",
+            "root": str,
+            "files": [
+                {
+                    "path": str,
+                    "size_bytes": int,
+                    "modified_timestamp": float,
+                    "file_type": str,
+                    "language_analysis": dict | None,
+                }
+            ],
+            "dynamic_analysis": dict | None
+        }
+        """
+
+        data = {
+            "report_schema_version": "1.0",
             "root": str(self.root),
             "files": [self._serialize_file(metadata) for metadata in self.files],
         }
+        if self.dynamic_analysis:
+            data["dynamic_analysis"] = self.dynamic_analysis
+        return data
 
     @staticmethod
     def from_files(root: Path, files: Iterable[FileMetadata]) -> "ScanReport":
@@ -35,8 +57,12 @@ class ScanReport:
     def _serialize_file(metadata: FileMetadata) -> dict[str, object]:
         """Serialize a single :class:`FileMetadata` instance."""
 
-        return {
+        data = {
             "path": str(metadata.path),
             "size_bytes": metadata.size_bytes,
             "modified_timestamp": metadata.modified_timestamp,
+            "file_type": metadata.file_type,
         }
+        if metadata.language_analysis:
+            data["language_analysis"] = metadata.language_analysis
+        return data
