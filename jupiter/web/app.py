@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from functools import partial
 from http.server import SimpleHTTPRequestHandler
@@ -35,7 +36,8 @@ class JupiterWebUI:
         """Return an HTTP handler exposing context metadata and static assets."""
 
         web_root = self.web_root
-        context = {"root": str(self.settings.root)}
+        api_base_url = os.environ.get("JUPITER_API_BASE", "http://127.0.0.1:8000")
+        context = {"root": str(self.settings.root), "api_base_url": api_base_url}
 
         class _Handler(SimpleHTTPRequestHandler):  # type: ignore[misc]
             def do_GET(self) -> None:  # noqa: N802 (SimpleHTTPRequestHandler interface)

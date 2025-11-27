@@ -238,6 +238,8 @@ Fonctionnalités :
 * thème dark par défaut + bascule light,
 * moteur multi-langue intégré.
 
+La page **Diagnostic** affiche l'URL de l'API cible et l'état du dernier scan. Le serveur FastAPI expose désormais CORS afin de permettre au bouton **Scan** du web UI (paramétrable via `JUPITER_API_BASE`) d'appeler `/scan` sans erreur "fail to fetch".
+
 ---
 
 # **7. Mode Serveur & SSH**

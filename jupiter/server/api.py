@@ -9,6 +9,7 @@ from typing import Optional, List
 
 import uvicorn
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from jupiter.core import ProjectAnalyzer, ProjectScanner, ScanReport
@@ -21,6 +22,14 @@ app = FastAPI(
     title="Jupiter API",
     description="API for scanning and analyzing projects.",
     version="1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Using app.state to hold the root path, which will be set on server startup.

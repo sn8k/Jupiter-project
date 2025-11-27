@@ -4,12 +4,59 @@ const state = {
   report: null,
   view: "dashboard",
   theme: "dark",
+  apiBaseUrl: null,
   i18n: {
     lang: "fr",
     translations: {},
   },
   logs: [],
   liveEvents: [],
+};
+
+const sampleReport = {
+  root: "~/projets/jupiter-demo",
+  report_schema_version: "1.0",
+  last_scan_timestamp: Math.floor(Date.now() / 1000) - 7200,
+  files: [
+    {
+      path: "jupiter/core/scanner.py",
+      size_bytes: 18456,
+      modified_timestamp: Math.floor(Date.now() / 1000) - 86400,
+      file_type: "py",
+    },
+    {
+      path: "jupiter/web/app.js",
+      size_bytes: 9645,
+      modified_timestamp: Math.floor(Date.now() / 1000) - 43200,
+      file_type: "js",
+    },
+    {
+      path: "README.md",
+      size_bytes: 4096,
+      modified_timestamp: Math.floor(Date.now() / 1000) - 3600,
+      file_type: "md",
+    },
+    {
+      path: "requirements.txt",
+      size_bytes: 512,
+      modified_timestamp: Math.floor(Date.now() / 1000) - 10800,
+      file_type: "txt",
+    },
+  ],
+  hotspots: {
+    most_functions: [
+      { path: "jupiter/core/scanner.py", details: "27 fonctions recensées" },
+      { path: "jupiter/core/analyzer.py", details: "18 fonctions recensées" },
+    ],
+  },
+  python_summary: {
+    total_potentially_unused_functions: 3,
+  },
+  plugins: [
+    { name: "code_quality", status: "ok", description: "Analyse des imports et fonctions orphelines" },
+    { name: "meeting", status: "pending", description: "Synchronisation licence Meeting" },
+    { name: "notify_webhook", status: "disabled", description: "Notification webhook (placeholder)" },
+  ],
 };
 
 // --- I18n & Theming ---
@@ -25,6 +72,10 @@ async function setLanguage(lang) {
     localStorage.setItem("jupiter-lang", lang);
     document.documentElement.lang = lang;
     translateUI();
+    const languageValue = document.getElementById("language-value");
+    if (languageValue) {
+      languageValue.textContent = lang === "fr" ? "Français" : "English";
+    }
     addLog(`Language changed to ${lang.toUpperCase()}`);
   } catch (error) {
     console.error("Failed to load language:", error);
@@ -47,6 +98,21 @@ function setTheme(theme) {
   document.body.classList.add(`theme-${theme}`);
   localStorage.setItem("jupiter-theme", theme);
   addLog(`Theme changed to ${theme} mode`);
+  const themeValue = document.getElementById("theme-value");
+  if (themeValue) {
+    themeValue.textContent = theme === "dark" ? t("s_theme_value_dark") : t("s_theme_value_light");
+  }
+}
+
+const DEFAULT_API_BASE = "http://127.0.0.1:8000";
+
+function inferApiBaseUrl() {
+  if (state.context?.api_base_url) return state.context.api_base_url;
+  const { origin } = window.location;
+  if (origin.includes(":8050")) {
+    return origin.replace(":8050", ":8000");
+  }
+  return DEFAULT_API_BASE;
 }
 
 // --- Core App Logic ---
@@ -65,7 +131,8 @@ async function startScan() {
   pushLiveEvent(t("scan_button"), t("scan_live_event_start"));
 
   try {
-    const response = await fetch('http://localhost:8000/scan', {
+    const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/scan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ show_hidden: false, ignore_globs: [] }),
@@ -136,6 +203,9 @@ function renderReport(report) {
   renderAnalysis(report);
   renderHotspots(report);
   renderAlerts(report);
+  renderPluginList(report);
+  renderStatusBadges(report);
+  renderDiagnostics(report);
   if (report) {
     addLog("UI updated with new report.");
   }
@@ -292,6 +362,79 @@ function renderAlerts(report) {
     });
 }
 
+function renderStatusBadges(report) {
+  const container = document.getElementById("status-badges");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const badges = [
+    {
+      label: t("badge_scan"),
+      value: report ? t("badge_scan_ready") : t("badge_scan_missing"),
+      icon: report ? "✅" : "⏳",
+    },
+    {
+      label: t("badge_last_scan"),
+      value: report?.last_scan_timestamp ? formatDate(report.last_scan_timestamp) : t("badge_last_scan_missing"),
+      icon: "🕒",
+    },
+    {
+      label: t("badge_root"),
+      value: report?.root || state.context?.root || t("loading"),
+      icon: "📁",
+    },
+  ];
+
+  badges.forEach((badge) => {
+    const pill = document.createElement("span");
+    pill.className = "badge";
+    pill.textContent = `${badge.icon} ${badge.label}: ${badge.value}`;
+    container.appendChild(pill);
+  });
+}
+
+function renderPluginList(report) {
+  const container = document.getElementById("plugin-list");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const plugins = Array.isArray(report?.plugins) && report.plugins.length
+    ? report.plugins
+    : sampleReport.plugins;
+
+  if (!plugins.length) {
+    container.innerHTML = `<p class="empty">${t("plugins_empty")}</p>`;
+    return;
+  }
+
+  plugins.forEach((plugin) => {
+    const card = document.createElement("div");
+    card.className = "plugin-card";
+
+    const statusText = t(`plugin_status_${plugin.status}`) || plugin.status;
+    card.innerHTML = `
+      <p class="label">${t("plugin_name_label")}</p>
+      <p class="value">${plugin.name}</p>
+      <p class="muted">${plugin.description || t("plugins_empty")}</p>
+      <p class="small">${t("plugin_status_label")}: ${statusText}</p>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function renderDiagnostics(report) {
+  const apiBaseLabel = document.getElementById("api-base-url");
+  const diagRoot = document.getElementById("diag-root");
+  const diagScanState = document.getElementById("diag-scan-state");
+
+  const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+  if (apiBaseLabel) apiBaseLabel.textContent = apiBaseUrl;
+  if (diagRoot) diagRoot.textContent = state.context?.root || report?.root || t("loading");
+  if (diagScanState) {
+    diagScanState.textContent = report ? t("diag_scan_ready") : t("diag_scan_missing");
+  }
+}
+
 // --- Utility functions ---
 
 const bytesToHuman = (value) => {
@@ -351,10 +494,16 @@ async function loadContext() {
     if (!response.ok) throw new Error("Network response was not ok");
     const payload = await response.json();
     state.context = payload;
-    document.getElementById("root-path").textContent = payload.root || "(undefined)";
+    state.apiBaseUrl = payload.api_base_url || inferApiBaseUrl();
+    const rootLabel = document.getElementById("root-path");
+    if (rootLabel) rootLabel.textContent = payload.root || "(undefined)";
+    const apiLabel = document.getElementById("api-base-url");
+    if (apiLabel) apiLabel.textContent = state.apiBaseUrl;
+    addLog(`${t("context_loaded")}: ${payload.root}`);
   } catch (error) {
     console.warn("Could not load context", error);
-    document.getElementById("root-path").textContent = "N/A";
+    const rootLabel = document.getElementById("root-path");
+    if (rootLabel) rootLabel.textContent = "N/A";
   }
 }
 
@@ -428,6 +577,10 @@ async function init() {
   
   const savedTheme = localStorage.getItem("jupiter-theme") || "dark";
   setTheme(savedTheme);
+
+  state.apiBaseUrl = inferApiBaseUrl();
+  renderDiagnostics(state.report);
+  renderStatusBadges(state.report);
 
   loadContext();
   bindUpload();
