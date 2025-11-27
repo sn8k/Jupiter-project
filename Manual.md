@@ -16,6 +16,7 @@ pip install -r requirements.txt
 - `python -m jupiter.cli.main scan <racine> [--ignore <pattern>] [--show-hidden] [--output rapport.json]` : produit un rapport JSON listant les fichiers et métadonnées basiques (chemins, tailles, dates). Les motifs `--ignore` peuvent être fournis plusieurs fois et complètent le contenu éventuel d’un fichier `.jupiterignore`.
 - `python -m jupiter.cli.main analyze <racine> [--top N] [--json] [--ignore <pattern>] [--show-hidden]` : calcule un résumé agrégé (nombre de fichiers, taille totale, taille moyenne, extensions, fichiers les plus volumineux).
 - `python -m jupiter.cli.main server <racine> --host 0.0.0.0 --port 8000` : lance le stub du serveur API (journalisation uniquement pour l’instant).
+- `python -m jupiter.cli.main gui <racine> --host 0.0.0.0 --port 8050` : démarre le serveur statique de la GUI. Ouvrez l’URL indiquée puis chargez un rapport JSON généré par `scan` pour afficher les tableaux et indicateurs de synthèse.
 
 ### Gestion des exclusions
 - Le scanner ignore les fichiers et dossiers cachés par défaut (sauf `--show-hidden`).
@@ -27,7 +28,15 @@ pip install -r requirements.txt
 - `jupiter/cli/` : interface en ligne de commande (argparse).
 - `jupiter/server/` : stubs serveur et Meeting pour intégration future.
 - `jupiter/config/` : configuration minimale (hôte, port, deviceKey Meeting).
-- `jupiter/web/` : espace réservé pour l’UI web.
+- `jupiter/web/` : interface graphique statique (HTML/CSS/JS) servie par le nouveau lanceur `gui`.
+
+## Interface graphique (aperçu)
+- Lancement : `python -m jupiter.cli.main gui <racine> --host 0.0.0.0 --port 8050`.
+- Fonctions disponibles :
+  - chargement d’un rapport JSON produit par `scan` (drag-and-drop ou sélection de fichier),
+  - affichage des indicateurs (nombre de fichiers, taille totale, fichier le plus volumineux, dernière mise à jour),
+  - tableau trié par taille (200 premiers fichiers pour rester lisible).
+- L’UI reste purement statique pour l’instant ; la connexion à l’API se fera dans une itération ultérieure.
 
 ## Prochaines étapes suggérées
 1. Brancher un framework ASGI (ex : FastAPI) dans `jupiter/server/api.py`.
