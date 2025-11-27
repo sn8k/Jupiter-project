@@ -31,7 +31,7 @@ L’agent doit toujours :
 5. Si une TODO list cochable est fournie, prendre en charge les taches via la TODO, et mettre a jour la TODO UNIQUEMENT en cochant les cases des taches effectivement terminées.
 6. chaque fichier doit avoir son changelog dedié.
 7. mise à jour systematique des fichiers README.md, requirements.txt, changelogs.
-8. Une documentation globale doit etre rédigée et mise à jour systematiquement.
+8. Une documentation globale (root/Manual.md) doit etre rédigée et mise à jour systematiquement.
 
 ---
 
