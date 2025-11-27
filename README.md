@@ -16,9 +16,10 @@ python -m jupiter.cli.main scan /chemin/vers/mon/projet --ignore "**/__pycache__
 python -m jupiter.cli.main analyze /chemin/vers/mon/projet
 python -m jupiter.cli.main analyze /chemin/vers/mon/projet --top 10 --json
 python -m jupiter.cli.main server /chemin/vers/mon/projet --host 0.0.0.0 --port 8000
+python -m jupiter.cli.main gui /chemin/vers/mon/projet --host 0.0.0.0 --port 8050
 ```
 
-Ces commandes offrent une première cartographie basique (liste de fichiers, tailles, extensions, fichiers les plus volumineux) et préparent le terrain pour l’API serveur et l’intégration Meeting.
+Ces commandes offrent une première cartographie basique (liste de fichiers, tailles, extensions, fichiers les plus volumineux) et préparent le terrain pour l’API serveur et l’intégration Meeting. La commande `gui` démarre un serveur HTTP statique qui expose la première ébauche d’interface web : chargez un rapport JSON issu de `scan` pour obtenir un tableau trié et quelques indicateurs (nombre de fichiers, taille totale, fichier le plus volumineux, dernière modification).
 
 ### Gestion des exclusions
 
@@ -191,6 +192,7 @@ jupiter/
  ├── web/
  │    ├── index.html
  │    ├── app.js
+ │    ├── styles.css
  │    ├── lang/
  │    └── components/
  ├── cli/

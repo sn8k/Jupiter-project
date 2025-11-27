@@ -1,2 +1,2 @@
 # Changelog – jupiter/web/__init__.py
-- Stubbed web package placeholder for future UI components.
+- Exported GUI server helpers (`JupiterWebUI`, `WebUISettings`, `launch_web_ui`) to simplify CLI wiring.

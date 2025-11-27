@@ -9,6 +9,7 @@ from pathlib import Path
 
 from jupiter.core import ProjectAnalyzer, ProjectScanner, ScanReport
 from jupiter.server import JupiterAPIServer
+from jupiter.web import launch_web_ui
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
     server_parser.add_argument("--host", default="127.0.0.1", help="Host to bind")
     server_parser.add_argument("--port", type=int, default=8000, help="Port to bind")
 
+    gui_parser = subcommands.add_parser("gui", help="Lancer l'interface web locale")
+    gui_parser.add_argument("root", type=Path, nargs="?", default=Path.cwd(), help="Projet à afficher dans la GUI")
+    gui_parser.add_argument("--host", default="127.0.0.1", help="Hôte HTTP pour la GUI")
+    gui_parser.add_argument("--port", type=int, default=8050, help="Port HTTP pour la GUI")
+
     return parser
 
 
@@ -94,6 +100,13 @@ def handle_server(root: Path, host: str, port: int) -> None:
     server.start()
 
 
+def handle_gui(root: Path, host: str, port: int) -> None:
+    """Lancer le serveur statique pour l'interface web."""
+
+    logger.info("Démarrage de la GUI Jupiter sur %s:%s (racine %s)", host, port, root)
+    launch_web_ui(root=root, host=host, port=port)
+
+
 def main() -> None:
     """Entrypoint for the CLI."""
 
@@ -114,6 +127,8 @@ def main() -> None:
         )
     elif args.command == "server":
         handle_server(root=args.root, host=args.host, port=args.port)
+    elif args.command == "gui":
+        handle_gui(root=args.root, host=args.host, port=args.port)
     else:
         raise ValueError(f"Unhandled command {args.command}")
 

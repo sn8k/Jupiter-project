@@ -1,0 +1,256 @@
+:root {
+  color-scheme: light;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(120deg, rgba(59, 130, 246, 0.18), rgba(14, 165, 233, 0.05));
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: rgba(59, 130, 246, 0.25);
+  border-radius: 12px;
+  font-size: 24px;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  color: #93c5fd;
+}
+
+h1 {
+  margin: 4px 0 0;
+  font-size: 24px;
+  color: #e2e8f0;
+}
+
+h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  color: #e2e8f0;
+}
+
+p {
+  margin: 6px 0;
+}
+
+.muted {
+  color: #cbd5e1;
+}
+
+.small {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.context {
+  text-align: right;
+}
+
+.context .label {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+.context .value {
+  margin: 4px 0 0;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.layout {
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px 32px;
+}
+
+.panel {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.24);
+}
+
+.panel > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button.primary {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  color: #0b162c;
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.25);
+}
+
+button.ghost {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.uploader {
+  position: relative;
+  margin-top: 12px;
+  padding: 20px;
+  border: 1px dashed rgba(148, 163, 184, 0.8);
+  border-radius: 14px;
+  text-align: center;
+  background: rgba(59, 130, 246, 0.06);
+  cursor: pointer;
+}
+
+.uploader:hover {
+  border-color: #93c5fd;
+}
+
+.uploader input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.stats-grid {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.stat-card .label {
+  font-size: 13px;
+  color: #cbd5e1;
+  margin: 0 0 4px;
+}
+
+.stat-card .value {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.table-wrapper {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 10px;
+  text-align: left;
+}
+
+th {
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  color: #cbd5e1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+td {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+}
+
+th.numeric,
+td.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  margin: 12px;
+  color: #94a3b8;
+}
+
+.app-footer {
+  padding: 16px 24px 24px;
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+@media (max-width: 720px) {
+  .panel > header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .context {
+    text-align: left;
+  }
+}

@@ -1,2 +1,2 @@
 # Core dependencies for Jupiter.
-# Standard library only for now; add external packages when server and UI mature.
+# Standard library only for now; GUI (http.server + static assets) does not add third-party needs yet.
