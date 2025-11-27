@@ -13,9 +13,14 @@ pip install -r requirements.txt
 ```
 
 ## Commandes principales
-- `python -m jupiter.cli.main scan <racine>` : produit un rapport JSON listant les fichiers et métadonnées basiques.
-- `python -m jupiter.cli.main analyze <racine>` : calcule un résumé agrégé (nombre de fichiers, taille totale, extensions).
+- `python -m jupiter.cli.main scan <racine> [--ignore <pattern>] [--show-hidden] [--output rapport.json]` : produit un rapport JSON listant les fichiers et métadonnées basiques (chemins, tailles, dates). Les motifs `--ignore` peuvent être fournis plusieurs fois et complètent le contenu éventuel d’un fichier `.jupiterignore`.
+- `python -m jupiter.cli.main analyze <racine> [--top N] [--json] [--ignore <pattern>] [--show-hidden]` : calcule un résumé agrégé (nombre de fichiers, taille totale, taille moyenne, extensions, fichiers les plus volumineux).
 - `python -m jupiter.cli.main server <racine> --host 0.0.0.0 --port 8000` : lance le stub du serveur API (journalisation uniquement pour l’instant).
+
+### Gestion des exclusions
+- Le scanner ignore les fichiers et dossiers cachés par défaut (sauf `--show-hidden`).
+- Les glob patterns de `.jupiterignore` sont appliqués automatiquement si le fichier est présent à la racine analysée.
+- `--ignore` permet d’ajouter des motifs temporaires sans modifier le fichier `.jupiterignore`.
 
 ## Structure actuelle
 - `jupiter/core/` : scanner, analyseur et sérialisation des rapports.
