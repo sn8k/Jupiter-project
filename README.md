@@ -6,6 +6,28 @@
 
 ---
 
+# **Guide de démarrage rapide**
+
+Les premières briques applicatives sont disponibles en CLI. Installez les dépendances (actuellement limitées à la bibliothèque standard) puis exécutez les commandes suivantes :
+
+```bash
+python -m jupiter.cli.main scan /chemin/vers/mon/projet
+python -m jupiter.cli.main scan /chemin/vers/mon/projet --ignore "**/__pycache__/*" --output rapport.json
+python -m jupiter.cli.main analyze /chemin/vers/mon/projet
+python -m jupiter.cli.main analyze /chemin/vers/mon/projet --top 10 --json
+python -m jupiter.cli.main server /chemin/vers/mon/projet --host 0.0.0.0 --port 8000
+```
+
+Ces commandes offrent une première cartographie basique (liste de fichiers, tailles, extensions, fichiers les plus volumineux) et préparent le terrain pour l’API serveur et l’intégration Meeting.
+
+### Gestion des exclusions
+
+* Le scanner ignore les fichiers et dossiers cachés par défaut ; ajoutez `--show-hidden` pour les inclure.
+* Les options `--ignore` (CLI) et le fichier `.jupiterignore` à la racine du projet permettent de filtrer des chemins via des glob patterns (`**/build/*`, `*.log`, etc.).
+* `--output` écrit le rapport de scan JSON sur disque pour archivage ou ingestion par d’autres outils.
+
+---
+
 # **1. Vision et Objectif Général**
 
 **Jupiter** est un outil généraliste conçu pour analyser, cartographier, observer et diagnostiquer l’état d’un projet de développement.
