@@ -6,6 +6,20 @@
 
 ---
 
+# **Guide de démarrage rapide**
+
+Les premières briques applicatives sont disponibles en CLI. Installez les dépendances (actuellement limitées à la bibliothèque standard) puis exécutez les commandes suivantes :
+
+```bash
+python -m jupiter.cli.main scan /chemin/vers/mon/projet
+python -m jupiter.cli.main analyze /chemin/vers/mon/projet
+python -m jupiter.cli.main server /chemin/vers/mon/projet --host 0.0.0.0 --port 8000
+```
+
+Ces commandes offrent une première cartographie basique (liste de fichiers, tailles, extensions) et préparent le terrain pour l’API serveur et l’intégration Meeting.
+
+---
+
 # **1. Vision et Objectif Général**
 
 **Jupiter** est un outil généraliste conçu pour analyser, cartographier, observer et diagnostiquer l’état d’un projet de développement.
