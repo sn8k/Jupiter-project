@@ -34,6 +34,7 @@
         <nav class="app-nav" aria-label="Navigation principale">
           <button class="nav-btn active" data-view="dashboard" data-i18n="dashboard_view">Dashboard</button>
           <button class="nav-btn" data-view="analysis" data-i18n="analysis_view">Analyse</button>
+          <button class="nav-btn" data-view="diagnostics" data-i18n="diagnostic_view">Diagnostic</button>
           <button class="nav-btn" data-view="files" data-i18n="files_view">Fichiers</button>
           <button class="nav-btn" data-view="settings" data-i18n="settings_view">Paramètres</button>
           <button class="nav-btn" data-view="plugins" data-i18n="plugins_view">Plugins</button>
@@ -72,6 +73,143 @@
                 <div class="upload-meta" id="upload-meta"></div>
               </section>
             </div>
+          </section>
+
+          <section class="view hidden" data-view="analysis" aria-label="Vue analyse">
+            <div class="grid two-cols">
+              <section class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="a_overview_eyebrow">Analyse</p>
+                    <h2 data-i18n="a_overview_title">Synthèse détaillée</h2>
+                    <p class="muted" data-i18n="a_overview_subtitle">Extensions dominantes, tailles moyennes et fichiers récents.</p>
+                  </div>
+                </header>
+                <div class="stats-grid" id="analysis-stats"></div>
+              </section>
+
+              <section class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="alerts_eyebrow">Alertes</p>
+                    <h2 data-i18n="alerts_title">Points d'attention</h2>
+                    <p class="muted" data-i18n="alerts_subtitle">État des plugins, licence Meeting et fonctions inactives.</p>
+                  </div>
+                </header>
+                <ul class="alert-list" id="alert-list"></ul>
+              </section>
+            </div>
+
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="hotspots_eyebrow">Hotspots</p>
+                  <h2 data-i18n="hotspots_title">Fichiers à explorer</h2>
+                  <p class="muted" data-i18n="hotspots_subtitle">Classement des fichiers avec le plus de fonctions.</p>
+                </div>
+              </header>
+              <div class="table-wrapper">
+                <table aria-label="Hotspots">
+                  <thead>
+                    <tr>
+                      <th data-i18n="hotspots_file">Fichier</th>
+                      <th data-i18n="hotspots_detail">Détails</th>
+                      <th class="numeric" data-i18n="hotspots_rank">Rang</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hotspot-body"></tbody>
+                </table>
+                <p class="empty" id="hotspot-empty"></p>
+              </div>
+            </section>
+          </section>
+
+          <section class="view hidden" data-view="diagnostics" aria-label="Vue diagnostic">
+            <div class="grid two-cols">
+              <section class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="diag_eyebrow">Diagnostic</p>
+                    <h2 data-i18n="diag_title">Connectivité & contexte</h2>
+                    <p class="muted" data-i18n="diag_subtitle">État du serveur API et racine servie.</p>
+                  </div>
+                </header>
+                <div class="stats-grid">
+                  <div class="stat-card">
+                    <p class="label" data-i18n="served_root">Racine servie</p>
+                    <p class="value" id="diag-root" data-i18n="loading">Chargement…</p>
+                  </div>
+                  <div class="stat-card">
+                    <p class="label" data-i18n="diag_api_label">API cible</p>
+                    <p class="value" id="api-base-url">http://127.0.0.1:8000</p>
+                  </div>
+                  <div class="stat-card">
+                    <p class="label" data-i18n="diag_scan_label">Scan</p>
+                    <p class="value" id="diag-scan-state" data-i18n="diag_scan_missing">En attente</p>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="live_events_eyebrow">Temps réel</p>
+                    <h2 data-i18n="live_events_title">Événements</h2>
+                    <p class="muted" data-i18n="live_events_subtitle">Dernières actions UI et futures notifications WS.</p>
+                  </div>
+                </header>
+                <div class="live-stream" id="live-stream"></div>
+              </section>
+            </div>
+
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="logs_eyebrow">Logs</p>
+                  <h2 data-i18n="logs_title">Historique rapide</h2>
+                  <p class="muted" data-i18n="logs_subtitle">Suivi des actions utilisateur et chargements.</p>
+                </div>
+              </header>
+              <div class="log-stream" id="log-stream"></div>
+            </section>
+          </section>
+
+          <section class="view hidden" data-view="files" aria-label="Vue fichiers">
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="files_eyebrow">Fichiers</p>
+                  <h2 data-i18n="files_title">Arborescence scannée</h2>
+                  <p class="muted" data-i18n="files_subtitle">Tri par taille décroissante (top 200).</p>
+                </div>
+              </header>
+              <div class="table-wrapper">
+                <table aria-label="Liste des fichiers">
+                  <thead>
+                    <tr>
+                      <th data-i18n="files_path">Chemin</th>
+                      <th class="numeric" data-i18n="files_size">Taille</th>
+                      <th class="numeric" data-i18n="files_modified">Modifié</th>
+                    </tr>
+                  </thead>
+                  <tbody id="files-body"></tbody>
+                </table>
+                <p class="empty" id="files-empty"></p>
+              </div>
+            </section>
+          </section>
+
+          <section class="view hidden" data-view="plugins" aria-label="Vue plugins">
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="plugins_eyebrow">Extensions</p>
+                  <h2 data-i18n="plugins_title">Plugins Jupiter</h2>
+                  <p class="muted" data-i18n="plugins_subtitle">État du socle Meeting, qualité et notifications.</p>
+                </div>
+              </header>
+              <div class="plugin-list" id="plugin-list"></div>
+            </section>
           </section>
 
           <section class="view hidden" data-view="settings" aria-label="Vue paramètres">

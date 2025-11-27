@@ -3,3 +3,4 @@
 - Documented early server stub and Meeting adapter placeholders.
 - Documented ignore patterns, `.jupiterignore` usage, and richer scan/analyze options.
 - Added GUI quickstart command and décrit la nouvelle interface web refondue (navigation multi-vues, placeholders Scan/Watch/Run, chargement drag-and-drop).
+- Clarified Diagnostic page role, CORS-enabled API access for the Scan button, and `JUPITER_API_BASE` override.
