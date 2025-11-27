@@ -1,5 +1,3 @@
----
-
 # 📘 **DOCUMENT DE RÉFÉRENCE – PROJET JUPITER**
 
 ### Outil généraliste de cartographie, d’analyse, d’observation et de maintenance intelligente de projets de développement
