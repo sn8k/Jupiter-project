@@ -19,7 +19,7 @@ python -m jupiter.cli.main server /chemin/vers/mon/projet --host 0.0.0.0 --port 
 python -m jupiter.cli.main gui /chemin/vers/mon/projet --host 0.0.0.0 --port 8050
 ```
 
-Ces commandes offrent une première cartographie basique (liste de fichiers, tailles, extensions, fichiers les plus volumineux) et préparent le terrain pour l’API serveur et l’intégration Meeting. La commande `gui` démarre un serveur HTTP statique qui expose la première ébauche d’interface web : chargez un rapport JSON issu de `scan` pour obtenir un tableau trié et quelques indicateurs (nombre de fichiers, taille totale, fichier le plus volumineux, dernière modification).
+Ces commandes offrent une cartographie basique (liste de fichiers, tailles, extensions, fichiers les plus volumineux) et préparent le terrain pour l’API serveur et l’intégration Meeting. La commande `gui` démarre un serveur HTTP statique qui expose l’interface web refondue : navigation Dashboard/Analyse/Fichiers/Paramètres/Plugins, chargement par glisser-déposer d’un rapport JSON issu de `scan`, cartes de synthèse, hotspots dérivés des fichiers volumineux et actions rapides `Scan / Watch / Run` en **placeholder** en attendant le branchement API/WS.
 
 ### Gestion des exclusions
 

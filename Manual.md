@@ -32,11 +32,13 @@ pip install -r requirements.txt
 
 ## Interface graphique (aperçu)
 - Lancement : `python -m jupiter.cli.main gui <racine> --host 0.0.0.0 --port 8050`.
-- Fonctions disponibles :
-  - chargement d’un rapport JSON produit par `scan` (drag-and-drop ou sélection de fichier),
-  - affichage des indicateurs (nombre de fichiers, taille totale, fichier le plus volumineux, dernière mise à jour),
-  - tableau trié par taille (200 premiers fichiers pour rester lisible).
-- L’UI reste purement statique pour l’instant ; la connexion à l’API se fera dans une itération ultérieure.
+- Vue globale : navigation Dashboard / Analyse / Fichiers / Paramètres / Plugins.
+- Import : glisser-déposer ou sélection d’un rapport JSON produit par `scan` (compatible avec la structure actuelle du rapport).
+- Synthèse : cartes de KPI (volumétrie, dernière modif, fichier le plus gros, dernier scan, statut Meeting placeholder), badges de statut.
+- Analyse : indicateurs dérivés (extension dominante, taille moyenne, fichier le plus récent), liste de hotspots basée sur les fichiers volumineux (placeholder pour la future analyse dynamique).
+- Fichiers : tableau trié par taille (200 premiers éléments) pour inspection rapide.
+- Paramètres & Plugins : cartes configurables prêtes à être reliées à l’adaptateur Meeting, au basculeur de thème et aux plugins (actions actuellement en **placeholder**).
+- Actions rapides : boutons `Scan / Watch / Run` et bascule Paramètres, tous en placeholder en attendant la connexion API/WS.
 
 ## Prochaines étapes suggérées
 1. Brancher un framework ASGI (ex : FastAPI) dans `jupiter/server/api.py`.
