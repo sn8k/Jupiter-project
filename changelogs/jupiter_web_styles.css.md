@@ -1,3 +1,4 @@
 # Changelog – jupiter/web/styles.css
-- Added dark-themed layout styles for the GUI panels, tables, and upload zone.
-- Added responsive tweaks for small screens.
+- Switched to refreshed dark design system with panel/contrast variables, gradients, and shadowed cards.
+- Styled navigation sidebar, action tiles, alerts, live cards, plugin/settings grids, and footer log stream.
+- Extended responsive rules for nav compaction, action grids, and header alignment on small screens.

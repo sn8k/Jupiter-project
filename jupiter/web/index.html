@@ -3,83 +3,245 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Jupiter – Interface graphique</title>
+    <title>Jupiter – Interface</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="app-header">
-      <div class="brand">
-        <span class="logo">🪐</span>
-        <div>
-          <p class="eyebrow">Jupiter</p>
-          <h1>Cartographie &amp; analyse</h1>
-        </div>
-      </div>
-      <div class="context">
-        <p class="label">Racine servie</p>
-        <p class="value" id="root-path">Chargement…</p>
-      </div>
-    </header>
-
-    <main class="layout">
-      <section class="panel">
-        <header>
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="brand">
+          <span class="logo" aria-hidden="true">🪐</span>
           <div>
-            <p class="eyebrow">Point d'entrée</p>
-            <h2>Charger un rapport</h2>
-            <p class="muted">Importez la sortie JSON de la commande <code>scan</code> pour visualiser vos fichiers.</p>
+            <p class="eyebrow">Jupiter</p>
+            <h1>Cartographie &amp; Observabilité</h1>
+            <p class="muted">Interface sombre, minimaliste et extensible</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <div class="context">
+            <p class="label">Racine servie</p>
+            <p class="value" id="root-path">Chargement…</p>
           </div>
           <div class="actions">
-            <button id="load-sample" class="ghost">Charger un exemple</button>
+            <button class="ghost" data-action="load-sample">Exemple</button>
+            <button class="primary" data-action="start-scan">Scan</button>
+            <button class="primary" data-action="start-watch">Watch</button>
           </div>
-        </header>
-        <div class="uploader" id="dropzone">
-          <div>
-            <p class="muted">Déposez un fichier <code>.json</code> ou cliquez pour sélectionner un rapport.</p>
-            <p class="small">Compatible avec la structure générée par <code>jupiter.cli.main scan --output</code>.</p>
-          </div>
-          <input type="file" id="report-input" accept="application/json" />
         </div>
-      </section>
+      </header>
 
-      <section class="panel" id="summary-panel">
-        <header>
-          <div>
-            <p class="eyebrow">Synthèse</p>
-            <h2>Vue d'ensemble</h2>
-            <p class="muted" id="summary-hint">En attente d'un rapport…</p>
-          </div>
-        </header>
-        <div class="stats-grid" id="stats-grid"></div>
-      </section>
+      <div class="app-body">
+        <nav class="app-nav" aria-label="Navigation principale">
+          <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+          <button class="nav-btn" data-view="analysis">Analyse</button>
+          <button class="nav-btn" data-view="files">Fichiers</button>
+          <button class="nav-btn" data-view="settings">Paramètres</button>
+          <button class="nav-btn" data-view="plugins">Plugins</button>
+        </nav>
 
-      <section class="panel" id="files-panel">
-        <header>
-          <div>
-            <p class="eyebrow">Fichiers</p>
-            <h2>Liste détaillée</h2>
-            <p class="muted">Tri par taille décroissante, limité aux 200 premiers éléments pour lisibilité.</p>
-          </div>
-        </header>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Chemin</th>
-                <th class="numeric">Taille</th>
-                <th class="numeric">Modifié</th>
-              </tr>
-            </thead>
-            <tbody id="files-body"></tbody>
-          </table>
-          <p class="empty" id="files-empty">Aucun rapport chargé.</p>
+        <main class="content">
+          <section class="view" data-view="dashboard" aria-label="Vue tableau de bord">
+            <div class="grid two-cols">
+              <section class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow">Panorama</p>
+                    <h2>État rapide du projet</h2>
+                    <p class="muted">Statut, progression et licence Meeting.</p>
+                  </div>
+                  <div class="badges" id="status-badges"></div>
+                </header>
+                <div class="stats-grid" id="stats-grid"></div>
+              </section>
+
+              <section class="panel" id="upload-panel">
+                <header>
+                  <div>
+                    <p class="eyebrow">Point d'entrée</p>
+                    <h2>Charger un rapport</h2>
+                    <p class="muted">Déposez un fichier <code>.json</code> généré par <code>jupiter scan</code> ou utilisez l'exemple.</p>
+                  </div>
+                </header>
+                <div class="uploader" id="dropzone">
+                  <div>
+                    <p class="muted">Glissez un rapport ou cliquez pour parcourir.</p>
+                    <p class="small">Compatible avec les scans statiques et les futures analyses incrémentales.</p>
+                  </div>
+                  <input type="file" id="report-input" accept="application/json" />
+                </div>
+                <div class="upload-meta" id="upload-meta"></div>
+              </section>
+            </div>
+
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow">Actions rapides</p>
+                  <h2>Scan, watch &amp; run</h2>
+                  <p class="muted">Déclenchez un scan ou préparez l'exécution. Les appels non câblés utilisent des placeholders.</p>
+                </div>
+              </header>
+              <div class="action-grid">
+                <button class="action-card" data-action="start-scan">
+                  <div class="icon">📡</div>
+                  <div>
+                    <p class="label">Scan</p>
+                    <p class="value">Analyser la racine</p>
+                  </div>
+                </button>
+                <button class="action-card" data-action="start-watch">
+                  <div class="icon">🛰️</div>
+                  <div>
+                    <p class="label">Watch</p>
+                    <p class="value">Suivi temps réel</p>
+                  </div>
+                </button>
+                <button class="action-card" data-action="start-run">
+                  <div class="icon">▶️</div>
+                  <div>
+                    <p class="label">Run</p>
+                    <p class="value">Exécuter une commande</p>
+                  </div>
+                </button>
+                <button class="action-card" data-action="open-settings">
+                  <div class="icon">⚙️</div>
+                  <div>
+                    <p class="label">Réglages</p>
+                    <p class="value">Licence &amp; langue</p>
+                  </div>
+                </button>
+              </div>
+              <div class="live-stream" id="live-stream" aria-live="polite"></div>
+            </section>
+
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow">Alertes</p>
+                  <h2>Problèmes détectés</h2>
+                  <p class="muted">Liste non exhaustive des alertes. Les données dynamiques seront branchées ultérieurement.</p>
+                </div>
+              </header>
+              <ul class="alert-list" id="alert-list"></ul>
+            </section>
+          </section>
+
+          <section class="view hidden" data-view="analysis" aria-label="Vue analyse">
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow">Synthèse</p>
+                  <h2>Indicateurs analytiques</h2>
+                  <p class="muted">Extensions dominantes, fichiers volumineux, horodatage du dernier scan.</p>
+                </div>
+              </header>
+              <div class="stats-grid" id="analysis-stats"></div>
+            </section>
+
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow">Hotspots</p>
+                  <h2>Fonctions et zones à surveiller</h2>
+                  <p class="muted">Placeholders en attendant la collecte d'appels dynamiques.</p>
+                </div>
+              </header>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Élément</th>
+                      <th>Raison</th>
+                      <th class="numeric">Priorité</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hotspot-body"></tbody>
+                </table>
+                <p class="empty" id="hotspot-empty">Aucun hotspot disponible sans rapport.</p>
+              </div>
+            </section>
+          </section>
+
+          <section class="view hidden" data-view="files" aria-label="Vue fichiers">
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow">Fichiers</p>
+                  <h2>Liste détaillée</h2>
+                  <p class="muted">Tri par taille décroissante. Filtrage dynamique à venir.</p>
+                </div>
+              </header>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Chemin</th>
+                      <th class="numeric">Taille</th>
+                      <th class="numeric">Modifié</th>
+                    </tr>
+                  </thead>
+                  <tbody id="files-body"></tbody>
+                </table>
+                <p class="empty" id="files-empty">Aucun rapport chargé.</p>
+              </div>
+            </section>
+          </section>
+
+          <section class="view hidden" data-view="settings" aria-label="Vue paramètres">
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow">Paramètres</p>
+                  <h2>Options principales</h2>
+                  <p class="muted">Placeholders pour licence Meeting, thème et i18n.</p>
+                </div>
+              </header>
+              <div class="settings-grid">
+                <div class="setting-card">
+                  <p class="label">Licence Meeting</p>
+                  <p class="value" id="meeting-status">En attente</p>
+                  <p class="small">Le statut réel sera synchronisé via l'adaptateur Meeting.</p>
+                  <button class="ghost" data-action="open-license">Gérer</button>
+                </div>
+                <div class="setting-card">
+                  <p class="label">Thème</p>
+                  <p class="value">Mode sombre par défaut</p>
+                  <p class="small">Le basculement clair/sombre est prévu.</p>
+                  <button class="ghost" data-action="toggle-theme">Placeholder</button>
+                </div>
+                <div class="setting-card">
+                  <p class="label">Langue</p>
+                  <p class="value">Français</p>
+                  <p class="small">Le sélecteur multi-langues sera branché sur les fichiers JSON.</p>
+                  <button class="ghost" data-action="change-language">Bientôt</button>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section class="view hidden" data-view="plugins" aria-label="Vue plugins">
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow">Plugins</p>
+                  <h2>Extensions et modules</h2>
+                  <p class="muted">Activation/désactivation à venir. Les bascules sont pour l'instant non fonctionnelles.</p>
+                </div>
+              </header>
+              <div class="plugin-list" id="plugin-list"></div>
+            </section>
+          </section>
+        </main>
+      </div>
+
+      <footer class="app-footer">
+        <div>
+          <p class="label">Journal</p>
+          <div class="log-stream" id="log-stream" aria-live="polite"></div>
         </div>
-      </section>
-    </main>
-
-    <footer class="app-footer">
-      <p>Prototype d'interface web Jupiter. Support des langues et des analyses enrichies à venir.</p>
-    </footer>
+        <p class="small muted">Interface web Jupiter — toutes les surfaces sont traduisibles et prêtes pour les flux réels.</p>
+      </footer>
+    </div>
     <script type="module" src="app.js"></script>
   </body>
 </html>
