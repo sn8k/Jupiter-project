@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jupiter"
+version = "0.1.0"
+description = "Project inspection and observability tool"
+authors = [
+  { name = "Jupiter Team", email = "team@jupiter.local" },
+]
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "pyyaml",
+]
+requires-python = ">=3.8"
+
+[project.scripts]
+jupiter = "jupiter.cli.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

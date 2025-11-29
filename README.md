@@ -1,485 +1,104 @@
-# 📘 **DOCUMENT DE RÉFÉRENCE – PROJET JUPITER**
+# Jupiter
 
-### Outil généraliste de cartographie, d’analyse, d’observation et de maintenance intelligente de projets de développement
+**Project Inspection & Observability Tool**
 
-*(Version consolidée mise à jour)*
+Jupiter is a modular tool designed to scan, analyze, and observe software projects. It combines static analysis, dynamic tracing, and a modern web interface to give you deep insights into your codebase.
 
----
+## Features
 
-# **Guide de démarrage rapide**
+*   **Static Analysis**: Scan files, detect languages, compute metrics (size, complexity, duplication).
+*   **Dynamic Analysis**: Trace function calls during execution to find dead code.
+*   **Incremental Scanning**: Fast re-scans using caching.
+*   **Web Interface**: Visual dashboard for exploring your project.
+*   **Plugins**: Extensible architecture.
+*   **Meeting Integration**: License management and session control.
 
-Les premières briques applicatives sont disponibles en CLI. Installez les dépendances (actuellement limitées à la bibliothèque standard) puis exécutez les commandes suivantes :
+## Quick Start
+
+### Windows Users
+Double-click on **`Jupiter UI.cmd`**. It will set up the environment and launch the application automatically.
+
+### Developers / Manual
+1.  **Install**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+2.  **Launch**:
+    ```bash
+    python -m jupiter.cli.main
+    ```
+    This will start the API server, the Web UI, and open your browser.
+
+## Advanced Usage (CLI)
+
+You can still use the CLI for specific tasks:
+
+*   **Scan**: `python -m jupiter.cli.main scan`
+*   **Analyze**: `python -m jupiter.cli.main analyze`
+
+### Persistent state
+
+When you change the served root in the Web UI or relaunch Jupiter without explicitly passing a directory, the tool reloads the last root saved in `~/.jupiter/state.json` and restores any cached scan data from `.jupiter/cache/last_scan.json` so your dashboards stay synchronized with the previous project.
+
+## Documentation
+
+Full documentation is available in the `docs/` directory:
+
+*   [User Guide](docs/user_guide.md)
+*   [API Reference](docs/api.md)
+*   [Architecture](docs/architecture.md)
+*   [Developer Guide](docs/dev_guide.md)
+
+## Security
+
+Jupiter is primarily a local development tool. However, when exposing the API (e.g. on a shared network), you should:
+
+1.  **Configure a Token**: Add `security.token` in `jupiter.yaml`.
+2.  **Use a Reverse Proxy**: For SSL/TLS termination if needed.
+
+## Release Notes
+
+- **0.1.5** – Ensures Web UI modals remain hidden (global `.hidden` helper) and fixes duplicated `startScan` logic that blocked the dashboard script.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+See [LICENSE](LICENSE).
+
+### Installation
 
 ```bash
-python -m jupiter.cli.main scan /chemin/vers/mon/projet
-python -m jupiter.cli.main scan /chemin/vers/mon/projet --ignore "**/__pycache__/*" --output rapport.json
-python -m jupiter.cli.main analyze /chemin/vers/mon/projet
-python -m jupiter.cli.main analyze /chemin/vers/mon/projet --top 10 --json
-python -m jupiter.cli.main server /chemin/vers/mon/projet --host 0.0.0.0 --port 8000
-python -m jupiter.cli.main gui /chemin/vers/mon/projet --host 0.0.0.0 --port 8050
+pip install -r requirements.txt
 ```
 
-Ces commandes offrent une cartographie basique (liste de fichiers, tailles, extensions, fichiers les plus volumineux) et préparent le terrain pour l’API serveur et l’intégration Meeting. La commande `gui` démarre un serveur HTTP statique qui expose l’interface web refondue : navigation Dashboard/Analyse/Fichiers/Paramètres/Plugins, chargement par glisser-déposer d’un rapport JSON issu de `scan`, cartes de synthèse, hotspots dérivés des fichiers volumineux et actions rapides `Scan / Watch / Run` en **placeholder** en attendant le branchement API/WS.
+### Usage
 
-### Gestion des exclusions
-
-* Le scanner ignore les fichiers et dossiers cachés par défaut ; ajoutez `--show-hidden` pour les inclure.
-* Les options `--ignore` (CLI) et le fichier `.jupiterignore` à la racine du projet permettent de filtrer des chemins via des glob patterns (`**/build/*`, `*.log`, etc.).
-* `--output` écrit le rapport de scan JSON sur disque pour archivage ou ingestion par d’autres outils.
-
----
-
-# **1. Vision et Objectif Général**
-
-**Jupiter** est un outil généraliste conçu pour analyser, cartographier, observer et diagnostiquer l’état d’un projet de développement.
-Il éclaire :
-
-* la structure réelle du code,
-* les dépendances internes,
-* les fonctions réellement utilisées,
-* les zones obsolètes ou mortes,
-* l’évolution du projet dans le temps,
-* le comportement dynamique en exécution,
-* la santé du projet dans sa globalité.
-
-Il fonctionne :
-
-* en **local**,
-* en **mode serveur**,
-* via **interface web** ou **interface locale**,
-* via **SSH**,
-* et peut être **intégré à d’autres systèmes** (ex : *Meeting*).
-
-Jupiter est **totalement généraliste**, indépendant de *Brain* ou d’un contexte spécifique.
-
----
-
-# **2. Problématique ciblée**
-
-Les projets informatiques évoluent et s’alourdissent. Ils accumulent :
-
-* fichiers inutilisés,
-* couches legacy,
-* code mort,
-* documentation obsolète,
-* modules fantômes,
-* scripts oubliés,
-* usages réels divergents du code prévu,
-* dette technique non identifiée.
-
-Jupiter met en lumière l’état réel du projet, avec des outils d’analyse statique, dynamique et incrémentale.
-
----
-
-# **3. Philosophie**
-
-### **3.1. Jupiter éclaire, il ne modifie jamais le code**
-
-Aucune modification automatique du code ou des fichiers du projet.
-
-### **3.2. Analyse statique + dynamique**
-
-Comprendre le projet “au repos” *et* “en mouvement”.
-
-### **3.3. Observabilité continue**
-
-Jupiter peut suivre l’évolution d’un projet dans le temps, ses modifications et son comportement lors de l’exécution.
-
-### **3.4. Multi-langue par design**
-
-Toutes les interfaces sont traduisibles nativement.
-
-### **3.5. Systèmes externes**
-
-Jupiter peut se connecter à Meeting ou d’autres services tiers via plugins.
-
----
-
-# **4. Fonctionnalités Principales**
-
-## **4.1. Scan & Cartographie globale**
-
-* Analyse complète du dossier
-* Détection de tous fichiers (code, doc, assets)
-* Graphe de dépendances internes
-* Arborescence annotée
-* Résultats exportables
-
----
-
-## **4.2. Analyse des fonctions**
-
-### Extraction
-
-Pour chaque langage :
-
-* fonctions définies
-* fonctions appelées
-* classes, méthodes, endpoints, handlers…
-
-### Détection des fonctions inutilisées
-
-Basée sur :
-
-* absence d’usage,
-* absence de référence,
-* ancienneté,
-* heuristiques d’usage indirect.
-
-### Niveaux de suspicion
-
-🔴 fort — 🟠 moyen — 🟡 faible — 🟢 sain
-
----
-
-## **4.3. Détection des fichiers obsolètes**
-
-Basée sur :
-
-* absence d’imports,
-* absence de références,
-* absence d’exécution,
-* ancienneté,
-* vide ou quasi vide,
-* non-consultation documentée.
-
----
-
-## **4.4. Analyse documentaire**
-
-Score basé sur :
-
-* âge,
-* taille,
-* mots-clés “deprecated/obsolete/legacy…“,
-* référencement dans README,
-* importance probable.
-
----
-
-## **4.5. Exécution + Logging**
-
-```
-jupiter run "ma_commande"
+**Scan a project:**
+```bash
+python -m jupiter.cli.main scan
 ```
 
-→ logs en temps réel
-→ sauvegarde structurée
-→ diffusion WebSocket en mode serveur
-
----
-
-# **5. Architecture Logicielle**
-
-```
-jupiter/
- ├── core/
- │    ├── scanner.py
- │    ├── incremental.py
- │    ├── analyzer.py
- │    ├── language/
- │    │       ├── python.py
- │    │       ├── js_ts.py
- │    │       └── …
- │    ├── docs.py
- │    ├── runner.py
- │    └── report.py
- ├── server/
- │    ├── api.py
- │    ├── manager.py
- │    ├── ws.py
- │    └── meeting_adapter.py
- ├── web/
- │    ├── index.html
- │    ├── app.js
- │    ├── styles.css
- │    ├── lang/
- │    └── components/
- ├── cli/
- │    └── main.py
- └── config/
-      ├── default.yml
-      └── languages.yml
+**Start the Web UI:**
+```bash
+python -m jupiter.cli.main gui
 ```
 
----
-
-# **6. Interfaces**
-
-## **6.1. Interface locale**
-
-Via :
-
-```
-jupiter gui
+**Start the API Server:**
+```bash
+python -m jupiter.cli.main server
 ```
 
-Inclut :
+## Documentation
 
-* tableau de bord,
-* arborescence,
-* résultats,
-* follow-up de fonctions,
-* mise à jour incrémentale.
+Full documentation is available in the `docs/` directory:
 
----
+* [User Guide](docs/user_guide.md)
+* [API Reference](docs/api.md)
+* [Architecture](docs/architecture.md)
 
-## **6.2. Interface web (serveur)**
+## License
 
-Fonctionnalités :
-
-* dashboard complet,
-* graphes de dépendances,
-* heatmaps,
-* logs en temps réel,
-* multi-projets,
-* incrémental,
-* suivi de fonction,
-* thème dark par défaut + bascule light,
-* moteur multi-langue intégré.
-
-La page **Diagnostic** affiche l'URL de l'API cible et l'état du dernier scan. Le serveur FastAPI expose désormais CORS afin de permettre au bouton **Scan** du web UI (paramétrable via `JUPITER_API_BASE`) d'appeler `/scan` sans erreur "fail to fetch".
-
----
-
-# **7. Mode Serveur & SSH**
-
-## **7.1. Serveur**
-
-```
-jupiter server start
-```
-
-Permet :
-
-* API REST complète
-* Web UI
-* gestion multi-projets
-* WebSocket temps réel
-* compatibilité Meeting
-* scans planifiés
-
----
-
-## **7.2. SSH**
-
-Commandes :
-
-* `jupiter scan`
-* `jupiter update`
-* `jupiter watch`
-* `jupiter check foo`
-* `jupiter run "..."`
-
----
-
-# **8. Fonctionnalités Avancées**
-
-## **8.1. Mise à jour incrémentale**
-
-```
-jupiter update
-```
-
-→ ne rescane **que** ce qui a changé
-→ met à jour les résultats existants
-
----
-
-## **8.2. Suivi d’une fonction**
-
-```
-jupiter check foo
-```
-
-Met à jour :
-
-* nombre d’appels,
-* références,
-* statut d’usage,
-* disparition éventuelle.
-
----
-
-## **8.3. Mode scan continu**
-
-```
-jupiter watch
-```
-
-Fonctionnalités :
-
-* file watcher,
-* analyse en direct,
-* alertes (function appears/disappears),
-* mise à jour du rapport.
-
-### Mode avancé : watch + exécution
-
-```
-jupiter watch --run "python main.py"
-```
-
-→ analyse dynamique réelle du programme.
-
----
-
-# **9. Multi-langue**
-
-* JSON/YAML de traduction,
-* clés unifiées,
-* auto-chargement selon langue choisie,
-* sélecteur de langue,
-* possibilité d’ajouter des langues personnalisées.
-
----
-
-# **10. Compatibilité Meeting**
-
-## Configuration
-
-```
-meeting:
-  enabled: true
-  deviceKey: "xxx"
-```
-
-## Comportement
-
-* Jupiter doit apparaître comme **device online** dans Meeting,
-* Meeting doit connaître :
-
-  * statut en ligne,
-  * date/heure de dernière détection,
-  * état du scan / watch,
-* **Système de licence** :
-
-  * si `deviceKey` inconnue → Jupiter fonctionne 10 minutes max.
-
-## Module dédié
-
-```
-server/meeting_adapter.py
-```
-
----
-
-# **11. Sorties & Rapports**
-
-* terminal,
-* web UI,
-* graphiques,
-* heatmaps,
-* WebSocket live,
-* fichiers (reports + logs).
-
----
-
-# **12. Nouvelles Idées Intégrées**
-
-## **12.1. Analyse qualité du code (optionnelle)**
-
-Détection :
-
-* code dupliqué,
-* fonctions trop longues,
-* classes trop denses,
-* complexité élevée,
-* imbrications excessives.
-
-## **12.2. Plugin System / Extensions**
-
-```
-jupiter/plugins/
-```
-
-Plugins pour :
-
-* nouveaux langages,
-* rapports personnalisés,
-* connexion à outils externes,
-* instrumentation avancée,
-* suggestions IA (optionnelles).
-
-## **12.3. Modes d'analyse spécialisés**
-
-* mode sécurité (patterns dangereux),
-* mode performance,
-* mode dépendances externes.
-
-## **12.4. Simulation de suppression**
-
-```
-jupiter simulate remove foo
-```
-
-Affiche :
-
-* impact potentiel,
-* fichiers cassés,
-* dépendances rompues.
-
-## **12.5. Historique et comparaison**
-
-```
-jupiter diff scan1 scan2
-```
-
-Permet :
-
-* comparaison de scans,
-* suivi historique de l’évolution.
-
-## **12.6. Support polyglotte**
-
-Détection automatique des langages du projet.
-
-## **12.7. API interne Python**
-
-```python
-import jupiter
-project = jupiter.Project("path")
-report = project.scan()
-```
-
-## **12.8. Live Map UI**
-
-* Carte interactive,
-* mise à jour en direct,
-* température d’usage du code.
-
-## **12.9. Notifications et webhooks (plugin)**
-
-Email **non prioritaire**, mais possible via plugin.
-
-## **12.10. Profil par projet**
-
-```
-.jupiter.yml
-```
-
-## **12.11. Supervision multi-projets**
-
-Dashboard global.
-
-## **12.12. Auto-mise-à-jour**
-
-* depuis le repo Git,
-* depuis un ZIP téléchargé.
-
----
-
-# **13. Questions en suspens (à décider ultérieurement)**
-
-* niveau de sécurité / sandboxing souhaité,
-* niveau exact d’instrumentation dynamique,
-* degré d’accès exposé par API Meeting,
-* périmètre futur de l’IA optionnelle,
-* granularité du profiling dynamique.
-
----
-
-# **14. Conclusion**
-
-Ce fichier est la **référence officielle** et complète du Projet Jupiter.
-Tous les ajouts sont intégrés, aucune section supprimée, tout est consolidé et extensible.
+Proprietary / Internal.

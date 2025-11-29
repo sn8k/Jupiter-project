@@ -47,7 +47,12 @@
   "analysis_dominant_ext": "Extension dominante",
   "analysis_avg_size": "Taille moyenne",
   "analysis_freshest": "Fichier le plus récent",
-  "analysis_dynamic": "Analyse dynamique",
+    "analysis_dynamic": "Analyse dynamique",
+  "browser_title": "Sélectionner un dossier",
+  "cancel": "Annuler",
+  "select": "Sélectionner"
+}
+,
   "placeholder_dynamic": "Placeholder (à brancher sur run/watch)",
   "hotspots_empty": "Aucun hotspot disponible sans rapport.",
   "alert_no_report_title": "Aucun rapport chargé",
@@ -94,6 +99,7 @@
   "plugin_name_label": "Nom",
   "plugin_status_label": "Statut",
   "plugin_status_ok": "Actif",
+  "plugin_status_active": "Actif",
   "plugin_status_pending": "En attente",
   "plugin_status_disabled": "Désactivé",
   "badge_scan": "Scan",

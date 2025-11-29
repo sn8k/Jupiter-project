@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from .scanner import FileMetadata
+from .cache import CacheManager
+from .quality.complexity import estimate_complexity
+from .quality.duplication import find_duplications
 
 
 @dataclass(slots=True)
@@ -18,7 +21,6 @@ class PythonProjectSummary:
     total_functions: int = 0
     total_potentially_unused_functions: int = 0
     avg_functions_per_file: float = 0.0
-    # Placeholder for future quality metrics
     quality_score: Optional[float] = None
 
 
@@ -33,6 +35,8 @@ class AnalysisSummary:
 
     python_summary: Optional[PythonProjectSummary] = None
     hotspots: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+    quality: Dict[str, Any] = field(default_factory=dict)
+    refactoring: List[Dict[str, Any]] = field(default_factory=list)
 
     def describe(self) -> str:
         """Return a human readable multi-line summary."""
@@ -69,8 +73,20 @@ class AnalysisSummary:
                 hotspots_str += f"\n  - {name.replace('_', ' ').capitalize()}:"
                 for item in items:
                     hotspots_str += f"\n    - {item['path']} ({item['details']})"
+        
+        quality_str = ""
+        if self.quality:
+            quality_str = f"\n\nQuality:\n  - Duplications: {len(self.quality.get('duplication_clusters', []))} clusters"
 
-        return base_summary + python_summary_str + hotspots_str
+        refactoring_str = ""
+        if self.refactoring:
+            refactoring_str = f"\n\nRefactoring Recommendations ({len(self.refactoring)}):"
+            for item in self.refactoring[:5]: # Show top 5
+                refactoring_str += f"\n  - [{item['severity'].upper()}] {item['path']}: {item['details']}"
+            if len(self.refactoring) > 5:
+                refactoring_str += f"\n  ... and {len(self.refactoring) - 5} more."
+
+        return base_summary + python_summary_str + hotspots_str + quality_str + refactoring_str
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable representation of the summary."""
@@ -80,18 +96,35 @@ class AnalysisSummary:
             "average_size_bytes": self.average_size_bytes,
             "by_extension": self.by_extension,
             "hotspots": self.hotspots,
+            "quality": self.quality,
+            "refactoring": self.refactoring,
         }
         if self.python_summary:
             # Manually convert dataclass to dict for nested serialization
-            data["python_summary"] = self.python_summary.__dict__
+            data["python_summary"] = asdict(self.python_summary)
         return data
 
 
 class ProjectAnalyzer:
     """Aggregate scanner outputs into a concise summary."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, no_cache: bool = False) -> None:
         self.root = root
+        self.no_cache = no_cache
+        self.cache_manager = CacheManager(root)
+        self.last_scan = self.cache_manager.load_last_scan()
+        self.analysis_cache = {}
+        
+        if not self.no_cache:
+            self.analysis_cache = self.cache_manager.load_analysis_cache()
+
+        self.dynamic_calls = {}
+        if self.last_scan and "dynamic" in self.last_scan and self.last_scan["dynamic"]:
+             dynamic_data = self.last_scan["dynamic"]
+             if isinstance(dynamic_data, dict) and "calls" in dynamic_data:
+                 self.dynamic_calls = dynamic_data["calls"]
+             elif isinstance(dynamic_data, dict):
+                 self.dynamic_calls = dynamic_data
 
     def summarize(self, files: Iterable[FileMetadata], top_n: int = 5) -> AnalysisSummary:
         """Compute aggregate metrics for ``files`` collection."""
@@ -128,15 +161,120 @@ class ProjectAnalyzer:
         if python_files:
             py_file_count = len(python_files)
             py_total_functions = sum(len(m.language_analysis.get("defined_functions", [])) for m in python_files)
-            py_total_unused = sum(
-                len(m.language_analysis.get("potentially_unused_functions", [])) for m in python_files
-            )
+            
+            # Calculate unused functions considering dynamic analysis
+            py_total_unused = 0
+            for m in python_files:
+                unused_funcs = m.language_analysis.get("potentially_unused_functions", [])
+                if not unused_funcs:
+                    continue
+                
+                try:
+                    rel_path = m.path.relative_to(self.root)
+                    rel_path_str = str(rel_path)
+                    rel_path_posix = rel_path.as_posix()
+                except ValueError:
+                    rel_path_str = str(m.path)
+                    rel_path_posix = str(m.path)
+
+                for func in unused_funcs:
+                    # Check if function was called dynamically
+                    # We check both OS-specific path and POSIX path just in case
+                    key = f"{rel_path_str}::{func}"
+                    key_posix = f"{rel_path_posix}::{func}"
+                    
+                    if self.dynamic_calls.get(key, 0) == 0 and self.dynamic_calls.get(key_posix, 0) == 0:
+                        py_total_unused += 1
+
             python_summary = PythonProjectSummary(
                 total_files=py_file_count,
                 total_functions=py_total_functions,
                 total_potentially_unused_functions=py_total_unused,
                 avg_functions_per_file=py_total_functions / py_file_count if py_file_count else 0.0,
             )
+
+        # Quality Analysis
+        quality_metrics = {}
+        refactoring_recommendations = []
+        
+        if python_files:
+            # Complexity
+            complexity_scores = []
+            new_analysis_cache = {}
+
+            for m in python_files:
+                file_key = str(m.path)
+                # Check cache
+                cached_data = self.analysis_cache.get(file_key)
+                
+                if (
+                    not self.no_cache 
+                    and cached_data 
+                    and cached_data.get("mtime") == m.modified_timestamp
+                    and "complexity" in cached_data
+                ):
+                    score = cached_data["complexity"]
+                else:
+                    if m.size_bytes > 10 * 1024 * 1024: # 10 MB limit
+                        score = 0
+                    else:
+                        score = estimate_complexity(m.path)
+                
+                # Update new cache
+                new_analysis_cache[file_key] = {
+                    "mtime": m.modified_timestamp,
+                    "complexity": score
+                }
+
+                complexity_scores.append({"path": str(m.path), "score": score})
+                
+                # Refactoring recommendation for complexity
+                if score > 15:
+                    severity = "high" if score > 30 else "medium"
+                    refactoring_recommendations.append({
+                        "path": str(m.path),
+                        "type": "complexity",
+                        "details": f"High cyclomatic complexity ({score}). Consider splitting functions.",
+                        "severity": severity
+                    })
+            
+            # Save cache
+            if not self.no_cache:
+                self.cache_manager.save_analysis_cache(new_analysis_cache)
+            
+            complexity_scores.sort(key=lambda x: x["score"], reverse=True)
+            quality_metrics["complexity_per_file"] = complexity_scores
+            
+            # Add complexity hotspot
+            hotspots["most_complex"] = [
+                {"path": item["path"], "details": f"Complexity: {item['score']}"}
+                for item in complexity_scores[:top_n]
+            ]
+
+            # Duplication
+            # Only check top 50 largest python files to save time for now, and skip large files
+            files_to_check = [m.path for m in python_files[:50] if m.size_bytes < 10 * 1024 * 1024]
+            duplications = find_duplications(files_to_check)
+            quality_metrics["duplication_clusters"] = duplications
+            
+            # Refactoring recommendation for duplication
+            for cluster in duplications:
+                paths = list(set(occ["path"] for occ in cluster["occurrences"]))
+                if len(paths) > 1:
+                    details = f"Code duplicated across {len(paths)} files."
+                    severity = "high"
+                else:
+                    details = f"Code duplicated {len(cluster['occurrences'])} times in this file."
+                    severity = "medium"
+                
+                # Add recommendation for the first file involved
+                if paths:
+                    refactoring_recommendations.append({
+                        "path": paths[0],
+                        "type": "duplication",
+                        "details": details,
+                        "severity": severity
+                    })
 
         return AnalysisSummary(
             file_count=file_count,
@@ -145,4 +283,6 @@ class ProjectAnalyzer:
             average_size_bytes=average_size,
             python_summary=python_summary,
             hotspots=hotspots,
+            quality=quality_metrics,
+            refactoring=refactoring_recommendations,
         )

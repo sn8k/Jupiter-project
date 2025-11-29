@@ -22,6 +22,7 @@ class WebUISettings:
     root: Path
     host: str = "127.0.0.1"
     port: int = 8050
+    device_key: str | None = None
 
 
 class JupiterWebUI:
@@ -37,10 +38,51 @@ class JupiterWebUI:
 
         web_root = self.web_root
         api_base_url = os.environ.get("JUPITER_API_BASE", "http://127.0.0.1:8000")
-        context = {"root": str(self.settings.root), "api_base_url": api_base_url}
+        
+        # Ensure root path is clean (no quotes)
+        root_str = str(self.settings.root).strip('"\'')
+        config_path = self.settings.root / "jupiter.yaml"
+        
+        context = {
+            "root": root_str,
+            "api_base_url": api_base_url,
+            "meeting": {"deviceKey": self.settings.device_key},
+            "has_config_file": config_path.exists()
+        }
 
         class _Handler(SimpleHTTPRequestHandler):  # type: ignore[misc]
+            def end_headers(self) -> None:
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
+                super().end_headers()
+
             def do_GET(self) -> None:  # noqa: N802 (SimpleHTTPRequestHandler interface)
+                # Force 200 OK for core files to bypass browser cache issues
+                if self.path in ["/", "/index.html", "/app.js"]:
+                    fpath = "/index.html" if self.path == "/" else self.path
+                    # Remove query params if any (though SimpleHTTPRequestHandler usually strips them before here, 
+                    # but self.path might include them depending on implementation. 
+                    # Actually self.path includes query string in standard http.server)
+                    if "?" in fpath:
+                        fpath = fpath.split("?")[0]
+                        
+                    rel_path = fpath.lstrip("/")
+                    full_path = web_root / rel_path
+                    
+                    if full_path.exists():
+                        try:
+                            content = full_path.read_bytes()
+                            self.send_response(200)
+                            ctype = self.guess_type(str(full_path))
+                            self.send_header("Content-Type", ctype)
+                            self.send_header("Content-Length", str(len(content)))
+                            self.end_headers()
+                            self.wfile.write(content)
+                            return
+                        except Exception as e:
+                            logger.error(f"Error serving {fpath}: {e}")
+
                 if self.path == "/context.json":
                     payload = json.dumps(context).encode("utf-8")
                     self.send_response(200)
@@ -84,7 +126,7 @@ class JupiterWebUI:
         self._server = None
 
 
-def launch_web_ui(root: Path, host: str = "127.0.0.1", port: int = 8050) -> None:
+def launch_web_ui(root: Path, host: str = "127.0.0.1", port: int = 8050, device_key: str | None = None) -> None:
     """Helper to run the GUI with minimal setup."""
 
-    JupiterWebUI(WebUISettings(root=root, host=host, port=port)).start()
+    JupiterWebUI(WebUISettings(root=root, host=host, port=port, device_key=device_key)).start()
