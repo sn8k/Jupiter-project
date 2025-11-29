@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable, Optional
 
 from .scanner import FileMetadata
 
@@ -15,7 +15,8 @@ class ScanReport:
 
     root: Path
     files: list[FileMetadata]
-    dynamic_analysis: Optional[dict] = None
+    schema_version: str = "1.0"
+    dynamic: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, object]:
         """Represent the report as a JSON-serializable dictionary.
@@ -33,17 +34,17 @@ class ScanReport:
                     "language_analysis": dict | None,
                 }
             ],
-            "dynamic_analysis": dict | None
+            "dynamic": dict | None
         }
         """
 
         data = {
-            "report_schema_version": "1.0",
+            "report_schema_version": self.schema_version,
             "root": str(self.root),
             "files": [self._serialize_file(metadata) for metadata in self.files],
         }
-        if self.dynamic_analysis:
-            data["dynamic_analysis"] = self.dynamic_analysis
+        if self.dynamic:
+            data["dynamic"] = self.dynamic
         return data
 
     @staticmethod

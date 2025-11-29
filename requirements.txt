@@ -1,10 +1,13 @@
 # Core dependencies for Jupiter.
 pyyaml
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
+httpx
 # Standard library only for now; GUI (http.server + static assets) does not add third-party needs yet.
 # Web interface refonte : toujours zéro dépendance externe côté Python/JS (vanilla assets uniquement).
+
+# Persistent-root state leverages the standard library (json/pathlib); no new requirements were added.
 
 
 

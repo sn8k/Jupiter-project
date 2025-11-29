@@ -47,7 +47,12 @@
   "analysis_dominant_ext": "Dominant extension",
   "analysis_avg_size": "Average size",
   "analysis_freshest": "Most recent file",
-  "analysis_dynamic": "Dynamic analysis",
+    "analysis_dynamic": "Dynamic analysis",
+  "browser_title": "Select a folder",
+  "cancel": "Cancel",
+  "select": "Select"
+}
+,
   "placeholder_dynamic": "Placeholder (to be connected to run/watch)",
   "hotspots_empty": "No hotspots available without a report.",
   "alert_no_report_title": "No report loaded",
@@ -94,6 +99,7 @@
   "plugin_name_label": "Name",
   "plugin_status_label": "Status",
   "plugin_status_ok": "Active",
+  "plugin_status_active": "Active",
   "plugin_status_pending": "Pending",
   "plugin_status_disabled": "Disabled",
   "badge_scan": "Scan",

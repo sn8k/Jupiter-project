@@ -47,29 +47,66 @@ class UIConfig:
 
 
 @dataclass
-class JupiterConfig:
-    """Root configuration object for Jupiter."""
+class PluginsConfig:
+    """Configuration for plugins."""
 
-    project_root: Optional[Path] = None
+    enabled: list[str] = field(default_factory=list)
+    disabled: list[str] = field(default_factory=list)
+
+
+@dataclass
+class SecurityConfig:
+    """Configuration for security."""
+
+    token: Optional[str] = None
+
+
+@dataclass
+class ProjectBackendConfig:
+    """Configuration for a project backend."""
+    name: str
+    type: str = "local_fs"  # local_fs, remote_jupiter_api
+    path: Optional[str] = None
+    api_url: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+@dataclass
+class JupiterConfig:
+    """Global configuration."""
+
     server: ServerConfig = field(default_factory=ServerConfig)
     gui: GuiConfig = field(default_factory=GuiConfig)
     meeting: MeetingConfig = field(default_factory=MeetingConfig)
     ui: UIConfig = field(default_factory=UIConfig)
+    plugins: PluginsConfig = field(default_factory=PluginsConfig)
+    security: SecurityConfig = field(default_factory=SecurityConfig)
+    backends: list[ProjectBackendConfig] = field(default_factory=list)
+    project_root: Path = field(default_factory=Path.cwd)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "JupiterConfig":
+    def from_dict(cls, data: dict[str, Any]) -> JupiterConfig:
         """Create a config object from a dictionary."""
-        server_cfg = ServerConfig(**data.get("server", {}))
-        gui_cfg = GuiConfig(**data.get("gui", {}))
-        meeting_cfg = MeetingConfig(**data.get("meeting", {}))
-        ui_cfg = UIConfig(**data.get("ui", {}))
+        server_data = data.get("server", {})
+        gui_data = data.get("gui", {})
+        meeting_data = data.get("meeting", {})
+        ui_data = data.get("ui", {})
+        plugins_data = data.get("plugins", {})
+        security_data = data.get("security", {})
+        backends_data = data.get("backends", [])
+
+        backends = [ProjectBackendConfig(**b) for b in backends_data]
+
         return cls(
-            project_root=data.get("project_root"),
-            server=server_cfg,
-            gui=gui_cfg,
-            meeting=meeting_cfg,
-            ui=ui_cfg,
+            server=ServerConfig(**server_data),
+            gui=GuiConfig(**gui_data),
+            meeting=MeetingConfig(**meeting_data),
+            ui=UIConfig(**ui_data),
+            plugins=PluginsConfig(**plugins_data),
+            security=SecurityConfig(**security_data),
+            backends=backends,
         )
+
 
 
 def load_config(root_path: Path) -> JupiterConfig:
@@ -88,13 +125,56 @@ def load_config(root_path: Path) -> JupiterConfig:
     logger.info("Loading config from %s", config_file)
     try:
         with config_file.open("r", encoding="utf-8") as f:
-            config_data = yaml.safe_load(f) or {}
-    except (IOError, yaml.YAMLError) as e:
-        logger.error("Failed to load or parse config file %s: %s", config_file, e)
-        # Fallback to default config on error
+            data = yaml.safe_load(f) or {}
+        
+        config = JupiterConfig.from_dict(data)
+        config.project_root = root_path
+        return config
+    except Exception as e:
+        logger.error("Failed to load config file: %s", e)
         return JupiterConfig(project_root=root_path)
 
-    # Create config from dict, which handles defaults for missing sections
-    config = JupiterConfig.from_dict(config_data)
-    config.project_root = root_path
-    return config
+
+def save_config(config: JupiterConfig, root_path: Path) -> None:
+    """Save configuration to a YAML file."""
+    config_file = root_path / CONFIG_FILE_NAME
+    
+    data = {
+        "server": {
+            "host": config.server.host,
+            "port": config.server.port,
+        },
+        "gui": {
+            "host": config.gui.host,
+            "port": config.gui.port,
+        },
+        "meeting": {
+            "enabled": config.meeting.enabled,
+            "deviceKey": config.meeting.deviceKey,
+        },
+        "ui": {
+            "theme": config.ui.theme,
+            "language": config.ui.language,
+        },
+        "plugins": {
+            "enabled": config.plugins.enabled,
+            "disabled": config.plugins.disabled,
+        },
+        "backends": [
+            {
+                "name": b.name,
+                "type": b.type,
+                "path": b.path,
+                "api_url": b.api_url,
+            }
+            for b in config.backends
+        ],
+    }
+    
+    try:
+        with config_file.open("w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False)
+        logger.info("Saved config to %s", config_file)
+    except Exception as e:
+        logger.error("Failed to save config file: %s", e)
+        raise
