@@ -8,7 +8,7 @@ Plugins are Python classes that adhere to the `Plugin` protocol. They are discov
 
 ### Configuration
 
-Plugins are configured in the `jupiter.yaml` file in your project root.
+Plugins are configured in the `<project>.jupiter.yaml` file in your project root.
 
 ```yaml
 plugins:

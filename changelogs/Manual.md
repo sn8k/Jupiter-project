@@ -6,3 +6,12 @@
 - Documented snapshot workflow (auto-save, `--snapshot-label`, `--no-snapshot`, `snapshots list|show|diff`, History view diff panel, API endpoints).
 - Added CI command coverage plus the explanation of the shared CLI pipeline.
 - Documented the `/config/root` behavior (automatic connector/plugin/Meeting refresh and history alignment).
+- Mentioned the redesigned Projects dashboard (active summary, root, last scan, quick actions) in the UI overview.
+- Added a logging section describing the new Settings-based log level control and where it is stored (`logging.level`).
+- Clarified configuration naming: project files are now `<projet>.jupiter.yaml` and the project registry lives in `~/.jupiter/global_config.yaml` (legacy names still readable).
+- Added guidance on the new log file path field in Settings (optional to enable file logging).
+- Clarified that activating a project from the Web UI updates the global registry and `~/.jupiter/state.json` so the next launch reopens the same project automatically.
+- Documented that AI Helper duplication suggestions now enumerate file:line occurrences so exported reports are directly actionable.
+- Mentioned internal refactors (CLI/API/UI) that remove duplicated scan/historique/projet handling code.
+- Documented per-project ignore globs editable depuis la page Projets (appliqués automatiquement aux scans/analyses).
+- Ajouté que la configuration API (connector/app_var/chemin) se gère désormais dans la page Projets, par projet, via un formulaire dédié.

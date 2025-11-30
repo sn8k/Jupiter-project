@@ -127,6 +127,8 @@ class RefactoringRecommendation(BaseModel):
     type: str
     details: str
     severity: str
+    locations: Optional[List[Dict[str, Any]]] = None
+    code_excerpt: Optional[str] = None
 
 
 class AnalyzeResponse(BaseModel):
@@ -222,6 +224,8 @@ class ConfigModel(BaseModel):
     meeting_device_key: Optional[str]
     ui_theme: str
     ui_language: str
+    log_level: str = "INFO"
+    log_path: Optional[str] = None
     plugins_enabled: List[str]
     plugins_disabled: List[str]
     # Performance

@@ -38,7 +38,7 @@ Jupiter is designed as a modular system with a clear separation of concerns.
 
 ## Configuration (`jupiter.config`)
 
-* Centralized configuration management using `jupiter.yaml`.
+* Centralized configuration management using `<project>.jupiter.yaml`.
 * Handles overrides via CLI arguments.
 
 ## Plugins (`jupiter.plugins`)
@@ -48,6 +48,6 @@ Jupiter is designed as a modular system with a clear separation of concerns.
 
 ## Security
 
-* **Run Restrictions**: The `run` command can be restricted via `jupiter.yaml` (`security.allow_run`, `security.allowed_commands`).
+* **Run Restrictions**: The `run` command can be restricted via `<project>.jupiter.yaml` (`security.allow_run`, `security.allowed_commands`).
 * **Plugin Policy**: Plugins have a `trust_level` (experimental vs trusted).
 * **Remote Projects**: Remote connectors use secure timeouts and masked error logging.

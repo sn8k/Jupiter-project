@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from collections import Counter
 from dataclasses import dataclass, field, asdict
+from itertools import islice
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
-import time
-import logging
 
 from .scanner import FileMetadata
 from .cache import CacheManager
@@ -100,7 +101,21 @@ class AnalysisSummary:
         
         quality_str = ""
         if self.quality:
-            quality_str = f"\n\nQuality:\n  - Duplications: {len(self.quality.get('duplication_clusters', []))} clusters"
+            duplication_clusters = self.quality.get("duplication_clusters", [])
+            quality_str = f"\n\nQuality:\n  - Duplications: {len(duplication_clusters)} clusters"
+            if duplication_clusters:
+                sample_occurrences = duplication_clusters[0].get("occurrences", [])
+                if sample_occurrences:
+                    preview_parts = []
+                    for occ in sample_occurrences[:3]:
+                        func = occ.get("function")
+                        location = f"{Path(occ.get('path', ''))}:{occ.get('line', '?')}"
+                        preview_parts.append(f"{location}" + (f" ({func})" if func else ""))
+                    preview = ", ".join(preview_parts)
+                    if preview:
+                        extra = max(0, len(sample_occurrences) - 3)
+                        suffix = f" (+{extra} more)" if extra else ""
+                        quality_str += f"\n    Example: {preview}{suffix}"
 
         refactoring_str = ""
         if self.refactoring:
@@ -318,16 +333,59 @@ class ProjectAnalyzer:
         if files_to_check:
             duplications = find_duplications(files_to_check)
             quality_metrics["duplication_clusters"] = duplications
+
+            def _format_path(path_str: str) -> str:
+                """Return a stable, relative-friendly path for reporting."""
+                p = Path(path_str)
+                try:
+                    rel = p.relative_to(self.root)
+                    return rel.as_posix()
+                except ValueError:
+                    return p.as_posix()
             
             # Refactoring recommendation for duplication
             for cluster in duplications:
-                paths = list(set(occ["path"] for occ in cluster["occurrences"]))
+                # Deduplicate occurrences to avoid noisy reports
+                unique_locations = []
+                seen_locations = set()
+                for occ in cluster["occurrences"]:
+                    key = (occ["path"], occ["line"])
+                    if key in seen_locations:
+                        continue
+                    seen_locations.add(key)
+                    unique_locations.append({
+                        "path": _format_path(occ["path"]),
+                        "line": occ["line"],
+                        "function": occ.get("function"),
+                        "code_excerpt": occ.get("code_excerpt")
+                    })
+
+                paths = list({loc["path"] for loc in unique_locations})
+                location_preview = ", ".join(
+                    f"{loc['path']}:{loc['line']}" + (f" ({loc['function']})" if loc.get("function") else "")
+                    for loc in islice(unique_locations, 3)
+                )
+                extra_locations = max(0, len(unique_locations) - 3)
+
                 if len(paths) > 1:
-                    details = f"Code duplicated across {len(paths)} files."
+                    base_details = f"Code duplicated across {len(paths)} files."
                     severity = "high"
                 else:
-                    details = f"Code duplicated {len(cluster['occurrences'])} times in this file."
+                    base_details = f"Code duplicated {len(cluster['occurrences'])} times in this file."
                     severity = "medium"
+
+                details_suffix = ""
+                if location_preview:
+                    details_suffix = f" Locations: {location_preview}"
+                    if extra_locations:
+                        details_suffix += f" (+{extra_locations} more occurrences)"
+                details = base_details + details_suffix
+                code_excerpt = None
+                if unique_locations and unique_locations[0].get("code_excerpt"):
+                    excerpt = unique_locations[0]["code_excerpt"]
+                    if len(excerpt) > 500:
+                        excerpt = excerpt[:500] + "…"
+                    code_excerpt = excerpt
                 
                 # Add recommendation for the first file involved
                 if paths:
@@ -335,7 +393,9 @@ class ProjectAnalyzer:
                         "path": paths[0],
                         "type": "duplication",
                         "details": details,
-                        "severity": severity
+                        "severity": severity,
+                        "locations": unique_locations,
+                        "code_excerpt": code_excerpt
                     })
 
         if self.perf_mode:

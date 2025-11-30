@@ -13,7 +13,7 @@ const state = {
     translations: {},
   },
   logs: [],
-  logLevel: "ALL",
+  logLevel: "INFO",
   liveEvents: [],
   meeting: {
     status: "unknown",
@@ -25,12 +25,15 @@ const state = {
   snapshotDiff: null,
   snapshotSelection: { a: null, b: null },
   lastSnapshotFetch: 0,
+  historyRoot: null,
   token: null,
   userRole: null,
   sortState: {
     files: { key: 'size_bytes', dir: 'desc' },
     functions: { key: 'calls', dir: 'desc' }
-  }
+  },
+  activeProjectId: null,
+  projects: []
 };
 
 const sampleReport = {
@@ -89,6 +92,40 @@ function formatBytes(value) {
     idx += 1;
   }
   return `${size.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
+}
+
+function formatRelativeDate(timestamp) {
+  if (!timestamp) return "—";
+  const date = typeof timestamp === "number" ? new Date(timestamp * 1000) : new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "—";
+  const diffSeconds = Math.max(0, (Date.now() - date.getTime()) / 1000);
+  if (diffSeconds < 60) return t("time_just_now") || "À l'instant";
+  if (diffSeconds < 3600) return `${Math.round(diffSeconds / 60)} ${t("time_minutes") || "min"}`;
+  if (diffSeconds < 86400) return `${Math.round(diffSeconds / 3600)} ${t("time_hours") || "h"}`;
+  return date.toLocaleString();
+}
+
+function normalizePath(p) {
+  if (!p) return "";
+  return p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+function sanitizeProjectName(name) {
+  if (!name) return "project";
+  const trimmed = name.trim().toLowerCase();
+  const cleaned = trimmed.replace(/[^a-z0-9_-]+/g, "_").replace(/^[_\.]+|[_\.]+$/g, "");
+  return cleaned || "project";
+}
+
+function resolveProjectConfigLabel(project) {
+  if (project?.config_file) return project.config_file;
+  const sourceName = project?.name || project?.project_name || (project?.path ? project.path.split(/[\\/]/).pop() : "project");
+  return `${sanitizeProjectName(sourceName)}.jupiter.yaml`;
+}
+
+function setText(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.textContent = value;
 }
 
 // --- I18n & Theming ---
@@ -301,6 +338,15 @@ function handleAction(action, data) {
     case "open-project-wizard":
       openProjectWizard();
       break;
+    case "close-project-wizard":
+      closeProjectWizard();
+      break;
+    case "refresh-projects":
+      loadProjects();
+      break;
+    case "save-project-api":
+      saveProjectApiConfig();
+      break;
     case "toggle-plugin":
       togglePlugin(data.pluginName, data.pluginState === 'true');
       break;
@@ -500,6 +546,10 @@ async function loadSettings() {
 
             if (document.getElementById("conf-ui-theme")) document.getElementById("conf-ui-theme").value = config.ui_theme || "dark";
             if (document.getElementById("conf-ui-lang")) document.getElementById("conf-ui-lang").value = config.ui_language || "fr";
+            const effectiveLogLevel = normalizeLogLevel(config.log_level || "INFO");
+            if (document.getElementById("conf-log-level")) document.getElementById("conf-log-level").value = effectiveLogLevel;
+            if (document.getElementById("conf-log-path")) document.getElementById("conf-log-path").value = config.log_path || "";
+            applyLogLevel(effectiveLogLevel);
             
             // Performance
             if (document.getElementById("conf-perf-parallel")) document.getElementById("conf-perf-parallel").checked = config.perf_parallel_scan !== false;
@@ -510,15 +560,6 @@ async function loadSettings() {
             
             // Security
             if (document.getElementById("conf-sec-allow-run")) document.getElementById("conf-sec-allow-run").checked = config.sec_allow_run !== false;
-
-            // API Inspection
-            if (document.getElementById("conf-api-connector")) {
-                document.getElementById("conf-api-connector").value = config.api_connector || "";
-                // Trigger change event to update UI state
-                document.getElementById("conf-api-connector").dispatchEvent(new Event('change'));
-            }
-            if (document.getElementById("conf-api-app-var")) document.getElementById("conf-api-app-var").value = config.api_app_var || "";
-            if (document.getElementById("conf-api-path")) document.getElementById("conf-api-path").value = config.api_path || "";
 
             // Load Users
             loadUsers();
@@ -547,6 +588,8 @@ async function saveSettings(e) {
         meeting_device_key: formData.get("meeting_device_key"),
         ui_theme: formData.get("ui_theme"),
         ui_language: formData.get("ui_language"),
+        log_level: formData.get("log_level") || "INFO",
+        log_path: (formData.get("log_path") || "").trim() || null,
         plugins_enabled: [], // TODO: Handle plugins list
         plugins_disabled: [],
         
@@ -559,11 +602,6 @@ async function saveSettings(e) {
         
         // Security
         sec_allow_run: formData.get("sec_allow_run") === "on",
-
-        // API Inspection
-        api_connector: formData.get("api_connector") || null,
-        api_app_var: formData.get("api_app_var") || null,
-        api_path: formData.get("api_path") || null
     };
     
     try {
@@ -578,6 +616,7 @@ async function saveSettings(e) {
             alert("Settings saved. Some changes may require a restart.");
             setTheme(config.ui_theme);
             setLanguage(config.ui_language);
+            applyLogLevel(config.log_level);
         } else {
             alert("Failed to save settings.");
         }
@@ -621,6 +660,15 @@ async function changeRoot(path) {
 function renderReport(report) {
   console.log("Rendering report with", report?.files?.length, "files");
   state.report = report;
+  if (report?.root) {
+    const rootLabel = document.getElementById("root-path");
+    if (rootLabel) {
+      const labelName = report.project_name || state.context?.project_name || "Projet";
+      rootLabel.textContent = `${labelName} (${report.root})`;
+      rootLabel.title = report.root;
+    }
+    state.historyRoot = normalizePath(report.root);
+  }
   renderStats(report);
   renderUploadMeta(report);
   renderFiles(report);
@@ -1150,15 +1198,41 @@ async function togglePlugin(name, enable) {
 
 // --- Projects Management ---
 
+async function performProjectMutation(path, options, onSuccess, errorLabel) {
+    if (!state.apiBaseUrl) return;
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}${path}`, options);
+        if (response.ok) {
+            await onSuccess(response);
+            return;
+        }
+        const err = await response.json();
+        alert((errorLabel || "Erreur") + ": " + (err.detail || "Action impossible"));
+    } catch (e) {
+        console.error(e);
+        alert("Erreur réseau");
+    }
+}
+
 async function loadProjects() {
     if (!state.apiBaseUrl) state.apiBaseUrl = inferApiBaseUrl();
     if (!state.apiBaseUrl) return;
 
     try {
-        const response = await apiFetch(`${state.apiBaseUrl}/system/projects`);
+        const response = await apiFetch(`${state.apiBaseUrl}/projects`);
         if (response.ok) {
             const projects = await response.json();
+            state.projects = projects;
+            const active = projects.find((p) => p.is_active) || null;
+            state.activeProjectId = active ? active.id : null;
             renderProjects(projects);
+            const hasActive = projects.some((p) => p.is_active);
+            if (hasActive && !state.report) {
+                await loadCachedReport();
+            }
+            if (state.activeProjectId) {
+                await loadProjectApiConfig(state.activeProjectId);
+            }
         } else {
             console.error("Failed to load projects");
             addLog("Erreur lors du chargement des projets", "ERROR");
@@ -1169,75 +1243,231 @@ async function loadProjects() {
     }
 }
 
-function renderProjects(projects) {
-    const tbody = document.querySelector("#projects-table tbody");
-    if (!tbody) return;
-    tbody.innerHTML = "";
-
-    projects.forEach(p => {
-        const tr = document.createElement("tr");
-        
-        const nameTd = document.createElement("td");
-        nameTd.innerHTML = `<strong>${p.project_name}</strong>`;
-        tr.appendChild(nameTd);
-
-        const pathTd = document.createElement("td");
-        pathTd.textContent = p.project_path;
-        pathTd.classList.add("muted", "small", "mono");
-        tr.appendChild(pathTd);
-
-        const statusTd = document.createElement("td");
-        if (p.is_active) {
-            const badge = document.createElement("span");
-            badge.className = "badge active";
-            badge.textContent = t("active") || "Actif";
-            statusTd.appendChild(badge);
-        } else {
-            const badge = document.createElement("span");
-            badge.className = "badge";
-            badge.textContent = t("inactive") || "Inactif";
-            statusTd.appendChild(badge);
+async function loadProjectApiConfig(projectId) {
+    if (!state.apiBaseUrl || !projectId) return;
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/projects/${projectId}/api_config`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const connectorSelect = document.getElementById("project-api-connector");
+        const appVarInput = document.getElementById("project-api-app-var");
+        const pathInput = document.getElementById("project-api-path");
+        if (connectorSelect) {
+            connectorSelect.value = data.connector || "";
+            connectorSelect.dispatchEvent(new Event("change"));
         }
-        tr.appendChild(statusTd);
+        if (appVarInput) appVarInput.value = data.app_var || "";
+        if (pathInput) pathInput.value = data.path || "";
+    } catch (e) {
+        console.error("Failed to load project API config", e);
+    }
+}
 
-        const actionsTd = document.createElement("td");
-        actionsTd.style.display = "flex";
-        actionsTd.style.gap = "0.5rem";
+async function saveProjectApiConfig() {
+    if (!state.apiBaseUrl || !state.activeProjectId) {
+        alert("Aucun projet actif");
+        return;
+    }
+    const connector = document.getElementById("project-api-connector")?.value || "";
+    const appVar = document.getElementById("project-api-app-var")?.value || "";
+    const path = document.getElementById("project-api-path")?.value || "";
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/projects/${state.activeProjectId}/api_config`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                connector: connector || null,
+                app_var: appVar || null,
+                path: path || null
+            })
+        });
+        if (response.ok) {
+            addLog(t("project_api_saved") || "Configuration API sauvegardée");
+            const data = await response.json();
+            if (data.connector) {
+                updateProjectOverview(state.projects, state.projects.find(p => p.id === state.activeProjectId));
+            }
+        } else {
+            const err = await response.json();
+            alert((t("project_api_error") || "Erreur enregistrement API") + ": " + (err.detail || ""));
+        }
+    } catch (e) {
+        console.error("Failed to save project API config", e);
+        alert("Erreur réseau");
+    }
+}
 
+async function updateProjectIgnores(projectId, ignoreGlobs) {
+    if (!state.apiBaseUrl) return;
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/projects/${projectId}/ignore`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ignore_globs: ignoreGlobs })
+        });
+        if (response.ok) {
+            addLog(t("project_ignore_saved") || "Règles d'ignore enregistrées");
+            loadProjects();
+        } else {
+            const err = await response.json();
+            alert((t("project_ignore_error") || "Impossible d'enregistrer les règles d'ignore") + ": " + (err.detail || ""));
+        }
+    } catch (e) {
+        console.error("Failed to update project ignore globs", e);
+        alert("Erreur réseau");
+    }
+}
+
+function updateProjectOverview(projects, activeProject) {
+    state.projects = projects || [];
+    state.activeProjectId = activeProject ? (activeProject.project_id || activeProject.id) : null;
+    const current = activeProject || null;
+    const projectName = current?.project_name || current?.name || state.context?.project_name || "—";
+    const projectPath = current?.project_path || current?.path || state.context?.root || "—";
+    const lastScan = state.report?.last_scan_timestamp || null;
+
+    setText("project-current-name", projectName);
+    setText("project-current-path", projectPath);
+    setText("project-root-quick", projectPath);
+    setText("project-last-scan", formatRelativeDate(lastScan));
+    setText("project-count", (projects?.length || 0).toString());
+
+    const statusNode = document.getElementById("project-current-status");
+    if (statusNode) {
+        if (current) {
+            statusNode.className = current.is_active ? "pill pill-active" : "pill pill-muted";
+            statusNode.textContent = current.is_active ? (t("active") || "Actif") : (t("inactive") || "Inactif");
+        } else {
+            statusNode.className = "pill pill-muted";
+            statusNode.textContent = t("project_status_empty") || "Aucun projet";
+        }
+    }
+
+    setText("project-health-active", projectName);
+    setText("project-health-scan", formatRelativeDate(lastScan));
+    setText("project-health-paths", projectPath);
+    setText("project-health-status", state.apiBaseUrl || inferApiBaseUrl() || "—");
+}
+
+function renderProjects(projects) {
+    const list = document.getElementById("projects-list");
+    const emptyState = document.getElementById("projects-empty");
+    if (!list || !emptyState) return;
+
+    list.innerHTML = "";
+    const projectArray = Array.isArray(projects) ? projects : [];
+    const activeProject = projectArray.find((p) => p.is_active) || null;
+    updateProjectOverview(projectArray, activeProject);
+
+    if (projectArray.length === 0) {
+        emptyState.style.display = "block";
+        return;
+    }
+
+    emptyState.style.display = "none";
+
+    projectArray.forEach((p) => {
+        const name = p.project_name || p.name || "—";
+        const path = p.project_path || p.path || "—";
+        const configPath = resolveProjectConfigLabel(p);
+        const projectId = p.project_id || p.id;
+
+        const card = document.createElement("div");
+        card.className = "project-card";
+
+        const head = document.createElement("div");
+        head.className = "project-card__head";
+        const titleBox = document.createElement("div");
+        titleBox.innerHTML = `<p class="eyebrow">${p.is_active ? (t("project_status_active") || "Actif") : (t("project_entry") || "Projet")}</p><h4>${name}</h4><p class="small muted mono">${path}</p>`;
+        const status = document.createElement("span");
+        status.className = p.is_active ? "pill pill-active" : "pill pill-muted";
+        status.textContent = p.is_active ? (t("active") || "Actif") : (t("inactive") || "Inactif");
+        head.appendChild(titleBox);
+        head.appendChild(status);
+
+        const body = document.createElement("div");
+        body.className = "project-card__body";
+        const bodyItems = [
+            { label: t("project_last_scan") || "Dernier scan", value: p.last_scan ? formatRelativeDate(p.last_scan) : (p.is_active ? formatRelativeDate(state.report?.last_scan_timestamp) : (t("project_unknown") || "—")) },
+            { label: t("project_root_label") || "Racine", value: path },
+            { label: t("project_config_label") || "Config", value: configPath },
+        ];
+        bodyItems.forEach(({ label, value }) => {
+            const wrapper = document.createElement("div");
+            const l = document.createElement("p");
+            l.className = "label";
+            l.textContent = label;
+            const v = document.createElement("p");
+            v.className = "value";
+            v.textContent = value;
+            wrapper.appendChild(l);
+            wrapper.appendChild(v);
+            body.appendChild(wrapper);
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "project-card__actions";
         if (!p.is_active) {
             const activateBtn = document.createElement("button");
             activateBtn.className = "small primary";
             activateBtn.textContent = t("activate") || "Activer";
-            activateBtn.onclick = () => activateProject(p.project_id);
-            actionsTd.appendChild(activateBtn);
+            activateBtn.onclick = () => activateProject(projectId);
+            actions.appendChild(activateBtn);
         }
 
-        const deleteBtn = document.createElement("button");
-        deleteBtn.className = "small secondary";
-        deleteBtn.textContent = t("delete") || "Supprimer";
-        deleteBtn.onclick = () => deleteProject(p.project_id, p.project_name);
-        actionsTd.appendChild(deleteBtn);
+        const ignoreLabel = document.createElement("label");
+        ignoreLabel.className = "small muted";
+        ignoreLabel.textContent = t("project_ignore_label") || "Ignorer (glob, séparés par des virgules)";
+        const ignoreInput = document.createElement("input");
+        ignoreInput.type = "text";
+        ignoreInput.className = "project-ignore-input";
+        ignoreInput.placeholder = t("project_ignore_placeholder") || "ex: node_modules/**,dist/**";
+        const currentIgnore = Array.isArray(p.ignore_globs) ? p.ignore_globs.join(", ") : "";
+        ignoreInput.value = currentIgnore;
+        const saveIgnoreBtn = document.createElement("button");
+        saveIgnoreBtn.className = "small";
+        saveIgnoreBtn.textContent = t("project_ignore_save") || "Enregistrer";
+        saveIgnoreBtn.onclick = () => {
+            const raw = ignoreInput.value || "";
+            const globs = raw.split(",").map(s => s.trim()).filter(Boolean);
+            updateProjectIgnores(projectId, globs);
+        };
 
-        tr.appendChild(actionsTd);
-        tbody.appendChild(tr);
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "small danger";
+        deleteBtn.textContent = t("delete") || "Supprimer";
+        deleteBtn.onclick = () => deleteProject(projectId, name);
+        actions.appendChild(deleteBtn);
+
+        const ignoreWrapper = document.createElement("div");
+        ignoreWrapper.style.display = "grid";
+        ignoreWrapper.style.gap = "4px";
+        ignoreWrapper.style.marginTop = "10px";
+        ignoreWrapper.appendChild(ignoreLabel);
+        ignoreWrapper.appendChild(ignoreInput);
+        ignoreWrapper.appendChild(saveIgnoreBtn);
+
+        card.appendChild(head);
+        card.appendChild(body);
+        card.appendChild(ignoreWrapper);
+        card.appendChild(actions);
+        list.appendChild(card);
     });
 }
 
 async function activateProject(projectId) {
-    if (!state.apiBaseUrl) return;
-    try {
-        const response = await apiFetch(`${state.apiBaseUrl}/system/projects/${projectId}/activate`, { method: "POST" });
-        if (response.ok) {
+    await performProjectMutation(
+        `/projects/${projectId}/activate`,
+        { method: "POST" },
+        async () => {
             addLog(t("project_activated") || "Projet activé", "INFO");
-            window.location.reload(); 
-        } else {
-            const err = await response.json();
-            alert("Erreur: " + (err.detail || "Impossible d'activer le projet"));
-        }
-    } catch (e) {
-        console.error(e);
-        alert("Erreur réseau");
-    }
+            await loadContext(true);
+            await loadCachedReport();
+            await loadSnapshots(true);
+            await loadProjects();
+        },
+        "Erreur"
+    );
 }
 
 async function deleteProject(projectId, projectName) {
@@ -1246,29 +1476,16 @@ async function deleteProject(projectId, projectName) {
         return;
     }
 
-    if (!state.apiBaseUrl) return;
-    try {
-        const response = await apiFetch(`${state.apiBaseUrl}/system/projects/${projectId}`, { method: "DELETE" });
-        if (response.ok) {
+    await performProjectMutation(
+        `/projects/${projectId}`,
+        { method: "DELETE" },
+        async () => {
             addLog(t("project_deleted") || "Projet supprimé", "INFO");
-            loadProjects(); 
-            // If we deleted the active project, the backend might have switched.
-            // We should check if we need to reload.
-            // But for now, loadProjects updates the list.
-            // If the active project was deleted, the backend sets another one as active.
-            // We might want to reload to reflect that in the UI context.
-            // Let's check if the deleted project was the active one.
-            // Actually, simpler to just reload if we deleted the active one, but we don't know easily here.
-            // Let's just reload context.
+            loadProjects();
             loadContext();
-        } else {
-            const err = await response.json();
-            alert("Erreur: " + (err.detail || "Impossible de supprimer le projet"));
-        }
-    } catch (e) {
-        console.error(e);
-        alert("Erreur réseau");
-    }
+        },
+        "Erreur"
+    );
 }
 
 function renderDynamicGraph(dynamicData) {
@@ -1429,8 +1646,33 @@ const formatDate = (timestamp) => {
   }).format(date);
 };
 
+const LOG_LEVEL_ORDER = {
+  DEBUG: 0,
+  INFO: 1,
+  WARNING: 2,
+  ERROR: 3,
+  CRITICAL: 4,
+};
+
+function normalizeLogLevel(level) {
+  if (!level) return "INFO";
+  const value = level.toString().trim().toUpperCase();
+  if (value === "WARN") return "WARNING";
+  if (value === "CRITIC") return "CRITICAL";
+  if (value === "ALL") return "DEBUG";
+  return LOG_LEVEL_ORDER[value] !== undefined ? value : "INFO";
+}
+
+function applyLogLevel(level) {
+  state.logLevel = normalizeLogLevel(level);
+  const filter = document.getElementById("log-level-filter");
+  if (filter) filter.value = state.logLevel;
+  renderLogs();
+}
+
 function addLog(message, level = "INFO") {
-  const entry = { message, level, timestamp: new Date() };
+  const normalizedLevel = normalizeLogLevel(level);
+  const entry = { message, level: normalizedLevel, timestamp: new Date() };
   state.logs.unshift(entry);
   state.logs = state.logs.slice(0, 50);
   renderLogs();
@@ -1440,14 +1682,14 @@ function renderLogs() {
   const container = document.getElementById("log-stream");
   if (!container) return;
   container.innerHTML = "";
-  
-  const levels = { "ALL": 0, "INFO": 1, "WARN": 2, "ERROR": 3 };
-  const currentLevel = levels[state.logLevel] || 0;
+  const currentLevel = LOG_LEVEL_ORDER[state.logLevel] ?? 1;
 
-  const filteredLogs = state.logs.filter(log => {
-      const logLevel = levels[log.level] || 1;
+  const filteredLogs = state.logs
+    .filter((log) => {
+      const logLevel = LOG_LEVEL_ORDER[normalizeLogLevel(log.level)] ?? 1;
       return logLevel >= currentLevel;
-  }).slice(0, 8);
+    })
+    .slice(0, 8);
 
   filteredLogs.forEach((log) => {
     const item = document.createElement("div");
@@ -1472,9 +1714,10 @@ function pushLiveEvent(title, detail) {
   });
 }
 
-async function loadContext() {
+async function loadContext(force = false) {
   try {
-    const response = await fetch("/context.json");
+    const url = force ? `/context.json?ts=${Date.now()}` : "/context.json";
+    const response = await fetch(url, { cache: "no-cache" });
     if (!response.ok) throw new Error("Network response was not ok");
     const payload = await response.json();
     state.context = payload;
@@ -1486,6 +1729,13 @@ async function loadContext() {
         rootLabel.textContent = `${name} (${root})`;
         rootLabel.title = root;
     }
+    const normalizedRoot = normalizePath(payload.root || "");
+    if (state.historyRoot && state.historyRoot !== normalizedRoot) {
+        state.snapshots = [];
+        state.snapshotSelection = { a: null, b: null };
+        renderSnapshots();
+    }
+    state.historyRoot = normalizedRoot;
     const apiLabel = document.getElementById("api-base-url");
     if (apiLabel) apiLabel.textContent = state.apiBaseUrl;
     addLog(`${t("context_loaded")}: ${payload.root}`);
@@ -1512,6 +1762,11 @@ async function loadCachedReport() {
     }
 
     const report = await response.json();
+    const reportRoot = normalizePath(report.root);
+    const currentRoot = normalizePath(state.context?.root);
+    if (currentRoot && reportRoot && reportRoot !== currentRoot) {
+      return null;
+    }
     renderReport(report);
     addLog("Restored last cached report.", "INFO");
     return report;
@@ -1532,7 +1787,23 @@ async function loadSnapshots(force = false) {
     const response = await apiFetch(`${state.apiBaseUrl}/snapshots`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
-    state.snapshots = payload.snapshots || [];
+    const currentRoot = normalizePath(state.context?.root);
+    if (!currentRoot) {
+      state.snapshots = [];
+      renderSnapshots();
+      return;
+    }
+    const snapshots = payload.snapshots || [];
+    const filtered = currentRoot
+      ? snapshots.filter((snap) => !snap.project_root || normalizePath(snap.project_root) === currentRoot)
+      : snapshots;
+    state.snapshots = filtered;
+    if (state.snapshotSelection.a && !filtered.find((s) => s.id === state.snapshotSelection.a)) {
+      state.snapshotSelection.a = null;
+    }
+    if (state.snapshotSelection.b && !filtered.find((s) => s.id === state.snapshotSelection.b)) {
+      state.snapshotSelection.b = null;
+    }
     state.lastSnapshotFetch = now;
     renderSnapshots();
   } catch (error) {
@@ -1545,6 +1816,11 @@ async function fetchSnapshotDiff() {
   if (!state.apiBaseUrl) return;
   const { a, b } = state.snapshotSelection;
   if (!a || !b) {
+    alert(t("history_diff_missing"));
+    return;
+  }
+  const validIds = new Set((state.snapshots || []).map((s) => s.id));
+  if (!validIds.has(a) || !validIds.has(b)) {
     alert(t("history_diff_missing"));
     return;
   }
@@ -1836,14 +2112,37 @@ function renderSuggestions() {
   }
 
   state.report.refactoring.forEach(s => {
+    const hasLocations = Array.isArray(s.locations) && s.locations.length > 0;
+    const locationsList = hasLocations
+      ? `<ul class="muted" style="margin: 6px 0 0 0; padding-left: 18px;">${
+          s.locations.slice(0, 5).map(loc => {
+            const path = loc.path || "";
+            const line = loc.line || "?";
+            const fn = loc.function ? ` (${loc.function})` : "";
+            return `<li>${path}:${line}${fn}</li>`;
+          }).join("")
+        }${s.locations.length > 5 ? `<li>... +${s.locations.length - 5} ${t("suggestions_more_locations") || "more locations"}</li>` : ""}</ul>`
+      : "";
+    const codeExcerpt = s.code_excerpt || (hasLocations ? s.locations[0].code_excerpt : null);
+    const codeBlock = codeExcerpt
+      ? `<pre class="muted" style="margin-top:8px; max-height:180px; overflow:auto;"><code>${codeExcerpt}</code></pre>`
+      : "";
+
     const item = document.createElement("div");
     item.className = "list-item";
+    const severityClass = (s.severity === 'critical' || s.severity === 'high')
+      ? 'error'
+      : (s.severity === 'warning' || s.severity === 'medium')
+        ? 'warning'
+        : 'info';
     item.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <strong>${s.path}</strong>
-        <span class="badge ${s.severity === 'critical' ? 'error' : s.severity === 'warning' ? 'warning' : 'info'}">${s.severity}</span>
+        <span class="badge ${severityClass}">${s.severity}</span>
       </div>
       <p><em>${s.type}</em>: ${s.details}</p>
+      ${locationsList}
+      ${codeBlock}
     `;
     list.appendChild(item);
   });
@@ -1882,10 +2181,11 @@ function bindActions() {
   const logLevelFilter = document.getElementById("log-level-filter");
   if (logLevelFilter) {
       logLevelFilter.addEventListener("change", (e) => {
-          state.logLevel = e.target.value;
-          renderLogs();
+          applyLogLevel(e.target.value);
       });
   }
+
+  applyLogLevel(state.logLevel);
 }
 
 function bindUpload() {
@@ -2039,10 +2339,6 @@ function openBrowser() {
       modal.showModal();
       // Strip quotes from root if present
       let rootToFetch = state.context?.root || ".";
-      if (state.browserMode === 'wizard') {
-          // In wizard mode, start from current directory if possible, or root
-          rootToFetch = ".";
-      }
       rootToFetch = rootToFetch.replace(/^"|"$/g, '');
       
       console.log("Fetching FS for:", rootToFetch);
@@ -2095,7 +2391,18 @@ function renderBrowser(data) {
   pathInput.value = data.current;
   list.innerHTML = "";
 
-  data.entries.forEach(entry => {
+  const entries = Array.isArray(data.entries) ? [...data.entries] : [];
+  const normalized = data.current.replace(/\\/g, "/").replace(/\/+$/, "");
+  const hasUp = entries.some((e) => e.name === "..");
+  if (!hasUp && normalized.includes("/")) {
+    const lastSlash = normalized.lastIndexOf("/");
+    if (lastSlash > 0) {
+      const parentPath = normalized.slice(0, lastSlash) || normalized;
+      entries.unshift({ name: "..", path: parentPath, is_dir: true });
+    }
+  }
+
+  entries.forEach(entry => {
     if (!entry.is_dir) return;
 
     const li = document.createElement("li");
@@ -2494,6 +2801,19 @@ function openProjectWizard() {
     }
 }
 
+function closeProjectWizard() {
+    const modal = document.getElementById("project-wizard-modal");
+    const errorDiv = document.getElementById("project-wizard-error");
+    if (errorDiv) {
+        errorDiv.textContent = "";
+        errorDiv.classList.add("hidden");
+    }
+    if (modal) {
+        modal.close();
+    }
+    state.browserMode = null;
+}
+
 async function handleCreateProject() {
     const pathInput = document.getElementById("project-path");
     const nameInput = document.getElementById("project-name");
@@ -2805,10 +3125,10 @@ async function deleteUser(name) {
 
 // Update File Upload Listener
 document.addEventListener('DOMContentLoaded', () => {
-    // API Connector UI Logic
-    const connectorSelect = document.getElementById('conf-api-connector');
-    const appVarInput = document.getElementById('conf-api-app-var');
-    const pathInput = document.getElementById('conf-api-path');
+    // Project API Connector UI Logic (Projects page)
+    const connectorSelect = document.getElementById('project-api-connector');
+    const appVarInput = document.getElementById('project-api-app-var');
+    const pathInput = document.getElementById('project-api-path');
 
     if (connectorSelect) {
         connectorSelect.addEventListener('change', () => {

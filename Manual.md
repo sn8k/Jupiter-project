@@ -37,8 +37,10 @@ Si aucun projet n'est configuré, un assistant vous proposera de créer une conf
 ## Gestion des Projets (Nouveau v1.1.0)
 Jupiter supporte désormais la gestion de plusieurs projets.
 - Au premier lancement, si aucun projet n'est configuré, l'interface web s'ouvre et un assistant interactif vous guide pour ajouter votre premier projet.
-- Chaque projet possède sa propre configuration (`jupiter.yaml`) et son propre cache.
-- La configuration globale (liste des projets) est stockée dans `~/.jupiter/global.yaml`.
+- Chaque projet possède sa propre configuration (`<projet>.jupiter.yaml`) et son propre cache.
+- La configuration globale (liste des projets) est stockée dans `~/.jupiter/global_config.yaml` (lecture de secours de l'ancien `global.yaml` maintenue).
+- Lorsque vous activez un projet depuis l'interface Web, le registre global et `~/.jupiter/state.json` sont synchronisés automatiquement afin que le prochain démarrage (CLI ou GUI) rouvre le même projet sans paramètre supplémentaire.
+- Les registres hérités sont normalisés automatiquement : si un projet pointe encore vers `jupiter.yaml`, il est réécrit en `<projet>.jupiter.yaml` et le chemin est stocké en absolu pour éviter les erreurs d'activation/suppression après mise à jour.
 
 ## Commandes avancées (CLI)
 Les commandes suivantes sont disponibles pour un usage avancé ou scripté :
@@ -49,7 +51,7 @@ Les commandes suivantes sont disponibles pour un usage avancé ou scripté :
 - `python -m jupiter.cli.main gui <racine> --host 0.0.0.0 --port 8050` : démarre le serveur statique de la GUI.
 - `python -m jupiter.cli.main ci [--json] [--fail-on-complexity 20] [--fail-on-duplication 5] [--fail-on-unused 50]` : exécute la même pipeline de scan/analyse en appliquant les seuils CI.
 
-> La racine servie et les données du dernier rapport (`.jupiter/cache/last_scan.json`) sont désormais restaurées automatiquement lors d'un redémarrage, en se basant sur la valeur enregistrée dans `~/.jupiter/state.json`.
+> La racine servie et les données du dernier rapport (`.jupiter/cache/last_scan.json`) sont désormais restaurées automatiquement lors d'un redémarrage : Jupiter privilégie le projet actif déclaré dans le registre global (`~/.jupiter/global_config.yaml` ou `global.yaml` legacy) puis synchronise `~/.jupiter/state.json`.
 > Le cache normalise aussi les métadonnées (plugins, fichiers) avant écriture, ce qui évite les erreurs `/reports/last` lorsque le schéma évolue entre deux versions.
 - `python -m jupiter.cli.main update <source> [--force]` : met à jour Jupiter depuis un fichier ZIP ou un dépôt Git.
 - `python -m jupiter.cli.main --version` : affiche la version actuelle.
@@ -59,11 +61,17 @@ Les commandes suivantes sont disponibles pour un usage avancé ou scripté :
 
 - Chaque `scan` lancé par la CLI, l'API ou la GUI crée par défaut un fichier dans `.jupiter/snapshots/scan-*.json` contenant le rapport complet et des métadonnées (racine, nombre de fichiers, fonctions détectées, etc.).
 
+## Logging paramétrable (Nouveau)
+- L'onglet **Settings** expose désormais un champ **Log Level** (Debug, Info, Warning, Error, Critic) appliqué au serveur FastAPI, à Uvicorn et à la CLI.
+- La valeur est stockée dans `logging.level` du fichier `<projet>.jupiter.yaml` (sauvegarde automatique via l'UI).
+- Le filtre de logs du tableau de bord utilise la même valeur pour rester cohérent avec la verbosité active.
+- Un champ **Chemin du fichier log** permet de définir la destination du fichier (laisser vide pour désactiver l'écriture fichier).
+
 ## Configuration de la Sécurité
 
 Jupiter supporte un mode multi-utilisateurs simple via des tokens d'accès.
 
-### Configuration (jupiter.yaml)
+### Configuration (<projet>.jupiter.yaml)
 
 ```yaml
 # Gestion des utilisateurs (Recommandé)
@@ -130,7 +138,7 @@ Pour les projets contenant des milliers de fichiers, Jupiter propose des options
 - **Scan parallèle** : Activé par défaut, utilise plusieurs threads pour accélérer la lecture des fichiers.
 - **Mode Performance** : Utilisez le flag `--perf` avec `scan` ou `analyze` pour afficher des métriques de temps d'exécution détaillées.
 - **Simplification du Graphe** : La Live Map simplifie automatiquement le graphe (regroupement par dossier) si le nombre de nœuds dépasse un seuil (défaut: 1000).
-- **Configuration** : Ajustez les paramètres dans `jupiter.yaml` sous la section `performance` :
+- **Configuration** : Ajustez les paramètres dans `<projet>.jupiter.yaml` sous la section `performance` :
   ```yaml
   performance:
     parallel_scan: true
@@ -143,7 +151,7 @@ Pour les projets contenant des milliers de fichiers, Jupiter propose des options
 Jupiter peut être intégré dans vos pipelines CI/CD pour garantir la qualité du code.
 Utilisez la commande `ci` pour exécuter une analyse et vérifier les seuils de qualité.
 
-Exemple de configuration `jupiter.yaml` :
+Exemple de configuration `<projet>.jupiter.yaml` :
 ```yaml
 ci:
   fail_on:
@@ -166,13 +174,15 @@ Si un seuil est dépassé, la commande retourne un code d'erreur `1`, ce qui blo
 - `jupiter/web/` : interface graphique.
 - `jupiter/plugins/` : plugins (ex: code_quality_stub).
 
-## Interface graphique (aperçu)
 - **Lancement** : `python -m jupiter.cli.main` (ou via CLI `gui`).
+- **Projets** : Tableau de bord dédié (vue "Projects") avec résumé du projet actif, racine servie, dernier scan et actions rapides (scanner, éditer la config .jupiter.yaml, basculer/supprimer).
+- Dans la page Projets, vous pouvez éditer les motifs d’ignore (globs, ex. `node_modules/**,dist/**`) propres à chaque projet ; ils sont appliqués automatiquement aux scans/analyses de ce projet.
+- Les paramètres d’inspection API (connector, app_var, chemin) sont désormais éditables dans la page Projets et sauvegardés par projet, sans passer par la page Settings.
 - **Dashboard** : Vue d'ensemble, badges de statut, statistiques et panneau de surveillance temps réel ("Live Watch").
-- **Projets (Backends)** : Sélecteur en haut de page pour basculer entre le projet local et des projets distants (configurés dans `jupiter.yaml`).
+- **Projets (Backends)** : Sélecteur en haut de page pour basculer entre le projet local et des projets distants (configurés dans `<projet>.jupiter.yaml`).
 - **Scan** : Lancement de scans avec options (fichiers cachés, incrémental, exclusions) via une modale dédiée, désormais mieux structurée et capable de mémoriser vos derniers réglages.
 - **Run** : Exécution de commandes arbitraires avec option d'analyse dynamique.
-- **Paramètres** : Édition complète de la configuration (`jupiter.yaml`), gestion du thème et de la langue.
+- **Paramètres** : Édition complète de la configuration (`<projet>.jupiter.yaml`), gestion du thème et de la langue.
 - **Historique** : Liste chronologique des snapshots avec vue diff (fichiers ajoutés/supprimés/modifiés, delta fonctions). Deux sélecteurs permettent de choisir les snapshots à comparer et un panneau détaille le diff.
 - **Mise à jour** : Interface pour déclencher une mise à jour depuis un ZIP ou Git.
 - **Plugins** : Liste et état des plugins. Configuration des plugins (ex: URL Webhook) directement depuis l'interface.
@@ -188,9 +198,12 @@ Jupiter est extensible via des plugins.
 - **Notifications Webhook** : Envoie un payload JSON à une URL configurée à la fin de chaque scan. Configurable dans l'onglet "Plugins".
   - Si aucune URL n'est fournie, le plugin publie une notification locale (WebSocket + panneau "Live Events") au lieu de tenter une requête HTTP invalide.
 - **AI Helper** : Analyse le code pour suggérer des refactorings, des améliorations de documentation ou détecter des problèmes de sécurité. Les suggestions apparaissent dans l'onglet "Suggestions IA" du rapport.
+  - Les alertes de duplication listent désormais précisément les fichiers et lignes concernés pour rendre le rapport actionnable (y compris dans l'export JSON des suggestions).
+  - Chaque duplication inclut aussi le nom de la fonction la plus proche et un extrait du bloc concerné pour que vous sachiez immédiatement quoi refactorer.
+- **Refactorings internes** : les flux CLI/API et la gestion des projets côté UI réutilisent désormais des helpers partagés (options de scan, gestion d'historique, requêtes projet) pour éviter les duplications de code et réduire les risques de divergence.
 
 ## Configuration Multi-Projets
-Jupiter supporte plusieurs backends de projet. Vous pouvez les configurer dans `jupiter.yaml` :
+Jupiter supporte plusieurs backends de projet. Vous pouvez les configurer dans `<projet>.jupiter.yaml` :
 
 ```yaml
 backends:

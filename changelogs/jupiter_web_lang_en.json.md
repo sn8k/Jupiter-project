@@ -1,3 +1,11 @@
 # Changelog – jupiter/web/lang/en.json
 - Added strings for restored Analysis, Diagnostics, Files, and Plugins views plus status badges and API/CORS context messaging.
 - Added `suggestions_refresh_*` keys so the UI can show progress/success/error messages when refreshing AI suggestions.
+- Added Projects dashboard wording (hero, metrics, shortcuts, empty state) and relative time labels for the redesigned page.
+- Added log-level settings strings so the UI can describe the new logging control.
+- Tweaked config-related strings to mention the new `.jupiter.yaml` naming pattern.
+- Added labels/hint for the log file path field in Settings.
+- Added `suggestions_more_locations` translation to describe truncated duplication evidence lists.
+- (UI) Suggestions tab now also shows code excerpts for duplication hints; existing keys remain valid.
+- Added keys for per-project ignore globs editing on the Projects page.
+- Added keys for the new Project API connector form (title, subtitle, save feedback).

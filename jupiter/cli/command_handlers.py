@@ -138,6 +138,31 @@ def _build_analyzer(options: ScanOptions) -> ProjectAnalyzer:
     return ProjectAnalyzer(root=options.root, no_cache=options.no_cache, perf_mode=options.perf_mode)
 
 
+def _build_services_from_args(
+    root: Path,
+    show_hidden: bool,
+    ignore_globs: list[str] | None,
+    incremental: bool,
+    no_cache: bool,
+    plugins_config: PluginsConfig | None,
+    performance_config: PerformanceConfig | None,
+    perf_mode: bool,
+) -> tuple[ScanOptions, WorkflowServices]:
+    """Create scan options and services from CLI-style arguments."""
+    scan_options = _build_scan_options(
+        root=root,
+        show_hidden=show_hidden,
+        ignore_globs=ignore_globs,
+        incremental=incremental,
+        no_cache=no_cache,
+        plugins_config=plugins_config,
+        performance_config=performance_config,
+        perf_mode=perf_mode,
+    )
+    services = _init_workflow_services(scan_options)
+    return scan_options, services
+
+
 def _evaluate_ci_thresholds(summary, thresholds: dict[str, int | None]) -> tuple[list[str], dict[str, int]]:
     """Compute CI failures and metrics deltas in one place."""
     failures: list[str] = []
@@ -198,7 +223,7 @@ def handle_scan(
     """Run a filesystem scan and return a JSON report."""
     logger.info("Scanning project at %s", root)
     
-    scan_options = _build_scan_options(
+    scan_options, services = _build_services_from_args(
         root=root,
         show_hidden=show_hidden,
         ignore_globs=ignore_globs,
@@ -208,7 +233,6 @@ def handle_scan(
         performance_config=performance_config,
         perf_mode=perf_mode,
     )
-    services = _init_workflow_services(scan_options)
     report_dict = _collect_scan_payload(services)
     snapshot_options = SnapshotOptions(
         enabled=snapshot_enabled,
@@ -278,7 +302,7 @@ def handle_analyze(root: Path, as_json: bool, top: int, ignore_globs: list[str] 
     """Scan then analyze a project root for quick feedback."""
     logger.info("Analyzing project at %s", root)
     
-    scan_options = _build_scan_options(
+    scan_options, services = _build_services_from_args(
         root=root,
         show_hidden=show_hidden,
         ignore_globs=ignore_globs,
@@ -288,7 +312,6 @@ def handle_analyze(root: Path, as_json: bool, top: int, ignore_globs: list[str] 
         performance_config=performance_config,
         perf_mode=perf_mode,
     )
-    services = _init_workflow_services(scan_options)
     analyzer = _build_analyzer(scan_options)
     summary = analyzer.summarize(services.scanner.iter_files(), top_n=top)
     summary_dict = summary.to_dict()

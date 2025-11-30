@@ -11,8 +11,10 @@ from jupiter.core.metrics import MetricsCollector
 from jupiter.core.plugin_manager import PluginManager
 from jupiter.core.updater import apply_update
 from jupiter.core.state import save_last_root
+from jupiter.core.logging_utils import normalize_log_level
 from jupiter.config import load_config, save_config
-from jupiter.config.config import ProjectApiConfig
+from jupiter.config.config import save_global_config
+from jupiter.config.config import ProjectApiConfig, get_project_config_path
 from jupiter.server.ws import manager
 from jupiter.core.events import JupiterEvent, CONFIG_UPDATED, PLUGIN_TOGGLED, RUN_STARTED, RUN_FINISHED
 from jupiter.server.meeting_adapter import MeetingAdapter
@@ -86,6 +88,7 @@ async def get_config(request: Request) -> ConfigModel:
             meeting_device_key=None,
             ui_theme="dark",
             ui_language="en",
+            log_level="INFO",
             plugins_enabled=[],
             plugins_disabled=[],
             perf_parallel_scan=True,
@@ -108,6 +111,8 @@ async def get_config(request: Request) -> ConfigModel:
         meeting_device_key=config.meeting.deviceKey,
         ui_theme=config.ui.theme,
         ui_language=config.ui.language,
+        log_level=normalize_log_level(config.logging.level),
+        log_path=config.logging.path,
         plugins_enabled=config.plugins.enabled,
         plugins_disabled=config.plugins.disabled,
         perf_parallel_scan=config.performance.parallel_scan,
@@ -137,6 +142,8 @@ async def update_config(request: Request, new_config: ConfigModel, role: str = D
     current_config.meeting.deviceKey = new_config.meeting_device_key
     current_config.ui.theme = new_config.ui_theme
     current_config.ui.language = new_config.ui_language
+    current_config.logging.level = normalize_log_level(new_config.log_level)
+    current_config.logging.path = new_config.log_path
     current_config.plugins.enabled = new_config.plugins_enabled
     current_config.plugins.disabled = new_config.plugins_disabled
     
@@ -168,7 +175,7 @@ async def update_config(request: Request, new_config: ConfigModel, role: str = D
 async def get_raw_config(request: Request) -> RawConfigModel:
     """Get raw configuration file content."""
     root = request.app.state.root_path
-    config_file = root / "jupiter.yaml"
+    config_file = get_project_config_path(root)
     if not config_file.exists():
         return RawConfigModel(content="")
     try:
@@ -180,7 +187,7 @@ async def get_raw_config(request: Request) -> RawConfigModel:
 async def update_raw_config(request: Request, raw_config: RawConfigModel) -> RawConfigModel:
     """Update raw configuration file content."""
     root = request.app.state.root_path
-    config_file = root / "jupiter.yaml"
+    config_file = get_project_config_path(root)
     try:
         config_file.write_text(raw_config.content, encoding="utf-8")
         return raw_config
@@ -308,7 +315,7 @@ async def get_meeting_status(request: Request) -> MeetingStatus:
 async def init_project(request: Request) -> Dict[str, str]:
     """Initialize a new Jupiter project with default config."""
     root = request.app.state.root_path
-    config_path = root / "jupiter.yaml"
+    config_path = get_project_config_path(root)
     
     if config_path.exists():
         return {"message": "Project already initialized"}
@@ -391,6 +398,7 @@ async def list_projects(request: Request) -> List[Dict[str, Any]]:
             "name": p.name,
             "path": p.path,
             "config_file": p.config_file,
+            "ignore_globs": p.ignore_globs,
             "is_active": p.id == pm.global_config.default_project_id
         }
         for p in pm.get_projects()
@@ -402,12 +410,15 @@ async def create_project(request: Request, payload: Dict[str, str]) -> Dict[str,
     """Create a new project."""
     path = payload.get("path")
     name = payload.get("name")
+    ignore_globs = payload.get("ignore_globs") or []
     if not path or not name:
         raise HTTPException(status_code=400, detail="Path and name are required")
     
     pm = request.app.state.project_manager
     try:
         project = pm.create_project(path, name)
+        project.ignore_globs = ignore_globs if isinstance(ignore_globs, list) else []
+        save_global_config(pm.global_config)
         return {
             "id": project.id,
             "name": project.name,
@@ -448,5 +459,76 @@ async def delete_project(request: Request, project_id: str) -> Dict[str, Any]:
     if not success:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"status": "ok", "project_id": project_id}
+
+
+@router.post("/projects/{project_id}/ignore", dependencies=[Depends(require_admin)])
+async def update_project_ignore(request: Request, project_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Update ignore globs for a project."""
+    pm = request.app.state.project_manager
+    project = next((p for p in pm.global_config.projects if p.id == project_id), None)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    ignore_globs = payload.get("ignore_globs") or []
+    if not isinstance(ignore_globs, list):
+        raise HTTPException(status_code=400, detail="ignore_globs must be a list of patterns")
+
+    project.ignore_globs = ignore_globs
+    save_global_config(pm.global_config)
+    return {"status": "ok", "ignore_globs": project.ignore_globs}
+
+
+@router.get("/projects/{project_id}/api_config", dependencies=[Depends(verify_token)])
+async def get_project_api_config(request: Request, project_id: str) -> Dict[str, Any]:
+    """Return API inspection settings for a project."""
+    pm = request.app.state.project_manager
+    project = next((p for p in pm.global_config.projects if p.id == project_id), None)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_path = Path(project.path)
+    config = load_config(project_path, config_file=project.config_file)
+    api_cfg = config.project_api or ProjectApiConfig()
+    return {
+        "connector": api_cfg.connector,
+        "app_var": api_cfg.app_var,
+        "path": api_cfg.path,
+        "base_url": api_cfg.base_url,
+        "openapi_url": api_cfg.openapi_url,
+    }
+
+
+@router.post("/projects/{project_id}/api_config", dependencies=[Depends(require_admin)])
+async def update_project_api_config(request: Request, project_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Update API inspection settings for a project."""
+    pm = request.app.state.project_manager
+    project = next((p for p in pm.global_config.projects if p.id == project_id), None)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    connector = payload.get("connector")
+    app_var = payload.get("app_var")
+    path = payload.get("path")
+
+    project_path = Path(project.path)
+    config = load_config(project_path, config_file=project.config_file)
+    if not config.project_api:
+        config.project_api = ProjectApiConfig()
+
+    config.project_api.connector = connector
+    config.project_api.app_var = app_var
+    config.project_api.path = path
+
+    save_config(config, project_path)
+
+    if pm.global_config.default_project_id == project_id:
+        # Refresh runtime for active project
+        SystemState(request.app).rebuild_runtime(config, new_root=config.project_root, reset_history=False)
+
+    return {
+        "connector": connector,
+        "app_var": app_var,
+        "path": path,
+    }
 
 

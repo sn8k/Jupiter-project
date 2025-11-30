@@ -258,12 +258,13 @@
                   <p class="muted" data-i18n="logs_subtitle">Suivi des actions utilisateur et chargements.</p>
                 </div>
                 <div class="actions">
-                    <select id="log-level-filter" class="small" style="padding: 2px 6px; font-size: 12px;">
-                        <option value="ALL">All</option>
-                        <option value="INFO">Info</option>
-                        <option value="WARN">Warn</option>
-                        <option value="ERROR">Error</option>
-                    </select>
+                  <select id="log-level-filter" class="small" style="padding: 2px 6px; font-size: 12px;">
+                    <option value="DEBUG">Debug</option>
+                    <option value="INFO">Info</option>
+                    <option value="WARNING">Warning</option>
+                    <option value="ERROR">Error</option>
+                    <option value="CRITICAL">Critic</option>
+                  </select>
                 </div>
               </header>
               <div class="log-stream" id="log-stream"></div>
@@ -349,7 +350,7 @@
               <div class="api-docs-intro" style="margin-bottom: 1rem; padding: 1rem; background: var(--panel-contrast); border-radius: 8px; border: 1px solid var(--border);">
                   <h4 data-i18n="api_docs_title">Documentation & Configuration</h4>
                   <p data-i18n="api_docs_intro">Jupiter analyse automatiquement les endpoints API de votre projet (FastAPI, Flask, Django, etc.).</p>
-                  <p data-i18n="api_docs_config">Pour configurer la détection, assurez-vous que votre fichier <code>jupiter.yaml</code> contient la section <code>api</code> correcte.</p>
+                  <p data-i18n="api_docs_config">Pour configurer la détection, assurez-vous que votre fichier <code>&lt;projet&gt;.jupiter.yaml</code> contient la section <code>api</code> correcte.</p>
                   <pre style="background: var(--bg); padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; overflow-x: auto;">
 api:
   connector: "fastapi"  # ou "flask", "django"
@@ -510,6 +511,22 @@ api:
                                 <option value="en">English</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label for="conf-log-level" data-i18n="settings_log_level_label">Log Level</label>
+                            <select id="conf-log-level" name="log_level">
+                                <option value="DEBUG">Debug</option>
+                                <option value="INFO">Info</option>
+                                <option value="WARNING">Warning</option>
+                                <option value="ERROR">Error</option>
+                                <option value="CRITICAL">Critic</option>
+                            </select>
+                            <p class="muted small" data-i18n="settings_log_level_hint">Ajuste la verbosité globale du serveur Jupiter.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="conf-log-path" data-i18n="settings_log_path_label">Chemin du fichier de log</label>
+                            <input type="text" id="conf-log-path" name="log_path" placeholder="logs/jupiter.log" />
+                            <p class="muted small" data-i18n="settings_log_path_hint">Emplacement du fichier log (laisser vide pour désactiver l'écriture fichier).</p>
+                        </div>
                         <div class="form-group checkbox-group">
                             <label for="conf-meeting-enabled">Meeting Enabled</label>
                             <input type="checkbox" id="conf-meeting-enabled" name="meeting_enabled" />
@@ -555,31 +572,6 @@ api:
                         <div class="form-group checkbox-group" title="Autoriser l'exécution de commandes shell via l'interface">
                             <label for="conf-sec-allow-run">Allow Run Command</label>
                             <input type="checkbox" id="conf-sec-allow-run" name="sec_allow_run" />
-                        </div>
-                    </section>
-
-                    <!-- API Inspection Section (New) -->
-                    <section class="panel settings-section">
-                        <header>
-                            <h3 data-i18n="settings_api_title">Inspection API</h3>
-                        </header>
-                        <div class="form-group" title="Framework utilisé (fastapi, flask, django)">
-                            <label for="conf-api-connector">Connector</label>
-                            <select id="conf-api-connector" name="api_connector">
-                                <option value="">(Aucun)</option>
-                                <option value="local">Local (Jupiter)</option>
-                                <option value="fastapi">FastAPI</option>
-                                <option value="flask">Flask</option>
-                                <option value="django">Django</option>
-                            </select>
-                        </div>
-                        <div class="form-group" title="Nom de la variable d'application (ex: app)">
-                            <label for="conf-api-app-var">App Variable</label>
-                            <input type="text" id="conf-api-app-var" name="api_app_var" placeholder="app" />
-                        </div>
-                        <div class="form-group" title="Chemin vers le fichier principal (ex: src/main.py)">
-                            <label for="conf-api-path">Main File Path</label>
-                            <input type="text" id="conf-api-path" name="api_path" placeholder="src/main.py" />
                         </div>
                     </section>
                     
@@ -666,27 +658,144 @@ api:
           <section class="view hidden" data-view="projects" aria-label="Vue Projets">
             <header class="view-header">
               <div>
-                <h2 data-i18n="projects_title">Gestion des Projets</h2>
-                <p class="muted" data-i18n="projects_subtitle">Gérez vos projets Jupiter et basculez de l'un à l'autre.</p>
+                <p class="eyebrow" data-i18n="projects_eyebrow">Pilotage</p>
+                <h2 data-i18n="projects_title">Tableau de bord Projets</h2>
+                <p class="muted" data-i18n="projects_subtitle">Vue unifiée sur vos projets configurés, l'état actif et les actions rapides.</p>
               </div>
               <div class="actions">
+                 <button class="secondary" data-action="refresh-projects" data-i18n="projects_refresh">Actualiser</button>
                  <button class="primary" data-action="open-project-wizard" data-i18n="add_project">Ajouter un projet</button>
               </div>
             </header>
+            <div class="grid projects-hero">
+              <div class="panel current-project-card">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="project_focus">Projet actif</p>
+                    <h3 id="project-current-name">—</h3>
+                    <p class="muted mono" id="project-current-path">—</p>
+                  </div>
+                  <span class="pill pill-active" id="project-current-status" data-i18n="project_status_active">Actif</span>
+                </header>
+                <div class="project-meta-grid">
+                  <div>
+                    <p class="label" data-i18n="project_last_scan">Dernier scan</p>
+                    <p class="value" id="project-last-scan">—</p>
+                  </div>
+                  <div>
+                    <p class="label" data-i18n="project_root_label">Racine servie</p>
+                    <p class="value" id="project-root-quick">—</p>
+                  </div>
+                  <div>
+                    <p class="label" data-i18n="project_count_label">Projets configurés</p>
+                    <p class="value" id="project-count">0</p>
+                  </div>
+                </div>
+              </div>
+              <div class="panel project-actions-panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="project_shortcuts">Actions rapides</p>
+                    <h3 data-i18n="project_shortcuts_title">Gérer et diagnostiquer</h3>
+                  </div>
+                </header>
+                <div class="project-actions-grid">
+                  <button class="ghost" data-action="start-scan" data-i18n="project_action_scan">Scanner le projet actif</button>
+                  <button class="ghost" data-action="open-raw-config" data-i18n="project_action_edit_config">Éditer la config (.jupiter.yaml)</button>
+                  <button class="ghost" data-action="open-project-wizard" data-i18n="project_action_add">Ajouter un projet</button>
+                  <button class="ghost" data-action="refresh-projects" data-i18n="project_action_refresh">Rafraîchir la liste</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid two-cols project-overview">
+              <div class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="project_health_eyebrow">Santé</p>
+                    <h3 data-i18n="project_health_title">Résumé rapide</h3>
+                    <p class="muted small" data-i18n="project_health_subtitle">Synchronisé avec l'API Jupiter.</p>
+                  </div>
+                </header>
+                <div class="stats-grid compact" id="project-health-stats">
+                  <div class="stat-card">
+                    <p class="label" data-i18n="project_metric_active">Projet actif</p>
+                    <p class="value" id="project-health-active">—</p>
+                  </div>
+                  <div class="stat-card">
+                    <p class="label" data-i18n="project_metric_last_scan">Dernier scan</p>
+                    <p class="value" id="project-health-scan">—</p>
+                  </div>
+                  <div class="stat-card">
+                    <p class="label" data-i18n="project_metric_paths">Chemins suivis</p>
+                    <p class="value" id="project-health-paths">—</p>
+                  </div>
+                  <div class="stat-card">
+                    <p class="label" data-i18n="project_metric_status">Statut API</p>
+                    <p class="value" id="project-health-status">—</p>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="project_notes_eyebrow">Notes</p>
+                    <h3 data-i18n="project_notes_title">Conseils d'usage</h3>
+                  </div>
+                </header>
+                <ul class="project-notes muted small">
+                  <li data-i18n="project_note_switch">Basculez d'un projet à l'autre sans redémarrer Jupiter.</li>
+                  <li data-i18n="project_note_scan">Chaque projet garde ses caches, snapshots et licence Meeting.</li>
+                  <li data-i18n="project_note_security">La suppression retire seulement la configuration, pas vos fichiers.</li>
+                  <li data-i18n="project_note_refresh">Utilisez "Rafraîchir" après un changement manuel du fichier .jupiter.yaml.</li>
+                </ul>
+              </div>
+            </div>
+
             <div class="panel">
-               <table class="data-table" id="projects-table" style="width: 100%;">
-                  <thead>
-                    <tr>
-                      <th data-i18n="project_name">Nom</th>
-                      <th data-i18n="project_path">Chemin</th>
-                      <th data-i18n="project_status">Statut</th>
-                      <th data-i18n="actions">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <!-- Projects will be loaded here -->
-                  </tbody>
-               </table>
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="project_api_title">Inspection API</p>
+                  <h3 data-i18n="project_api_subtitle">Configurer le connecteur API du projet actif</h3>
+                </div>
+                <div class="actions">
+                  <button class="primary" data-action="save-project-api" data-i18n="project_api_save">Enregistrer</button>
+                </div>
+              </header>
+              <div class="grid three-cols">
+                <div class="form-group" title="Framework utilisé (fastapi, flask, django)">
+                  <label for="project-api-connector">Connector</label>
+                  <select id="project-api-connector" name="api_connector">
+                      <option value="">(Aucun)</option>
+                      <option value="local">Local (Jupiter)</option>
+                      <option value="fastapi">FastAPI</option>
+                      <option value="flask">Flask</option>
+                      <option value="django">Django</option>
+                  </select>
+                </div>
+                <div class="form-group" title="Nom de la variable d'application (ex: app)">
+                  <label for="project-api-app-var">App Variable</label>
+                  <input type="text" id="project-api-app-var" name="api_app_var" placeholder="app" />
+                </div>
+                <div class="form-group" title="Chemin vers le fichier principal (ex: src/main.py)">
+                  <label for="project-api-path">Main File Path</label>
+                  <input type="text" id="project-api-path" name="api_path" placeholder="src/main.py" />
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="project_list_eyebrow">Liste</p>
+                  <h3 data-i18n="project_list_title">Projets configurés</h3>
+                  <p class="muted small" data-i18n="project_list_subtitle">Activez, rafraîchissez ou supprimez une entrée.</p>
+                </div>
+              </header>
+              <div id="projects-empty" class="empty" style="display: none;" data-i18n="projects_empty">Aucun projet pour le moment. Ajoutez-en un.</div>
+              <div class="project-list" id="projects-list">
+                <!-- Projects cards injected here -->
+              </div>
             </div>
           </section>
         </main>
@@ -752,7 +861,7 @@ api:
     <div id="raw-config-modal" class="modal-overlay hidden">
         <div class="modal" style="width: 800px; max-width: 90vw;">
             <header>
-                <h3 data-i18n="raw_config_title">Éditeur YAML (jupiter.yaml)</h3>
+                <h3 data-i18n="raw_config_title">Éditeur YAML (.jupiter.yaml)</h3>
                 <button class="ghost small" data-action="close-raw-config">✕</button>
             </header>
             <div class="modal-body">
@@ -851,7 +960,8 @@ api:
               <input type="text" id="project-name" placeholder="Mon Projet" required />
             </div>
             <div id="project-wizard-error" class="error hidden" style="margin-top: 1rem; color: var(--text-error);"></div>
-            <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+            <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: flex-end;">
+              <button type="button" class="ghost" data-action="close-project-wizard" style="min-width: 120px;" data-i18n="cancel">Annuler</button>
               <button type="submit" class="primary" style="width: 100%;">Créer le projet</button>
             </div>
           </form>

@@ -48,3 +48,35 @@ def load_last_root() -> Path | None:
     if not candidate.exists() or not candidate.is_dir():
         return None
     return candidate
+
+
+def load_default_project_root() -> Path | None:
+    """
+    Return the default project root from the global registry, if it exists.
+
+    This uses the multi-project registry stored under ``~/.jupiter`` so the CLI
+    can reopen the last project activated from the Web UI even if the local
+    state file is stale.
+    """
+    try:
+        from jupiter.config.config import load_global_config
+    except Exception:
+        return None
+
+    global_config = load_global_config()
+    if not global_config.default_project_id:
+        return None
+
+    project = next((p for p in global_config.projects if p.id == global_config.default_project_id), None)
+    if not project or not project.path:
+        return None
+
+    candidate = Path(project.path).expanduser()
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+
+    if resolved.exists() and resolved.is_dir():
+        return resolved
+    return None

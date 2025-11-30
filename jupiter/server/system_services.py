@@ -12,6 +12,7 @@ from jupiter.config.config import (
     save_global_settings,
     save_project_settings,
 )
+from jupiter.core.logging_utils import configure_logging
 from jupiter.core.history import HistoryManager
 from jupiter.core.plugin_manager import PluginManager
 from jupiter.server.manager import ProjectManager
@@ -63,6 +64,8 @@ class SystemState:
             project_manager.refresh_for_root(config)
         else:
             self.app.state.project_manager = ProjectManager(config)
+
+        configure_logging(config.logging.level, log_file=config.logging.path)
 
         plugin_manager = PluginManager(config=config.plugins)
         plugin_manager.discover_and_load()

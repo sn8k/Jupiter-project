@@ -6,3 +6,5 @@
 - Created `CONTRIBUTING.md` based on `AGENTS.md` and project standards.
 - Refreshed root `README.md` to serve as a public landing page linking to full documentation.
 - Added snapshot history coverage across `docs/user_guide.md` (History view + CLI flags), `docs/api.md` (snapshot endpoints and scan payload flags), and `docs/dev_guide.md` (HistoryManager internals and API integration).
+- Added Projects API section (`/projects`, activate/delete) and documentation note about the Web UI control center.
+- Documented the new log destination field in the Settings section of `docs/user_guide.md`.

@@ -8,4 +8,6 @@
 - Integrated `PluginManager` into `scan`, `analyze`, and `server` commands.
 - Passed `plugins_config` from `jupiter.yaml` to `PluginManager`.
 - Remember the last root between sessions via `jupiter.core.state`, so the CLI (and GUI) default to the previous project and keep that path in sync whenever a command or the UI launches.
+- CLI bootstrap now applies the project `logging.level` (Debug/Info/Warning/Error/Critical) so all commands share the same verbosity as the UI settings.
+- Logging setup now honors an optional `logging.path` (when configured) to mirror the Settings page log destination in CLI runs.
 

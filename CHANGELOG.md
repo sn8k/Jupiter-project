@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.1.10 – Internal Deduplication
+- CLI scan/analyze commands now reuse a shared service builder to remove repeated argument blocks.
+- API routers reuse a common history manager helper (SystemState) instead of duplicated local implementations.
+- Remote connector HTTP calls are centralized to avoid repeated request/raise patterns.
+- Web UI project actions share a single mutation helper to reduce copy/paste error handling.
+- Projects page now lets you edit per-project ignore globs, stored in the global registry and applied by default to scans/analyses.
+- Project API connector settings moved to the Projects page with dedicated save endpoints (`/projects/{id}/api_config`).
+
+## 1.1.9 – Detailed Duplication Evidence
+- Duplication refactoring hints now embed file:line occurrences so AI suggestions explicitly list where duplicated blocks live.
+- `/analyze` responses and the Suggestions tab surface these locations (with line numbers), the nearest function name, and a code excerpt to make the report actionable without hunting through duplication clusters.
+
+# Changelog
+
+## 1.1.8 – Active Project Persistence
+- CLI root resolution now uses the active project stored in the global registry (`~/.jupiter/global_config.yaml` or legacy `global.yaml`) and syncs the local state file so restarting the GUI/CLI reopens the last project activated from the Web UI.
+- Project activation in the backend now persists the selected root to the shared state file, keeping the registry and CLI defaults aligned.
+- Global project registry entries are normalized on load (legacy `jupiter.yaml` -> `<project>.jupiter.yaml`, absolute paths), and Windows event-loop policy is enforced to suppress noisy connection-reset traces on client disconnects.
+
+## 1.1.6 – Config Naming Update
+- Global install configuration now targets `global_config.yaml` (with backward-compatible loading of legacy install overrides).
+- Project configurations follow the `<project>.jupiter.yaml` naming scheme; legacy `jupiter.yaml` files are still loaded for existing setups.
+- Documentation and UI copy have been refreshed to highlight the new naming and the registry path `~/.jupiter/global_config.yaml`.
+
+## 1.1.7 – Log Destination in Settings
+- Settings page now exposes a log file path field; the API, CLI, and debug server pass this value to logging setup to attach a file handler.
+- Config schema (`logging.path`) persists this path across global/project saves and is exposed via `/config`.
+
+## 1.1.5 – Configurable Logging
+- Added centralized logging configuration with a project-level `logging.level` setting applied to CLI, FastAPI, and Uvicorn.
+- Settings page now exposes the log level selector (Debug/Info/Warning/Error/Critic) and reuses it to filter dashboard logs.
+- API config endpoints normalize and persist the log level while rebuilding runtime services with the updated verbosity.
+
+## 1.1.4 – Projects Control Center
+- Projects page is now fully wired to `/projects` (list, activate, delete) with refresh controls and in-place overview updates.
+- Documented the Projects API endpoints and the new Web UI dashboard for multi-project management.
+- Added a regression test (FastAPI TestClient) covering project create/activate/delete using the provided secondary project path.
+- History view now scopes snapshots/diffs to the active project, clearing stale selections when switching.
+- Forced context reload on project switch (no-cache) so the top bar and History view update to the newly active project immediately.
+
 ## 1.0.4 – Cache Schema & Notification Fallbacks
 - Normalized cached scan payloads (plugins serialized as lists) and forced the API to resave the enriched report so `/reports/last` never fails Pydantic validation after upgrading plugins.
 - Added a `PLUGIN_NOTIFICATION` event and taught the webhook plugin to emit local Live Events (via WebSocket) whenever no webhook URL is configured instead of logging errors.

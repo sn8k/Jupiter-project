@@ -8,6 +8,7 @@ from pathlib import Path
 
 from jupiter import __version__
 from jupiter.config import load_config
+from jupiter.core.logging_utils import configure_logging
 from jupiter.core.state import save_last_root
 from jupiter.cli.utils import resolve_root_argument
 from jupiter.cli.command_handlers import (
@@ -26,7 +27,7 @@ from jupiter.cli.command_handlers import (
     handle_simulate_remove,
 )
 
-logging.basicConfig(level=logging.INFO)
+configure_logging("INFO")
 logger = logging.getLogger(__name__)
 
 
@@ -156,7 +157,8 @@ def main() -> None:
     root = resolve_root_argument(getattr(args, "root", None))
     save_last_root(root)
     config = load_config(root)
-
+    active_level = configure_logging(config.logging.level, log_file=config.logging.path)
+    logger.info("Log level set to %s", active_level)
 
     default_backend_name = config.backends[0].name if config.backends else "local"
 
@@ -238,4 +240,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

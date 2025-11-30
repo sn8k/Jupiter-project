@@ -18,5 +18,19 @@
 - Added `loadCachedReport` plus `/reports/last` integration so the UI restores the last scan on startup and when the served root changes before issuing a new scan.
 - Wired the Suggestions IA "Actualiser" button to call `/analyze`, refresh `state.report.refactoring`, and provide loading feedback.
 - WebSocket handler now parses JSON events and renders `PLUGIN_NOTIFICATION` payloads inside the Live Events/log panels so local webhook fallbacks are visible to the user.
+- Switched project management calls to `/projects` endpoints, refreshed overview after activation/delete without full reload, and backfilled relative timestamps/auto-report hydration for the Projects dashboard.
+- Added wizard close handler, parent folder navigation in the browser modal, and applied danger styling to project delete actions.
+- Ensured the project browse modal always exposes parent navigation by auto-inserting a `..` entry when absent.
+- History view now filters snapshots to the active project only, clears stale selections on project switch, and blocks diffs against out-of-scope snapshots.
+- Context reloads are forced (no-cache) when switching projects so the top bar and History view reflect the newly active project immediately.
+- Redesigned project rendering: overview hydration, relative timestamps, refresh action handler, and card-based list with activate/delete buttons powered by `/system/projects`.
+- Bound Settings log level selector to the API, normalized client log levels (Debug/Info/Warning/Error/Critical), and reused it to filter the dashboard log stream.
+- Settings load/save flows now include an optional log file path so the UI can persist the destination for file logging.
+- Projects list now shows the new `<project>.jupiter.yaml` naming by default (with a safe sanitizer) and no longer hardcodes `jupiter.yaml`.
+- Suggestions view now renders duplication evidence (file:line list with truncation) and maps `high`/`medium` severities to visible badge styles.
+- Suggestions now display the nearest function names and a code excerpt for duplicated blocks to make remediation faster.
+- Added `performProjectMutation` helper to factor repeated project activation/deletion request handling.
+- Projects page now lets users edit per-project ignore globs (UI inputs + `/projects/{id}/ignore` API call).
+- Moved API connector settings to the Projects page with a dedicated form that saves via `/projects/{id}/api_config`.
 
 

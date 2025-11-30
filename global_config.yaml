@@ -1,0 +1,19 @@
+gui:
+  host: 127.0.0.1
+  port: 8050
+logging:
+  level: DEBUG
+  path: ./testlogs.log
+meeting:
+  deviceKey: 7F334701F08E904D796A83C6C26ADAF3
+  enabled: true
+plugins:
+  disabled: []
+  enabled: []
+server:
+  host: 127.0.0.1
+  port: 8000
+ui:
+  language: en
+  theme: dark
+users: []

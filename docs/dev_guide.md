@@ -88,7 +88,7 @@ The API is built with FastAPI and provides endpoints for the Web UI and CLI. It 
     *   `GET /graph`: Delegates to `GraphBuilder` to expose a graph suitable for the Live Map. Supports `simplify` (group by directory) and `max_nodes` parameters for large projects.
     *   `GET /backends`: Lists configured backends.
     *   `GET /plugins`, `POST /plugins/{name}/toggle`, `POST /plugins/{name}/config`: Introspect and manage plugins (including webhook configuration).
-    *   `GET /config` & `POST /config`: Manages `jupiter.yaml`.
+    *   `GET /config` & `POST /config`: Manages `<project>.jupiter.yaml`.
     *   `POST /update`: Handles self-update.
     *   `WS /ws`: WebSocket for real-time events (watch mode).
 
@@ -96,7 +96,7 @@ The API is built with FastAPI and provides endpoints for the Web UI and CLI. It 
 
 Jupiter includes a basic security layer with Role-Based Access Control (RBAC):
 
-*   **Authentication**: Tokens are configured in `jupiter.yaml`. The API enforces `Authorization: Bearer <token>` on protected endpoints.
+*   **Authentication**: Tokens are configured in `<project>.jupiter.yaml`. The API enforces `Authorization: Bearer <token>` on protected endpoints.
 *   **Roles**:
     *   **Admin**: Full access (`/run`, `/update`, `/config`, `/plugins`, `/scan`).
     *   **Viewer**: Read-only access (`/snapshots`, `/graph`, `/analyze`, `/reports`, `/fs/list`).

@@ -10,3 +10,5 @@ Welcome to the Jupiter documentation (v1.0).
 * [Developer Guide](dev_guide.md) - Internals, extension points, and contributing guidelines.
 * [Plugin System](plugins.md) - How to build and configure plugins (including webhook notifications).
 * [Reference (FR)](reference_fr.md) - Original vision document.
+
+The Web UI now ships with a Projects Control Center to list, activate, and manage registered roots without restarting the server.

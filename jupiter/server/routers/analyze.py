@@ -16,20 +16,13 @@ from jupiter.server.models import (
     ImpactModel,
 )
 from jupiter.server.routers.auth import verify_token
-from jupiter.core.history import HistoryManager
 from jupiter.core.cache import CacheManager
 from jupiter.core.simulator import ProjectSimulator
 from jupiter.core.graph import GraphBuilder
+from jupiter.server.system_services import SystemState
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-def _history_manager(app) -> HistoryManager:
-    manager = getattr(app.state, "history_manager", None)
-    if manager is None:
-        manager = HistoryManager(app.state.root_path)
-        app.state.history_manager = manager
-    return manager
 
 @router.get("/analyze", response_model=AnalyzeResponse, dependencies=[Depends(verify_token)])
 async def get_analyze(
@@ -56,6 +49,10 @@ async def get_analyze(
         "show_hidden": show_hidden,
         "ignore_globs": ignore_globs,
     }
+    if not analyze_options["ignore_globs"]:
+        active_project = app.state.project_manager.get_active_project()
+        if active_project:
+            analyze_options["ignore_globs"] = active_project.ignore_globs
     
     try:
         summary_dict = await connector.analyze(analyze_options)
@@ -74,7 +71,9 @@ async def get_analyze(
             path=r["path"],
             type=r["type"],
             details=r["details"],
-            severity=r["severity"]
+            severity=r["severity"],
+            locations=r.get("locations"),
+            code_excerpt=r.get("code_excerpt")
         )
         for r in summary_dict.get("refactoring", [])
     ]
@@ -111,7 +110,7 @@ async def get_analyze(
 
 @router.get("/snapshots", response_model=SnapshotListResponse, dependencies=[Depends(verify_token)])
 async def get_snapshots(request: Request) -> SnapshotListResponse:
-    history = _history_manager(request.app)
+    history = SystemState(request.app).history_manager()
     entries = [SnapshotMetadataModel(**asdict(meta)) for meta in history.list_snapshots()]
     return SnapshotListResponse(snapshots=entries)
 
@@ -119,7 +118,7 @@ async def get_snapshots(request: Request) -> SnapshotListResponse:
 @router.get("/snapshots/diff", response_model=SnapshotDiffResponse, dependencies=[Depends(verify_token)])
 async def diff_snapshots(request: Request, id_a: str, id_b: str) -> SnapshotDiffResponse:
     try:
-        diff = _history_manager(request.app).compare_snapshots(id_a, id_b).to_dict()
+        diff = SystemState(request.app).history_manager().compare_snapshots(id_a, id_b).to_dict()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return SnapshotDiffResponse(**diff)
@@ -127,7 +126,7 @@ async def diff_snapshots(request: Request, id_a: str, id_b: str) -> SnapshotDiff
 
 @router.get("/snapshots/{snapshot_id}", response_model=SnapshotResponse, dependencies=[Depends(verify_token)])
 async def get_snapshot(request: Request, snapshot_id: str) -> SnapshotResponse:
-    snapshot = _history_manager(request.app).get_snapshot(snapshot_id)
+    snapshot = SystemState(request.app).history_manager().get_snapshot(snapshot_id)
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     metadata = SnapshotMetadataModel(**snapshot["metadata"])

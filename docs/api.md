@@ -8,7 +8,7 @@ By default: `http://127.0.0.1:8000`
 
 ## Authentication
 
-Jupiter supports token-based authentication with roles. Tokens are configured in `jupiter.yaml` (under `security.tokens`).
+Jupiter supports token-based authentication with roles. Tokens are configured in `<project>.jupiter.yaml` (under `security.tokens`).
 
 **Header:**
 `Authorization: Bearer <your-token>`
@@ -40,8 +40,18 @@ Jupiter supports token-based authentication with roles. Tokens are configured in
     *   `GET /plugins`
     *   `GET /backends`
     *   `WS /ws` (via query parameter `token`)
+    *   `GET /projects`
 
 ## Endpoints
+
+### Projects
+
+Manage registered projects and the active context.
+
+* `GET /projects` (auth): list `{id, name, path, config_file, is_active}` entries. `is_active` marks the current project.
+* `POST /projects` (admin): body `{ "path": "/abs/path", "name": "My Project" }` registers a project and sets it as default.
+* `POST /projects/{id}/activate` (admin): switches the active project, reloads config/plugins/history, and returns `{ "status": "ok", "project_id": "<id>" }`.
+* `DELETE /projects/{id}` (admin): removes a project entry (files are untouched). If the active project is deleted, the server falls back to the next available one.
 
 ### `GET /health`
 
@@ -120,7 +130,7 @@ Executes a shell command within the project context.
 **Security notes:**
 
 * This endpoint is protected by Bearer token authentication (`security.token`).
-* Execution can be globally disabled via `security.allow_run = false` in `jupiter.yaml`.
+* Execution can be globally disabled via `security.allow_run = false` in `<project>.jupiter.yaml`.
 * When `security.allowed_commands` is non‑empty, only commands or executables listed there are accepted.
 
 ### `GET /meeting/status`

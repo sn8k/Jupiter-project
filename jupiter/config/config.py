@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-import logging
 import os
 from typing import Any, Optional
 
@@ -12,7 +12,11 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-CONFIG_FILE_NAME = "jupiter.yaml"
+PROJECT_CONFIG_SUFFIX = ".jupiter.yaml"
+LEGACY_CONFIG_FILE_NAME = "jupiter.yaml"
+GLOBAL_INSTALL_CONFIG_FILE_NAME = "global_config.yaml"
+GLOBAL_REGISTRY_FILE_NAME = "global_config.yaml"
+LEGACY_GLOBAL_REGISTRY_FILE_NAME = "global.yaml"
 
 
 @dataclass
@@ -54,6 +58,14 @@ class PluginsConfig:
     enabled: list[str] = field(default_factory=list)
     disabled: list[str] = field(default_factory=list)
     settings: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class LoggingConfig:
+    """Configuration for logging."""
+
+    level: str = "INFO"
+    path: Optional[str] = None
 
 
 @dataclass
@@ -107,7 +119,8 @@ class ProjectDefinition:
     id: str
     name: str
     path: str
-    config_file: str = "jupiter.yaml"
+    config_file: str | None = None
+    ignore_globs: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -119,7 +132,16 @@ class GlobalConfig:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> GlobalConfig:
         projects_data = data.get("projects", [])
-        projects = [ProjectDefinition(**p) for p in projects_data]
+        projects = []
+        for p in projects_data:
+            ignore_globs = p.get("ignore_globs") or []
+            projects.append(ProjectDefinition(
+                id=p["id"],
+                name=p["name"],
+                path=p["path"],
+                config_file=p.get("config_file"),
+                ignore_globs=ignore_globs if isinstance(ignore_globs, list) else [],
+            ))
         return cls(
             projects=projects,
             default_project_id=data.get("default_project_id")
@@ -156,6 +178,7 @@ class JupiterConfig:
     gui: GuiConfig = field(default_factory=GuiConfig)
     meeting: MeetingConfig = field(default_factory=MeetingConfig)
     ui: UIConfig = field(default_factory=UIConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
     plugins: PluginsConfig = field(default_factory=PluginsConfig)
     users: list[UserConfig] = field(default_factory=list)
     security: SecurityConfig = field(default_factory=SecurityConfig)
@@ -178,6 +201,7 @@ class JupiterConfig:
 
         ui_data = data.get("ui", {})
         plugins_data = data.get("plugins", {})
+        logging_data = data.get("logging", {})
         
         # Handle PluginsConfig manually to support extra settings
         plugins_enabled = plugins_data.get("enabled", [])
@@ -206,6 +230,7 @@ class JupiterConfig:
             gui=GuiConfig(**gui_data),
             meeting=MeetingConfig(**meeting_data),
             ui=UIConfig(**ui_data),
+            logging=LoggingConfig(**logging_data),
             plugins=plugins_config,
             users=users_config,
             security=SecurityConfig(**security_data),
@@ -216,23 +241,91 @@ class JupiterConfig:
         )
 
 
+def _sanitize_project_name_for_filename(name: str) -> str:
+    """Normalize a project name so it is safe for filenames."""
+    normalized = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in name.strip())
+    normalized = normalized.strip("._") or "project"
+    return normalized.lower()
 
-def load_config(root_path: Path) -> JupiterConfig:
+
+def default_project_config_file_name(project_name: str) -> str:
+    """Return the canonical config file name for a project."""
+    return f"{_sanitize_project_name_for_filename(project_name)}{PROJECT_CONFIG_SUFFIX}"
+
+
+def get_project_config_path(root_path: Path, config_file: str | None = None) -> Path:
+    """Locate the project configuration file, preferring the new naming scheme."""
+    preferred_name = config_file or default_project_config_file_name(root_path.name)
+    candidates = [
+        root_path / preferred_name,
+        *sorted(root_path.glob(f"*{PROJECT_CONFIG_SUFFIX}")),
+        root_path / LEGACY_CONFIG_FILE_NAME,
+    ]
+
+    seen: set[Path] = set()
+    ordered_candidates: list[Path] = []
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        ordered_candidates.append(candidate)
+
+    for candidate in ordered_candidates:
+        if candidate.is_file():
+            return candidate
+
+    # Default to the preferred path even if it does not exist yet
+    return ordered_candidates[0]
+
+
+def resolve_install_config_path(install_path: Path) -> Path:
+    """Return the global install config path, honoring legacy filenames."""
+    modern = install_path / GLOBAL_INSTALL_CONFIG_FILE_NAME
+    legacy = install_path / LEGACY_CONFIG_FILE_NAME
+    if modern.exists():
+        return modern
+    if legacy.exists():
+        return legacy
+    return modern
+
+
+def load_install_config(install_path: Path) -> JupiterConfig:
+    """Load configuration from the install directory using the global filename."""
+    config_path = resolve_install_config_path(install_path)
+
+    if not config_path.is_file():
+        logger.debug("No global config file found at %s, using defaults.", config_path)
+        return JupiterConfig(project_root=install_path)
+
+    logger.info("Loading global config from %s", config_path)
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        config = JupiterConfig.from_dict(data)
+        config.project_root = install_path
+        return config
+    except Exception as e:
+        logger.error("Failed to load global config file: %s", e)
+        return JupiterConfig(project_root=install_path)
+
+
+
+def load_config(root_path: Path, config_file: str | None = None) -> JupiterConfig:
     """Load configuration from a YAML file.
 
-    Looks for ``jupiter.yaml`` in the given ``root_path``. If not found,
-    returns a default configuration. If found, loads it and merges it with
-    the defaults.
+    Project configs follow the ``<project>.jupiter.yaml`` naming convention.
+    Legacy ``jupiter.yaml`` files are still supported as a fallback.
     """
-    config_file = root_path / CONFIG_FILE_NAME
+    config_path = get_project_config_path(root_path, config_file=config_file)
 
-    if not config_file.is_file():
-        logger.debug("No config file found at %s, using defaults.", config_file)
+    if not config_path.is_file():
+        logger.debug("No config file found at %s, using defaults.", config_path)
         return JupiterConfig(project_root=root_path)
 
-    logger.info("Loading config from %s", config_file)
+    logger.info("Loading config from %s", config_path)
     try:
-        with config_file.open("r", encoding="utf-8") as f:
+        with config_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
         
         config = JupiterConfig.from_dict(data)
@@ -246,18 +339,18 @@ def load_config(root_path: Path) -> JupiterConfig:
 def load_merged_config(install_path: Path, project_path: Path) -> JupiterConfig:
     """Load configuration merging global (install) and project settings."""
     # 1. Load global config
-    global_config = load_config(install_path)
+    global_config = load_install_config(install_path)
 
     # Check LocalAppData override
     local_app_data = os.environ.get("LOCALAPPDATA")
     if local_app_data:
         app_data_path = Path(local_app_data) / "Jupiter"
-        if (app_data_path / CONFIG_FILE_NAME).exists():
+        if resolve_install_config_path(app_data_path).exists():
              logger.info("Loading global config from LocalAppData: %s", app_data_path)
-             global_config = load_config(app_data_path)
+             global_config = load_install_config(app_data_path)
     
     # If paths are same, just return it
-    if install_path.resolve() == project_path.resolve() and not (local_app_data and (Path(local_app_data) / "Jupiter" / CONFIG_FILE_NAME).exists()):
+    if install_path.resolve() == project_path.resolve() and not (local_app_data and resolve_install_config_path(Path(local_app_data) / "Jupiter").exists()):
         return global_config
 
     # 2. Load project config
@@ -362,10 +455,11 @@ def save_global_settings(config: JupiterConfig, install_path: Path) -> None:
         "gui": {"host": config.gui.host, "port": config.gui.port},
         "meeting": {"enabled": config.meeting.enabled, "deviceKey": config.meeting.deviceKey},
         "ui": {"theme": config.ui.theme, "language": config.ui.language},
+        "logging": {"level": config.logging.level, "path": config.logging.path},
         "plugins": {"enabled": config.plugins.enabled, "disabled": config.plugins.disabled},
         "users": [{"name": u.name, "token": u.token, "role": u.role} for u in config.users],
     }
-    _update_yaml_section(install_path / CONFIG_FILE_NAME, updates)
+    _update_yaml_section(resolve_install_config_path(install_path), updates)
 
 
 def save_project_settings(config: JupiterConfig, project_path: Path) -> None:
@@ -377,19 +471,20 @@ def save_project_settings(config: JupiterConfig, project_path: Path) -> None:
         "security": { # Security is usually project specific (allowed commands)
              "allow_run": config.security.allow_run,
              "allowed_commands": config.security.allowed_commands
-        }
+        },
+        "logging": {"level": config.logging.level, "path": config.logging.path},
     }
     
     project_api_serialized = _serialize_project_api(config.project_api)
     if project_api_serialized:
         updates["api"] = project_api_serialized
 
-    _update_yaml_section(project_path / CONFIG_FILE_NAME, updates)
+    _update_yaml_section(get_project_config_path(project_path), updates)
 
 
 def save_config(config: JupiterConfig, root_path: Path) -> None:
     """Save configuration to a YAML file."""
-    config_file = root_path / CONFIG_FILE_NAME
+    config_file = get_project_config_path(root_path)
     
     data = {
         "server": {
@@ -407,6 +502,10 @@ def save_config(config: JupiterConfig, root_path: Path) -> None:
         "ui": {
             "theme": config.ui.theme,
             "language": config.ui.language,
+        },
+        "logging": {
+            "level": config.logging.level,
+            "path": config.logging.path,
         },
         "ci": {
             "fail_on": config.ci.fail_on,
@@ -434,7 +533,14 @@ def save_config(config: JupiterConfig, root_path: Path) -> None:
 
 def get_global_config_path() -> Path:
     """Get the path to the global configuration file."""
-    return Path.home() / ".jupiter" / "global.yaml"
+    home_root = Path.home() / ".jupiter"
+    modern = home_root / GLOBAL_REGISTRY_FILE_NAME
+    legacy = home_root / LEGACY_GLOBAL_REGISTRY_FILE_NAME
+    if modern.exists():
+        return modern
+    if legacy.exists():
+        return legacy
+    return modern
 
 
 def load_global_config() -> GlobalConfig:
@@ -442,11 +548,39 @@ def load_global_config() -> GlobalConfig:
     path = get_global_config_path()
     if not path.exists():
         return GlobalConfig()
-    
+
+    def _normalize_projects(cfg: GlobalConfig) -> bool:
+        """Ensure project entries use modern config filenames and absolute paths."""
+        changed = False
+        for project in cfg.projects:
+            expected_cfg = default_project_config_file_name(project.name)
+            if not project.config_file or project.config_file in (LEGACY_CONFIG_FILE_NAME, "jupiter.yaml"):
+                project.config_file = expected_cfg
+                changed = True
+
+            try:
+                resolved = Path(project.path).expanduser().resolve()
+                if str(resolved) != project.path:
+                    project.path = str(resolved)
+                    changed = True
+            except OSError:
+                # If the path cannot be resolved, keep the stored value.
+                continue
+        return changed
+
     try:
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-            return GlobalConfig.from_dict(data)
+            cfg = GlobalConfig.from_dict(data)
+
+        if _normalize_projects(cfg):
+            try:
+                save_global_config(cfg)
+                logger.info("Normalized global registry entries to modern config naming.")
+            except Exception as e:
+                logger.warning("Failed to persist normalized global registry: %s", e)
+
+        return cfg
     except Exception as e:
         logger.error("Failed to load global config: %s", e)
         return GlobalConfig()
@@ -454,8 +588,9 @@ def load_global_config() -> GlobalConfig:
 
 def save_global_config(config: GlobalConfig) -> None:
     """Save the global configuration."""
-    path = get_global_config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    storage_root = Path.home() / ".jupiter"
+    storage_root.mkdir(parents=True, exist_ok=True)
+    path = storage_root / GLOBAL_REGISTRY_FILE_NAME
     
     data = {
         "projects": [
@@ -463,7 +598,8 @@ def save_global_config(config: GlobalConfig) -> None:
                 "id": p.id,
                 "name": p.name,
                 "path": p.path,
-                "config_file": p.config_file
+                "config_file": p.config_file or default_project_config_file_name(p.name),
+                "ignore_globs": p.ignore_globs,
             }
             for p in config.projects
         ],

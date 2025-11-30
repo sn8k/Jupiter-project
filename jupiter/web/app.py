@@ -12,6 +12,8 @@ from pathlib import Path
 from socketserver import ThreadingTCPServer
 from typing import Callable
 
+from jupiter.config.config import get_project_config_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +43,7 @@ class JupiterWebUI:
         
         # Ensure root path is clean (no quotes)
         root_str = str(self.settings.root).strip('"\'')
-        config_path = self.settings.root / "jupiter.yaml"
+        config_path = get_project_config_path(self.settings.root)
         
         project_name = self.settings.root.name
         if config_path.exists():

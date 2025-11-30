@@ -5,17 +5,10 @@ from jupiter.server.routers.auth import verify_token
 from jupiter.core.events import JupiterEvent, SCAN_STARTED, SCAN_FINISHED
 from jupiter.core.cache import CacheManager
 from jupiter.server.ws import manager
-from jupiter.core.history import HistoryManager
+from jupiter.server.system_services import SystemState
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-def _history_manager(app) -> HistoryManager:
-    manager = getattr(app.state, "history_manager", None)
-    if manager is None:
-        manager = HistoryManager(app.state.root_path)
-        app.state.history_manager = manager
-    return manager
 
 @router.post("/scan", response_model=ScanReport, dependencies=[Depends(verify_token)])
 async def post_scan(request: Request, options: ScanRequest) -> ScanReport:
@@ -40,7 +33,12 @@ async def post_scan(request: Request, options: ScanRequest) -> ScanReport:
         "ignore_globs": options.ignore_globs,
         "incremental": options.incremental,
     }
-    
+    # Apply default ignore globs from active project if none provided
+    if not scan_options["ignore_globs"]:
+        active_project = app.state.project_manager.get_active_project()
+        if active_project:
+            scan_options["ignore_globs"] = active_project.ignore_globs
+
     try:
         report_dict = await connector.scan(scan_options)
     except Exception as e:
@@ -89,7 +87,7 @@ async def post_scan(request: Request, options: ScanRequest) -> ScanReport:
 
     if options.capture_snapshot:
         try:
-            metadata = _history_manager(app).create_snapshot(
+            metadata = SystemState(app).history_manager().create_snapshot(
                 report_dict,
                 label=options.snapshot_label,
                 backend_name=options.backend_name,

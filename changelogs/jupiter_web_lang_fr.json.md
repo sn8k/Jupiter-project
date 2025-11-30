@@ -1,3 +1,11 @@
 # Changelog – jupiter/web/lang/fr.json
 - Ajout des chaînes pour les vues Diagnostic, Analyse, Fichiers et Plugins restaurées, badges de statut, et messages de contexte API/CORS.
 - Ajout des chaînes `suggestions_refresh_*` pour l'état d'actualisation des suggestions IA.
+- Ajout du vocabulaire pour le tableau de bord Projets (hero actif, métriques, actions rapides, états vides) et formats de temps relatifs.
+- Ajout des libellés liés au niveau de log pour décrire la nouvelle option de verbosité.
+- Ajustement des libellés de configuration pour refléter le nouveau nommage `.jupiter.yaml`.
+- Ajout des libellés pour le champ de chemin de fichier log dans les paramètres.
+- Ajout de la traduction `suggestions_more_locations` pour expliquer qu'une liste d'occurrences de duplication est tronquée.
+- (UI) L'onglet Suggestions affiche désormais des extraits de code pour les doublons ; pas de nouvelles clés requises.
+- Ajout des clés pour l'édition des globs d'ignore par projet dans la page Projets.
+- Ajout des clés pour le nouveau formulaire de connecteur API par projet (titre, sous-titre, sauvegarde).

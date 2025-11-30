@@ -16,8 +16,11 @@ Jupiter is a modular tool designed to scan, analyze, and observe software projec
 *   **Project API Connectors**: OpenAPI connector to inspect your own project's HTTP API.
 *   **Web Interface**: Visual dashboard for exploring your project.
 *   **Plugins & Webhooks**: Extensible plugin architecture with webhook notifications.
+*   **Configurable Logging**: Set the global log level (Debug/Info/Warning/Error/Critical) from the Settings page and keep CLI/API/Uvicorn aligned.
 *   **Meeting Integration**: License management and session control.
 *   **Multi-Project Management**: Manage multiple projects with distinct configurations and switch between them easily.
+*   **Projects Control Center**: Dedicated Web UI dashboard to view the active project, key stats, and manage configured roots in one place.
+*   **AI Suggestions Evidence**: Duplication recommendations now surface the exact file/line, nearest function, and a code excerpt inside reports and the Suggestions tab.
 
 ## Quick Start
 
@@ -69,7 +72,9 @@ Snapshots power the new **History** panel in the Web UI and the `/snapshots` API
 
 ### Persistent state
 
-When you change the served root in the Web UI or relaunch Jupiter without explicitly passing a directory, the tool reloads the last root saved in `~/.jupiter/state.json`, restores cached scan data from `.jupiter/cache/last_scan.json`, and keeps the snapshot history in `.jupiter/snapshots/` scoped per project so dashboards and diffs stay aligned with the same root.
+When you change the served root in the Web UI or relaunch Jupiter without explicitly passing a directory, the tool reloads the default project defined in the global registry (`~/.jupiter/global_config.yaml` with legacy fallback to `global.yaml`) and keeps `~/.jupiter/state.json` in sync. Cached scan data from `.jupiter/cache/last_scan.json` and the snapshot history in `.jupiter/snapshots/` are restored per project so dashboards and diffs stay aligned with the same root. Activating a project from the Web UI writes it back to the registry so the next CLI/GUI launch opens the same project automatically.
+
+Legacy registries are auto-normalized: entries still pointing to `jupiter.yaml` are rewritten to `<project>.jupiter.yaml` and paths are stored absolute so multi-project switching, activation, and deletion stay reliable across upgrades.
 
 `scan`, `analyze`, and `ci` now share a unified workflow builder that wires plugins, caching, performance settings, and snapshot persistence the same way no matter which command you trigger. This removes the subtle drifts that previously existed between the commands.
 
@@ -89,12 +94,15 @@ Full documentation is available in the `docs/` directory:
 
 Jupiter is primarily a local development tool. However, when exposing the API (e.g. on a shared network), you should:
 
-1.  **Configure a Token**: Add `security.token` in `jupiter.yaml`.
+1.  **Configure a Token**: Add `security.token` in your `<project>.jupiter.yaml`.
 2.  **Restrict `run`**: Use `security.allow_run` and `security.allowed_commands` to disable or whitelist commands.
 3.  **Use a Reverse Proxy**: For SSL/TLS termination if needed.
 
 ## Release Notes
 
+- **1.1.10** – Internal deduplication: shared helpers now drive CLI scan/analyze setup, server snapshot handling, and project UI mutations to reduce drift.
+- **1.1.9** – AI duplication suggestions now include concrete file:line evidence in the API response and the Web UI Suggestions tab.
+- **1.1.4** – Projects Control Center fully wired to `/projects` (refresh, activate, delete) with dashboard stats and documented multi-project management.
 - **1.0.4** – Hardened `/reports/last` (cached data now matches the API schema) and added a local notification fallback when the webhook URL is missing.
 - **1.0.1** – Scan modal restyle (with persisted options) and automatic population of the Quality view right after each scan, even in Watch mode.
 - **1.0.0** – First stable release. Includes standalone executable, full CI/CD integration, AI plugin support, and performance optimizations for large repositories.

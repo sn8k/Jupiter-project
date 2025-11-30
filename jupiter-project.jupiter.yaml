@@ -1,7 +1,7 @@
 api:
   app_var: null
   base_url: null
-  connector: local
+  connector: null
   openapi_url: /openapi.json
   path: null
   type: openapi
@@ -11,9 +11,9 @@ ci:
 gui:
   host: 127.0.0.1
   port: 8050
-meeting:
-  deviceKey: 7F334701F08E904D796A83C6C26ADAF3
-  enabled: true
+logging:
+  level: DEBUG
+  path: ./testlogs.log
 performance:
   excluded_dirs:
   - node_modules

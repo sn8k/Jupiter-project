@@ -37,9 +37,9 @@ If no project is configured, an onboarding wizard will help you create a default
 
 ## Configuration
 
-Jupiter looks for a `jupiter.yaml` file in the project root. You can configure the server, UI, and meeting integration there.
+Jupiter looks for a `<project>.jupiter.yaml` file in the project root (legacy `jupiter.yaml` is still read for backward compatibility). You can configure the server, UI, and meeting integration there.
 
-Example `jupiter.yaml`:
+Example `<project>.jupiter.yaml`:
 
 ```yaml
 server:
@@ -95,7 +95,7 @@ Click the **Run** button to execute shell commands within the project root:
 Click **Watch** to enable real-time monitoring. File changes will appear in the "Live Watch" panel on the dashboard.
 
 #### Settings
-The **Settings** view allows you to configure `jupiter.yaml` directly:
+The **Settings** view allows you to configure your `<project>.jupiter.yaml` directly (log level and optional log file destination included):
 - **Server/GUI Host & Port**: Network configuration.
 - **Meeting**: Enable/Disable and set Device Key.
 - **Theme & Language**: Customize the UI appearance.
@@ -249,7 +249,7 @@ The `analyze` command (and the Web UI) reports on code quality metrics:
 ### Plugins
 
 Jupiter supports plugins to extend functionality.
-- Configure plugins in `jupiter.yaml`:
+- Configure plugins in `<project>.jupiter.yaml`:
   ```yaml
   plugins:
     enabled: ["ai_helper", "code_quality_stub", "notifications_webhook"]
@@ -306,7 +306,7 @@ Use zoom and pan to explore the structure, and click on a node to highlight its 
 
 ### Project APIs (OpenAPI)
 
-If you configure a `project_api` section in `jupiter.yaml`, Jupiter will:
+If you configure a `project_api` section in `<project>.jupiter.yaml`, Jupiter will:
 - Fetch your OpenAPI schema.
 - List endpoints (path, method, tags) in the **API** view.
 - Optionally correlate endpoints with files/handlers when possible.
@@ -332,7 +332,7 @@ Jupiter can be used in your CI/CD pipelines to enforce quality gates.
 
 ### Configuration
 
-Add a `ci` section to your `jupiter.yaml`:
+Add a `ci` section to your `<project>.jupiter.yaml`:
 
 ```yaml
 ci:

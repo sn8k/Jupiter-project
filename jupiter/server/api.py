@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+import sys
+import asyncio
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +23,7 @@ from jupiter.server.manager import ProjectManager
 from jupiter.server.ws import websocket_endpoint
 from jupiter.server.meeting_adapter import MeetingAdapter
 from jupiter.server.routers import auth, scan, system, analyze
+from jupiter.core.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,10 @@ app = FastAPI(
     description="API for scanning and analyzing projects.",
     version="1.0.1",
 )
+
+# Windows Proactor loops tend to emit noisy connection-lost traces when clients close abruptly.
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 app.include_router(auth.router)
 app.include_router(scan.router)
@@ -142,13 +149,20 @@ class JupiterAPIServer:
         app.state.plugin_manager = plugin_manager
         logger.info("Loaded %d plugins", len(plugin_manager.plugins))
 
+        active_config = getattr(app.state.project_manager, "config", None)
+        active_logging = getattr(active_config, "logging", None)
+        active_level = getattr(active_logging, "level", None)
+        active_path = getattr(active_logging, "path", None)
+        active_log_level = configure_logging(active_level, log_file=active_path)
+        logger.info("Configured logging at %s", active_log_level)
+
         logger.info("Starting Jupiter API server on %s:%s for root %s", self.host, self.port, self.root)
         try:
             uvicorn.run(
                 app,
                 host=self.host,
                 port=self.port,
-                log_level="info",
+                log_level=active_log_level.lower(),
             )
         except Exception as e:
             logger.error("Server crashed: %s", e)

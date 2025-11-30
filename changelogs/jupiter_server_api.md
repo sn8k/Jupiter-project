@@ -26,6 +26,7 @@
 - Added `GET /reports/last` so the Web UI can restore the most recent scan from `.jupiter/cache/last_scan.json` without running a new scan.
 - `POST /scan` now re-saves the enriched report (with plugin metadata) through `CacheManager` so cached payloads remain schema-compatible for `/reports/last`.
 - `POST /config/root` now reloads the new root's configuration/connectors/plugins and writes the fresh path to `~/.jupiter/state.json` so future launches start back where the user left off.
+- On Windows, the API now forces the selector event loop policy to silence noisy proactor connection-reset traces when clients close abruptly.
 
 **Previous entries**
 
@@ -36,3 +37,5 @@
 
 - Updated `GET /analyze` to convert the response model to a dictionary before calling `hook_on_analyze`.
 - This allows plugins (like `ai_helper`) to modify the response data (e.g., injecting suggestions) before it is returned to the client.
+- API startup now normalizes the configured `logging.level`, applies it to Uvicorn, and logs the active verbosity when booting the server.
+- API startup now also forwards `logging.path` (when set) to configure a file handler so log destinations configured in Settings are honored.

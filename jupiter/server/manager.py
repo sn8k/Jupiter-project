@@ -2,7 +2,16 @@ from pathlib import Path
 from typing import Dict, Optional
 import logging
 import uuid
-from jupiter.config.config import JupiterConfig, ProjectBackendConfig, load_global_config, save_global_config, ProjectDefinition, load_config
+from jupiter.config.config import (
+    JupiterConfig,
+    ProjectBackendConfig,
+    default_project_config_file_name,
+    load_global_config,
+    save_global_config,
+    ProjectDefinition,
+    load_config,
+)
+from jupiter.core.state import save_last_root
 from jupiter.core.connectors.base import BaseConnector
 from jupiter.core.connectors.local import LocalConnector
 from jupiter.core.connectors.remote import RemoteConnector
@@ -29,7 +38,9 @@ class ProjectManager:
         project_def = ProjectDefinition(
             id=project_id,
             name=name,
-            path=path
+            path=path,
+            config_file=default_project_config_file_name(name),
+            ignore_globs=[],
         )
         self.global_config.projects.append(project_def)
         self.global_config.default_project_id = project_id
@@ -48,7 +59,7 @@ class ProjectManager:
         try:
             # Load config from project path
             project_path = Path(project.path)
-            new_config = load_config(project_path)
+            new_config = load_config(project_path, config_file=project.config_file)
             new_config.project_root = project_path # Ensure root is set
             
             self.refresh_for_root(new_config)
@@ -56,6 +67,7 @@ class ProjectManager:
             # Update global default
             self.global_config.default_project_id = project_id
             save_global_config(self.global_config)
+            save_last_root(project_path)
             return True
         except Exception as e:
             logger.error(f"Failed to load project {project.name}: {e}")
@@ -63,6 +75,12 @@ class ProjectManager:
 
     def get_projects(self) -> list[ProjectDefinition]:
         return self.global_config.projects
+
+    def get_active_project(self) -> Optional[ProjectDefinition]:
+        """Return the active project definition, if any."""
+        if not self.global_config.default_project_id:
+            return None
+        return next((p for p in self.global_config.projects if p.id == self.global_config.default_project_id), None)
 
     def delete_project(self, project_id: str) -> bool:
         """Remove a project from the registry."""

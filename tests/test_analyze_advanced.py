@@ -89,6 +89,14 @@ def test_python_complexity_duplication(tmp_path):
     dups = summary.quality.get("duplication_clusters", [])
     assert len(dups) > 0
     # Should find duplication between dup1 and dup2
+    dup_recs = [r for r in summary.refactoring if r["type"] == "duplication"]
+    assert dup_recs, "Expected duplication refactoring recommendation"
+    first_dup = dup_recs[0]
+    assert first_dup.get("locations"), "Duplication recommendation should list occurrences"
+    assert any("dup1.py" in loc["path"] or "dup2.py" in loc["path"] for loc in first_dup["locations"])
+    assert all("line" in loc and loc["line"] >= 1 for loc in first_dup["locations"])
+    assert any((loc.get("function") == "dup") for loc in first_dup["locations"])
+    assert first_dup.get("code_excerpt"), "Duplication recommendation should include a code excerpt"
 
 def test_js_complexity_duplication(tmp_path):
     f1 = tmp_path / "complex.js"
