@@ -1,9 +1,12 @@
 from pathlib import Path
 from typing import Dict, Optional
+import logging
 from jupiter.config.config import JupiterConfig, ProjectBackendConfig
 from jupiter.core.connectors.base import BaseConnector
 from jupiter.core.connectors.local import LocalConnector
 from jupiter.core.connectors.remote import RemoteConnector
+
+logger = logging.getLogger(__name__)
 
 class ProjectManager:
     """
@@ -28,7 +31,24 @@ class ProjectManager:
         for backend_conf in self.config.backends:
             if backend_conf.type == "local_fs":
                 backend_path = self._resolve_local_path(backend_conf.path)
-                self.connectors[backend_conf.name] = LocalConnector(str(backend_path))
+                
+                # Handle "local" API connector
+                project_api = self.config.project_api
+                if project_api:
+                    logger.info(f"Project API config found: connector={project_api.connector}")
+                    if project_api.connector == "local":
+                        # Inject local server details
+                        project_api.base_url = f"http://{self.config.server.host}:{self.config.server.port}"
+                        project_api.openapi_url = "/openapi.json"
+                        project_api.type = "openapi"
+                        logger.info(f"Configured local API connector: {project_api.base_url}")
+                else:
+                    logger.info("No Project API config found")
+
+                self.connectors[backend_conf.name] = LocalConnector(
+                    str(backend_path),
+                    project_api_config=project_api
+                )
             elif backend_conf.type == "remote_jupiter_api":
                 if backend_conf.api_url:
                     self.connectors[backend_conf.name] = RemoteConnector(

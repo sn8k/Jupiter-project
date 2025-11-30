@@ -1,0 +1,30 @@
+name: Jupiter CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  jupiter-analysis:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install Jupiter
+      run: |
+        pip install -r requirements.txt
+        # Or install from your package source
+        # pip install jupiter-project
+
+    - name: Run Jupiter CI
+      run: |
+        # Run analysis and fail if thresholds are exceeded
+        # You can override thresholds via CLI args if needed
+        python -m jupiter.cli.main ci --json --fail-on-complexity 20

@@ -9,12 +9,14 @@ import time
 import sys
 import threading
 import webbrowser
+from dataclasses import asdict
 from pathlib import Path
 
 from jupiter import __version__
-from jupiter.config import load_config, PluginsConfig
+from jupiter.config import load_config, PluginsConfig, PerformanceConfig
 from jupiter.core import ProjectAnalyzer, ProjectScanner, ScanReport
 from jupiter.core.cache import CacheManager
+from jupiter.core.history import HistoryManager
 from jupiter.core.plugin_manager import PluginManager
 from jupiter.core.state import load_last_root, save_last_root
 from jupiter.core.updater import apply_update
@@ -58,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(description="Jupiter project inspection tool")
     parser.add_argument("--version", action="version", version=f"jupiter {__version__}")
+    parser.add_argument("--root", type=Path, default=None, help="Project root (optional, overrides current directory)")
     
     # Global root argument (optional, for when no subcommand is used)
     # Note: This might be tricky with subcommands. 
@@ -88,10 +91,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan_parser.add_argument("--incremental", action="store_true", help="Use incremental scanning")
     scan_parser.add_argument("--no-cache", action="store_true", help="Force scan without using cache")
+    scan_parser.add_argument("--perf", action="store_true", help="Enable performance profiling")
 
     analyze_parser = subcommands.add_parser("analyze", help="Analyze a project directory")
     analyze_parser.add_argument("root", type=Path, nargs="?", default=None, help="Root folder to analyze")
     analyze_parser.add_argument("--json", action="store_true", help="Emit the summary as JSON")
+    analyze_parser.add_argument("--perf", action="store_true", help="Enable performance profiling")
+    scan_parser.add_argument("--no-snapshot", action="store_true", help="Skip automatic snapshot creation")
+    scan_parser.add_argument("--snapshot-label", help="Override the generated snapshot label")
     analyze_parser.add_argument(
         "--top",
         type=int,
@@ -108,6 +115,13 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--show-hidden", action="store_true", help="Include hidden files in analysis")
     analyze_parser.add_argument("--incremental", action="store_true", help="Use incremental scanning")
     analyze_parser.add_argument("--no-cache", action="store_true", help="Force analysis without using cache")
+
+    ci_parser = subcommands.add_parser("ci", help="Run in CI mode with quality gates")
+    ci_parser.add_argument("root", type=Path, nargs="?", default=None, help="Root folder to analyze")
+    ci_parser.add_argument("--json", action="store_true", help="Emit the summary as JSON")
+    ci_parser.add_argument("--fail-on-complexity", type=int, help="Override max complexity threshold")
+    ci_parser.add_argument("--fail-on-duplication", type=int, help="Override max duplication clusters threshold")
+    ci_parser.add_argument("--fail-on-unused", type=int, help="Override max unused functions threshold")
 
     server_parser = subcommands.add_parser("server", help="Start the API server")
     server_parser.add_argument("root", type=Path, nargs="?", default=None, help="Project root to serve")
@@ -127,10 +141,49 @@ def build_parser() -> argparse.ArgumentParser:
     watch_parser = subcommands.add_parser("watch", help="Watch a project directory for changes")
     watch_parser.add_argument("root", type=Path, nargs="?", default=None, help="Root folder to watch")
 
+    snapshots_parser = subcommands.add_parser("snapshots", help="Inspect saved scan snapshots")
+    snapshots_sub = snapshots_parser.add_subparsers(dest="snapshot_command", required=True)
+
+    snap_list = snapshots_sub.add_parser("list", help="List available snapshots")
+    snap_list.add_argument("root", type=Path, nargs="?", default=None, help="Project root")
+    snap_list.add_argument("--json", action="store_true", help="Output as JSON")
+
+    snap_show = snapshots_sub.add_parser("show", help="Show a snapshot's metadata or report")
+    snap_show.add_argument("snapshot_id", help="Snapshot identifier")
+    snap_show.add_argument("root", type=Path, nargs="?", default=None, help="Project root")
+    snap_show.add_argument("--report", action="store_true", help="Include the full report payload")
+    snap_show.add_argument("--json", action="store_true", help="Output as JSON")
+
+    snap_diff = snapshots_sub.add_parser("diff", help="Diff two snapshots")
+    snap_diff.add_argument("snapshot_a", help="Older snapshot identifier")
+    snap_diff.add_argument("snapshot_b", help="Newer snapshot identifier")
+    snap_diff.add_argument("root", type=Path, nargs="?", default=None, help="Project root")
+    snap_diff.add_argument("--json", action="store_true", help="Output as JSON")
+
+    simulate_parser = subcommands.add_parser("simulate", help="Simulate changes")
+    simulate_sub = simulate_parser.add_subparsers(dest="simulate_command", required=True)
+    
+    sim_remove = simulate_sub.add_parser("remove", help="Simulate removal of a file or function")
+    sim_remove.add_argument("target", help="Target path (file) or path::function")
+    sim_remove.add_argument("root", type=Path, nargs="?", default=None, help="Project root")
+    sim_remove.add_argument("--json", action="store_true", help="Output as JSON")
+
     return parser
 
 
-def handle_scan(root: Path, show_hidden: bool, ignore_globs: list[str] | None, incremental: bool, no_cache: bool, plugins_config: PluginsConfig | None = None) -> str:
+def handle_scan(
+    root: Path,
+    show_hidden: bool,
+    ignore_globs: list[str] | None,
+    incremental: bool,
+    no_cache: bool,
+    plugins_config: PluginsConfig | None = None,
+    performance_config: PerformanceConfig | None = None,
+    snapshot_label: str | None = None,
+    snapshot_enabled: bool = True,
+    backend_name: str | None = None,
+    perf_mode: bool = False,
+) -> str:
     """Run a filesystem scan and return a JSON report."""
     logger.info("Scanning project at %s", root)
     
@@ -143,7 +196,10 @@ def handle_scan(root: Path, show_hidden: bool, ignore_globs: list[str] | None, i
         ignore_hidden=not show_hidden, 
         ignore_globs=ignore_globs,
         incremental=incremental,
-        no_cache=no_cache
+        no_cache=no_cache,
+        perf_mode=perf_mode,
+        max_workers=performance_config.max_workers if performance_config else None,
+        large_file_threshold=performance_config.large_file_threshold if performance_config else 10 * 1024 * 1024,
     )
     report = ScanReport.from_files(root=root, files=scanner.iter_files())
     
@@ -159,12 +215,79 @@ def handle_scan(root: Path, show_hidden: bool, ignore_globs: list[str] | None, i
     # Save to cache
     cache_manager = CacheManager(root)
     cache_manager.save_last_scan(report_dict)
+
+    if snapshot_enabled:
+        try:
+            history = HistoryManager(root)
+            metadata = history.create_snapshot(
+                report_dict,
+                label=snapshot_label,
+                backend_name=backend_name,
+            )
+            logger.info("Snapshot saved as %s", metadata.id)
+        except Exception as exc:
+            logger.warning("Failed to store snapshot: %s", exc)
     
     payload = json.dumps(report_dict, indent=2)
     return payload
 
 
-def handle_analyze(root: Path, as_json: bool, top: int, ignore_globs: list[str] | None, show_hidden: bool, incremental: bool, no_cache: bool, plugins_config: PluginsConfig | None = None) -> None:
+def handle_snapshot_list(root: Path, as_json: bool) -> None:
+    history = HistoryManager(root)
+    snapshots = history.list_snapshots()
+    if as_json:
+        print(json.dumps([asdict(s) for s in snapshots], indent=2))
+        return
+
+    if not snapshots:
+        print("No snapshots recorded yet.")
+        return
+
+    for meta in snapshots:
+        ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(meta.timestamp))
+        print(f"{meta.id}\t{meta.label}\t{ts}\tfiles={meta.file_count}\tsize={meta.total_size_bytes}B")
+
+
+def handle_snapshot_show(root: Path, snapshot_id: str, include_report: bool, as_json: bool) -> None:
+    history = HistoryManager(root)
+    snapshot = history.get_snapshot(snapshot_id)
+    if not snapshot:
+        logger.error("Snapshot %s not found", snapshot_id)
+        raise SystemExit(1)
+
+    payload = snapshot if include_report else {"metadata": snapshot["metadata"]}
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return
+
+    meta = payload["metadata"]
+    ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(meta["timestamp"]))
+    print(f"Snapshot {meta['id']} ({meta['label']})")
+    print(f" Created: {ts}")
+    print(f" Files: {meta['file_count']} | Size: {meta['total_size_bytes']} bytes")
+    print(f" Functions: {meta.get('function_count', 0)} | Potentially unused: {meta.get('unused_function_count', 0)}")
+    if include_report:
+        print("--- Report excerpt ---")
+        file_count = len(snapshot.get("report", {}).get("files", []))
+        print(f" Report root: {snapshot.get('report', {}).get('root', '<unknown>')} ({file_count} files)")
+
+
+def handle_snapshot_diff(root: Path, snapshot_a: str, snapshot_b: str, as_json: bool) -> None:
+    history = HistoryManager(root)
+    diff = history.compare_snapshots(snapshot_a, snapshot_b).to_dict()
+    if as_json:
+        print(json.dumps(diff, indent=2))
+        return
+
+    summary = diff["diff"]["metrics_delta"]
+    print(f"Diff {snapshot_a} -> {snapshot_b}")
+    print(f" File delta: {summary['file_count']} | Size delta: {summary['total_size_bytes']} bytes")
+    print(f" Functions delta: {summary['function_count']} | Unused delta: {summary['unused_function_count']}")
+    files = diff["diff"]
+    print(f" Added files: {len(files['files_added'])}, Removed: {len(files['files_removed'])}, Modified: {len(files['files_modified'])}")
+
+
+def handle_analyze(root: Path, as_json: bool, top: int, ignore_globs: list[str] | None, show_hidden: bool, incremental: bool, no_cache: bool, plugins_config: PluginsConfig | None = None, performance_config: PerformanceConfig | None = None, perf_mode: bool = False) -> None:
     """Scan then analyze a project root for quick feedback."""
     logger.info("Analyzing project at %s", root)
     
@@ -177,9 +300,12 @@ def handle_analyze(root: Path, as_json: bool, top: int, ignore_globs: list[str] 
         ignore_hidden=not show_hidden, 
         ignore_globs=ignore_globs,
         incremental=incremental,
-        no_cache=no_cache
+        no_cache=no_cache,
+        perf_mode=perf_mode,
+        max_workers=performance_config.max_workers if performance_config else None,
+        large_file_threshold=performance_config.large_file_threshold if performance_config else 10 * 1024 * 1024,
     )
-    analyzer = ProjectAnalyzer(root=root, no_cache=no_cache)
+    analyzer = ProjectAnalyzer(root=root, no_cache=no_cache, perf_mode=perf_mode)
     summary = analyzer.summarize(scanner.iter_files(), top_n=top)
     
     # Convert to dict for plugins
@@ -194,6 +320,135 @@ def handle_analyze(root: Path, as_json: bool, top: int, ignore_globs: list[str] 
         print(summary.describe())
 
 
+def handle_ci(
+    root: Path,
+    as_json: bool,
+    config: JupiterConfig,
+    fail_on_complexity: int | None = None,
+    fail_on_duplication: int | None = None,
+    fail_on_unused: int | None = None,
+) -> None:
+    """Run scan and analysis in CI mode, checking against quality gates."""
+    logger.info("Running CI analysis on %s", root)
+    
+    # 1. Scan
+    scanner = ProjectScanner(
+        root=root,
+        ignore_hidden=True, # Usually CI ignores hidden files
+        incremental=False, # CI usually wants a fresh scan or relies on restored cache
+        no_cache=False,
+        perf_mode=False,
+        max_workers=config.performance.max_workers,
+        large_file_threshold=config.performance.large_file_threshold,
+    )
+    
+    # 2. Analyze
+    analyzer = ProjectAnalyzer(root=root, no_cache=False, perf_mode=False)
+    summary = analyzer.summarize(scanner.iter_files(), top_n=10)
+    summary_dict = summary.to_dict()
+    
+    # 3. Check thresholds
+    thresholds = config.ci.fail_on.copy()
+    if fail_on_complexity is not None:
+        thresholds["max_complexity"] = fail_on_complexity
+    if fail_on_duplication is not None:
+        thresholds["max_duplication_clusters"] = fail_on_duplication
+    if fail_on_unused is not None:
+        thresholds["max_unused_functions"] = fail_on_unused
+        
+    failures = []
+    
+    # Check Complexity
+    max_complexity = 0
+    if summary.quality and "complexity_per_file" in summary.quality:
+        for item in summary.quality["complexity_per_file"]:
+            if item["score"] > max_complexity:
+                max_complexity = item["score"]
+    
+    limit_complexity = thresholds.get("max_complexity")
+    if limit_complexity is not None and max_complexity > limit_complexity:
+        failures.append(f"Max complexity {max_complexity} exceeds limit {limit_complexity}")
+
+    # Check Duplication
+    duplication_count = 0
+    if summary.quality and "duplication_clusters" in summary.quality:
+        duplication_count = len(summary.quality["duplication_clusters"])
+        
+    limit_duplication = thresholds.get("max_duplication_clusters")
+    if limit_duplication is not None and duplication_count > limit_duplication:
+        failures.append(f"Duplication clusters {duplication_count} exceeds limit {limit_duplication}")
+
+    # Check Unused Functions
+    unused_count = 0
+    if summary.python_summary:
+        unused_count += summary.python_summary.total_potentially_unused_functions
+    
+    limit_unused = thresholds.get("max_unused_functions")
+    if limit_unused is not None and unused_count > limit_unused:
+        failures.append(f"Unused functions {unused_count} exceeds limit {limit_unused}")
+
+    # 4. Output
+    result = {
+        "status": "failed" if failures else "passed",
+        "failures": failures,
+        "metrics": {
+            "max_complexity": max_complexity,
+            "duplication_clusters": duplication_count,
+            "unused_functions": unused_count,
+        },
+        "summary": summary_dict
+    }
+    
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"CI Analysis Status: {result['status'].upper()}")
+        print("-" * 30)
+        print(f"Max Complexity: {max_complexity} (Limit: {limit_complexity if limit_complexity else 'None'})")
+        print(f"Duplication Clusters: {duplication_count} (Limit: {limit_duplication if limit_duplication else 'None'})")
+        print(f"Unused Functions: {unused_count} (Limit: {limit_unused if limit_unused else 'None'})")
+        
+        if failures:
+            print("\nFailures:")
+            for f in failures:
+                print(f" - {f}")
+    
+    if failures:
+        sys.exit(1)
+
+
+def handle_simulate_remove(root: Path, target: str, as_json: bool) -> None:
+    # Load cache
+    cache_manager = CacheManager(root)
+    last_scan = cache_manager.load_last_scan()
+    if not last_scan or "files" not in last_scan:
+        logger.error("No scan data found. Run 'jupiter scan' first.")
+        sys.exit(1)
+        
+    from jupiter.core.simulator import ProjectSimulator
+    simulator = ProjectSimulator(last_scan["files"])
+    
+    if "::" in target:
+        path, func = target.split("::", 1)
+        result = simulator.simulate_remove_function(path, func)
+    else:
+        result = simulator.simulate_remove_file(target)
+        
+    if as_json:
+        from dataclasses import asdict
+        print(json.dumps(asdict(result), indent=2))
+        return
+        
+    print(f"Simulation: {result.target}")
+    print(f"Risk Score: {result.risk_score.upper()}")
+    if not result.impacts:
+        print("No impacts detected.")
+    else:
+        print(f"Impacts ({len(result.impacts)}):")
+        for imp in result.impacts:
+            print(f" - [{imp.severity.upper()}] {imp.target}: {imp.details} ({imp.impact_type})")
+
+
 def handle_server(root: Path, host: str, port: int) -> None:
     """Start the Jupiter API server stub."""
     # Strip quotes if present (workaround for Windows cmd passing quotes)
@@ -205,12 +460,16 @@ def handle_server(root: Path, host: str, port: int) -> None:
     final_host = host or config.server.host
     final_port = port or config.server.port
     
+    install_path = Path(__file__).resolve().parent.parent.parent
+
     server = JupiterAPIServer(
         root=root, 
         host=final_host, 
         port=final_port,
         device_key=config.meeting.deviceKey if config.meeting.enabled else None,
-        plugins_config=config.plugins
+        plugins_config=config.plugins,
+        config=config,
+        install_path=install_path
     )
     server.start()
 
@@ -329,6 +588,8 @@ def handle_app(root: Path) -> None:
     web_port = config.gui.port
     device_key = config.meeting.deviceKey if config.meeting.enabled else None
     
+    install_path = Path(__file__).resolve().parent.parent.parent
+
     # Start API Server in a thread
     logger.info("Starting API Server on %s:%s", api_host, api_port)
     api_server = JupiterAPIServer(
@@ -336,7 +597,8 @@ def handle_app(root: Path) -> None:
         host=api_host, 
         port=api_port,
         device_key=device_key,
-        plugins_config=config.plugins
+        plugins_config=config.plugins,
+        install_path=install_path
     )
     
     api_thread = threading.Thread(target=api_server.start, daemon=True)
@@ -384,6 +646,7 @@ def main() -> None:
     root = resolve_root_argument(getattr(args, "root", None))
     save_last_root(root)
     config = load_config(root)
+    default_backend_name = config.backends[0].name if config.backends else "local"
 
     if args.command == "scan":
         payload = handle_scan(
@@ -392,7 +655,12 @@ def main() -> None:
             ignore_globs=args.ignore_globs,
             incremental=args.incremental,
             no_cache=args.no_cache,
-            plugins_config=config.plugins
+            plugins_config=config.plugins,
+            performance_config=config.performance,
+            snapshot_label=args.snapshot_label,
+            snapshot_enabled=not args.no_snapshot,
+            backend_name=default_backend_name,
+            perf_mode=args.perf,
         )
         if args.output:
             args.output.write_text(payload, encoding="utf-8")
@@ -408,7 +676,9 @@ def main() -> None:
             show_hidden=args.show_hidden,
             incremental=args.incremental,
             no_cache=args.no_cache,
-            plugins_config=config.plugins
+            plugins_config=config.plugins,
+            performance_config=config.performance,
+            perf_mode=args.perf,
         )
     elif args.command == "server":
         host = args.host or config.server.host
@@ -423,8 +693,33 @@ def main() -> None:
         handle_gui(root=root, host=host, port=port, device_key=device_key)
     elif args.command == "watch":
         handle_watch(root)
+    elif args.command == "snapshots":
+        snap_root = resolve_root_argument(getattr(args, "root", None))
+        save_last_root(snap_root)
+        if args.snapshot_command == "list":
+            handle_snapshot_list(snap_root, args.json)
+        elif args.snapshot_command == "show":
+            handle_snapshot_show(snap_root, args.snapshot_id, args.report, args.json)
+        elif args.snapshot_command == "diff":
+            handle_snapshot_diff(snap_root, args.snapshot_a, args.snapshot_b, args.json)
+        else:
+            raise ValueError(f"Unhandled snapshot command {args.snapshot_command}")
+    elif args.command == "simulate":
+        sim_root = resolve_root_argument(getattr(args, "root", None))
+        save_last_root(sim_root)
+        if args.simulate_command == "remove":
+            handle_simulate_remove(sim_root, args.target, args.json)
     elif args.command == "update":
         handle_update(args.source, args.force)
+    elif args.command == "ci":
+        handle_ci(
+            root=root,
+            as_json=args.json,
+            config=config,
+            fail_on_complexity=args.fail_on_complexity,
+            fail_on_duplication=args.fail_on_duplication,
+            fail_on_unused=args.fail_on_unused,
+        )
     else:
         raise ValueError(f"Unhandled command {args.command}")
 

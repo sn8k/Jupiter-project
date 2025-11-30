@@ -1,12 +1,13 @@
 """Example plugin for Jupiter."""
 
 from typing import Any, Dict
+from jupiter import __version__
 
 class ExamplePlugin:
     """An example plugin that adds a custom field to the report."""
 
     name = "example_plugin"
-    version = "0.1.0"
+    version = __version__
     description = "A simple example plugin."
 
     def on_scan(self, report: Dict[str, Any]) -> None:

@@ -4,11 +4,14 @@ Jupiter is designed as a modular system with a clear separation of concerns.
 
 ## Core Modules (`jupiter.core`)
 
-* **Scanner (`scanner.py`)**: Responsible for traversing the filesystem, respecting ignore rules (`.jupiterignore`), and collecting file metadata.
+* **Scanner (`scanner.py`)**: Responsible for traversing the filesystem, respecting ignore rules (`.jupiterignore`), and collecting file metadata (Python and JS/TS).
 * **Analyzer (`analyzer.py`)**: Consumes scan results to produce aggregated statistics (file counts, sizes, hotspots) and language-specific insights.
 * **Runner (`runner.py`)**: Handles execution of shell commands and capturing their output.
 * **Tracer (`tracer.py`)**: Provides dynamic analysis capabilities (call graphs, execution timing) using `sys.settrace`.
-* **Language Support (`language/`)**: Pluggable modules for analyzing specific languages. Currently supports Python (AST analysis).
+* **Language Support (`language/`)**: Pluggable modules for analyzing specific languages (Python AST, JS/TS heuristics).
+* **History (`history.py`)**: Manages snapshot storage and diffing.
+* **Graph (`graph.py`)**: Builds the dependency graph consumed by the Live Map.
+* **Simulator (`simulator.py`)**: Computes impact when virtually removing files or functions.
 
 ## Server (`jupiter.server`)
 
@@ -42,3 +45,9 @@ Jupiter is designed as a modular system with a clear separation of concerns.
 
 * An extensible plugin system to add custom analysis or hooks.
 * Plugins implement the `Plugin` protocol.
+
+## Security
+
+* **Run Restrictions**: The `run` command can be restricted via `jupiter.yaml` (`security.allow_run`, `security.allowed_commands`).
+* **Plugin Policy**: Plugins have a `trust_level` (experimental vs trusted).
+* **Remote Projects**: Remote connectors use secure timeouts and masked error logging.

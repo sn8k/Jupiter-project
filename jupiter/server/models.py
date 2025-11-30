@@ -22,6 +22,12 @@ class ScanRequest(BaseModel):
     backend_name: Optional[str] = Field(
         default=None, description="Name of the backend to use (optional)."
     )
+    capture_snapshot: bool = Field(
+        default=True, description="Persist a snapshot once the scan finishes."
+    )
+    snapshot_label: Optional[str] = Field(
+        default=None, description="Optional human label stored with the snapshot."
+    )
 
 
 class FileAnalysis(BaseModel):
@@ -47,6 +53,15 @@ class ScanReport(BaseModel):
     )
     plugins: Optional[List[Dict[str, Any]]] = Field(
         default=None, description="List of active plugins and their status."
+    )
+    api: Optional[Dict[str, Any]] = Field(
+        default=None, description="API inspection data."
+    )
+    quality: Optional[Dict[str, Any]] = Field(
+        default=None, description="Code quality metrics (complexity, duplication)."
+    )
+    refactoring: Optional[List[Dict[str, Any]]] = Field(
+        default=None, description="Refactoring recommendations derived from quality analysis."
     )
 
 
@@ -83,11 +98,26 @@ class PythonProjectSummary(BaseModel):
     quality_score: Optional[float] = None
 
 
+class JsTsProjectSummary(BaseModel):
+    """Summary statistics for JS/TS code in a project."""
+
+    total_files: int
+    total_functions: int
+    avg_functions_per_file: float
+
+
 class Hotspot(BaseModel):
     """Represents a hotspot (area of interest) in the project."""
 
     path: str
     details: str
+
+
+class UserModel(BaseModel):
+    """Model for a Jupiter user."""
+    name: str
+    token: str
+    role: str = "viewer"
 
 
 class RefactoringRecommendation(BaseModel):
@@ -108,8 +138,10 @@ class AnalyzeResponse(BaseModel):
     by_extension: Dict[str, int]
     hotspots: Dict[str, List[Hotspot]]
     python_summary: Optional[PythonProjectSummary] = None
+    js_ts_summary: Optional[JsTsProjectSummary] = None
     plugins: Optional[List[Dict[str, Any]]] = None
     refactoring: List[RefactoringRecommendation] = Field(default_factory=list)
+    api: Optional[Dict[str, Any]] = None
 
 
 class MeetingStatus(BaseModel):
@@ -192,9 +224,79 @@ class ConfigModel(BaseModel):
     ui_language: str
     plugins_enabled: List[str]
     plugins_disabled: List[str]
+    # Performance
+    perf_parallel_scan: bool = True
+    perf_max_workers: Optional[int] = None
+    perf_scan_timeout: int = 300
+    perf_graph_simplification: bool = False
+    perf_max_graph_nodes: int = 1000
+    # Security
+    sec_allow_run: bool = True
+    # API Inspection
+    api_connector: Optional[str] = None
+    api_app_var: Optional[str] = None
+    api_path: Optional[str] = None
+
+
+class RawConfigModel(BaseModel):
+    """Model for raw configuration file content."""
+    content: str
 
 
 class UpdateRequest(BaseModel):
     """Request model for POST /update endpoint."""
     source: str
     force: bool = False
+
+
+class SnapshotMetadataModel(BaseModel):
+    """Metadata describing a stored snapshot."""
+
+    id: str
+    timestamp: float
+    label: str
+    jupiter_version: str
+    backend_name: Optional[str]
+    project_root: str
+    project_name: str
+    file_count: int
+    total_size_bytes: int
+    function_count: int
+    unused_function_count: int
+
+
+class SnapshotListResponse(BaseModel):
+    snapshots: List[SnapshotMetadataModel]
+
+
+class SnapshotResponse(BaseModel):
+    metadata: SnapshotMetadataModel
+    report: Dict[str, Any]
+
+
+class SnapshotDiffResponse(BaseModel):
+    snapshot_a: SnapshotMetadataModel
+    snapshot_b: SnapshotMetadataModel
+    diff: Dict[str, Any]
+
+
+class SimulateRequest(BaseModel):
+    """Request model for POST /simulate/remove endpoint."""
+    target_type: str = Field(..., description="Type of target: 'file' or 'function'")
+    path: str = Field(..., description="Path to the file")
+    function_name: Optional[str] = Field(None, description="Name of the function (if target_type is 'function')")
+
+
+class ImpactModel(BaseModel):
+    """Represents a single impact detected during simulation."""
+    target: str
+    impact_type: str
+    details: str
+    severity: str
+
+
+class SimulateResponse(BaseModel):
+    """Response model for simulation results."""
+    target: str
+    impacts: List[ImpactModel]
+    risk_score: str

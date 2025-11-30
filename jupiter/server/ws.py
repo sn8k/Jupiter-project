@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import List
-
+import json
+from typing import List, Union, Dict, Any
 from fastapi import WebSocket, WebSocketDisconnect
+from jupiter.core.events import JupiterEvent
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +23,23 @@ class ConnectionManager:
         self.active_connections.remove(websocket)
         logger.info("WebSocket connection closed.")
 
-    async def broadcast(self, message: str):
+    async def broadcast(self, message: Union[str, Dict[str, Any], JupiterEvent]):
+        """Broadcast a message to all connected clients.
+        
+        Args:
+            message: Can be a string, a dict, or a JupiterEvent object.
+        """
+        if isinstance(message, JupiterEvent):
+            payload = json.dumps(message.to_dict())
+        elif isinstance(message, dict):
+            payload = json.dumps(message)
+        else:
+            payload = str(message)
+
         to_remove = []
         for connection in self.active_connections:
             try:
-                await connection.send_text(message)
+                await connection.send_text(payload)
             except Exception:
                 logger.warning("Failed to send message to a client. Removing connection.")
                 to_remove.append(connection)

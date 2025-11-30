@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from jupiter import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,7 @@ class CodeQualityPlugin:
     """A simple plugin that adds dummy quality metrics."""
 
     name = "code_quality_stub"
-    version = "0.1.0"
+    version = __version__
     description = "Adds basic code quality metrics (stub)."
 
     def on_scan(self, report: dict[str, Any]) -> None:

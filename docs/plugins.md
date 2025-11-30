@@ -15,8 +15,13 @@ plugins:
   enabled:
     - "example_plugin"
     - "security_scanner"
+    - "notifications_webhook"
   disabled:
     - "noisy_plugin"
+
+notifications_webhook:
+  url: "https://my-service/hooks/jupiter"
+  events: ["scan_complete", "unused_function", "meeting_expired"]
 ```
 
 If `enabled` is provided, only plugins in that list are loaded. If `enabled` is empty, all discovered plugins are loaded unless they are in `disabled`.
@@ -33,9 +38,10 @@ A plugin is a class with the following attributes and methods:
 from typing import Any, Dict
 
 class MyPlugin:
-    name = "my_plugin"
-    version = "1.0.0"
+  name = "my_plugin"
+  version = "1.0.1"
     description = "Does amazing things."
+  trust_level = "experimental"  # or "trusted"
 
     def on_scan(self, report: Dict[str, Any]) -> None:
         """Called after a scan is complete.
@@ -65,3 +71,34 @@ class MyPlugin:
 ## Managing Plugins via UI
 
 The Jupiter Web UI provides a view to see active plugins. While you cannot currently install plugins directly from the UI, you can see which ones are active and their version.
+
+## AI Helper Plugin
+
+The `ai_helper` plugin provides an interface for AI-assisted analysis. It is an optional component that can generate refactoring suggestions, documentation improvements, and security alerts.
+
+### Configuration
+
+```yaml
+plugins:
+  enabled:
+    - ai_helper
+  ai_helper:
+    enabled: true
+    provider: "mock" # or "openai", "local"
+    api_key: "sk-..." # if required
+```
+
+### Interface
+
+The AI plugin hooks into `on_analyze` and populates the `refactoring` list in the analysis summary.
+
+```python
+@dataclass
+class AISuggestion:
+    path: str
+    type: str  # refactoring, doc, security, optimization
+    details: str
+    severity: str  # info, warning, critical
+    code_snippet: Optional[str] = None
+```
+

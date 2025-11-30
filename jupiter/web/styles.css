@@ -205,7 +205,10 @@ button.ghost {
 }
 
 .stats-grid { margin-top: 10px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.stat-card { background: var(--panel-contrast); border: 1px solid var(--border); padding: 12px; border-radius: 12px; box-shadow: 0 10px 30px color-mix(in srgb, var(--shadow) 50%, transparent); }
+.stat-card { background: var(--panel-contrast); border: 1px solid var(--border); padding: 12px; border-radius: 12px; box-shadow: 0 10px 30px color-mix(in srgb, var(--shadow) 50%, transparent); overflow: hidden; }
+.stat-card .value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.view[data-view="analysis"] > .panel:last-child { margin-top: 24px; }
 
 .uploader {
   position: relative;
@@ -386,9 +389,6 @@ dialog.modal::backdrop {
   border: 1px solid var(--border);
   pointer-events: auto;
 }
-  width: 90%;
-  border: 1px solid var(--border);
-}
 
 .modal h2 {
   margin-top: 0;
@@ -399,5 +399,260 @@ dialog.modal::backdrop {
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
+}
+
+/* Settings Layout */
+.settings-layout {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.settings-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.settings-section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.settings-section header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.settings-section h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--accent);
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select {
+    width: 100%;
+    padding: 0.6rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+.form-group.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.form-group.checkbox-group label {
+    margin-bottom: 0;
+    order: 2;
+}
+
+.form-group.checkbox-group input[type="checkbox"] {
+    order: 1;
+    width: 1.2rem;
+    height: 1.2rem;
+    margin: 0;
+}
+
+.settings-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+/* Login Modal Specifics */
+#login-modal {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  color: var(--text-main);
+  max-width: 400px;
+  width: 100%;
+}
+
+#login-modal::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+#login-modal .modal-content {
+  padding: 2rem;
+}
+
+#login-modal header {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+#login-modal header h2 {
+  font-size: 1.5rem;
+  color: var(--accent);
+}
+
+#login-modal .form-group {
+  margin-bottom: 1.25rem;
+}
+
+#login-modal input[type="text"],
+#login-modal input[type="password"] {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+#login-modal input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+#login-modal button.primary {
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Layout tweaks for Scan modal */
+#scan-modal .modal {
+  width: 520px;
+  max-width: 92vw;
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+#scan-modal header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+#scan-modal header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+#scan-modal footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+.scan-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.scan-options-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.scan-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-contrast);
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  gap: 1rem;
+}
+
+#scan-modal .scan-toggle span {
+  flex: 1;
+}
+
+#scan-modal .scan-toggle input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.scan-ignore-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.scan-ignore-field input {
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text-main);
+}
+
+/* Fix for run-modal presentation */
+#run-modal .modal {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+#run-modal header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+#run-modal header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--accent);
+}
+
+#run-modal footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+}
+
+#run-modal .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 

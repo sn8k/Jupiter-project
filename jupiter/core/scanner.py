@@ -7,8 +7,11 @@ import fnmatch
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Dict, Any
 import logging
+import time
+import concurrent.futures
 
 from jupiter.core.language.python import analyze_python_source
+from jupiter.core.language.js_ts import analyze_js_ts_source
 from jupiter.core.cache import CacheManager
 
 logger = logging.getLogger(__name__)
@@ -50,12 +53,18 @@ class ProjectScanner:
         ignore_file: str = ".jupiterignore",
         incremental: bool = False,
         no_cache: bool = False,
+        perf_mode: bool = False,
+        max_workers: int | None = None,
+        large_file_threshold: int = 10 * 1024 * 1024,
     ) -> None:
         self.root = root
         self.ignore_hidden = ignore_hidden
         self.ignore_patterns = self._resolve_ignore_patterns(ignore_globs, ignore_file)
         self.incremental = incremental
         self.no_cache = no_cache
+        self.perf_mode = perf_mode
+        self.max_workers = max_workers
+        self.large_file_threshold = large_file_threshold
         self.cache_manager = CacheManager(root)
         self.cached_files: Dict[str, Dict[str, Any]] = {}
         
@@ -89,8 +98,30 @@ class ProjectScanner:
 
     def iter_files(self) -> Iterator[FileMetadata]:
         """Yield :class:`FileMetadata` objects for files under ``root``."""
+        start_time = time.time()
+        
+        # Collect all paths first to allow parallel processing
+        paths = list(self._walk_files(self.root))
+        
+        walk_time = time.time() - start_time
+        if self.perf_mode:
+            logger.info(f"Walked {len(paths)} files in {walk_time:.4f}s")
 
-        for path in self._walk_files(self.root):
+        # Use ThreadPoolExecutor for parallel processing
+        # IO-bound tasks (reading files) benefit from threads
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            results = executor.map(self._process_single_file, paths)
+            for res in results:
+                if res:
+                    yield res
+
+        if self.perf_mode:
+            total_time = time.time() - start_time
+            logger.info(f"Scanned {len(paths)} files in {total_time:.4f}s")
+
+    def _process_single_file(self, path: Path) -> Optional[FileMetadata]:
+        """Process a single file and return its metadata."""
+        try:
             metadata = FileMetadata.from_path(path)
             
             # Check cache if incremental
@@ -108,7 +139,7 @@ class ProjectScanner:
                 # Use cached analysis
                 metadata.language_analysis = cached.get("language_analysis")
             elif metadata.file_type == "py":
-                if metadata.size_bytes > self.MAX_FILE_SIZE_BYTES:
+                if metadata.size_bytes > self.large_file_threshold:
                     metadata.language_analysis = {"error": "File too large to analyze"}
                 else:
                     try:
@@ -116,8 +147,20 @@ class ProjectScanner:
                         metadata.language_analysis = analyze_python_source(source)
                     except Exception as e:
                         metadata.language_analysis = {"error": f"Could not read or parse file: {e}"}
+            elif metadata.file_type in ("js", "ts", "jsx", "tsx"):
+                if metadata.size_bytes > self.large_file_threshold:
+                    metadata.language_analysis = {"error": "File too large to analyze"}
+                else:
+                    try:
+                        source = path.read_text(encoding="utf-8")
+                        metadata.language_analysis = analyze_js_ts_source(source)
+                    except Exception as e:
+                        metadata.language_analysis = {"error": f"Could not read or parse file: {e}"}
             
-            yield metadata
+            return metadata
+        except Exception as e:
+            logger.warning(f"Failed to process file {path}: {e}")
+            return None
 
     def _walk_files(self, root: Path) -> Iterable[Path]:
         """Iterate over files respecting ignore rules."""

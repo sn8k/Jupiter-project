@@ -6,11 +6,15 @@ from collections import Counter
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+import time
+import logging
 
 from .scanner import FileMetadata
 from .cache import CacheManager
 from .quality.complexity import estimate_complexity
 from .quality.duplication import find_duplications
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -25,6 +29,15 @@ class PythonProjectSummary:
 
 
 @dataclass(slots=True)
+class JsTsProjectSummary:
+    """Aggregated information about JS/TS code in a project."""
+
+    total_files: int = 0
+    total_functions: int = 0
+    avg_functions_per_file: float = 0.0
+
+
+@dataclass(slots=True)
 class AnalysisSummary:
     """Simple aggregated information on a project scan."""
 
@@ -34,6 +47,7 @@ class AnalysisSummary:
     average_size_bytes: float
 
     python_summary: Optional[PythonProjectSummary] = None
+    js_ts_summary: Optional[JsTsProjectSummary] = None
     hotspots: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
     quality: Dict[str, Any] = field(default_factory=dict)
     refactoring: List[Dict[str, Any]] = field(default_factory=list)
@@ -66,6 +80,16 @@ class AnalysisSummary:
                 f"  - Average functions per file: {py_summary.avg_functions_per_file:.2f}"
             )
 
+        js_ts_summary_str = ""
+        if self.js_ts_summary:
+            js_summary = self.js_ts_summary
+            js_ts_summary_str = (
+                f"\n\nJS/TS Project Summary:\n"
+                f"  - JS/TS files: {js_summary.total_files}\n"
+                f"  - Total functions: {js_summary.total_functions}\n"
+                f"  - Average functions per file: {js_summary.avg_functions_per_file:.2f}"
+            )
+
         hotspots_str = ""
         if self.hotspots:
             hotspots_str = "\n\nHotspots:"
@@ -86,7 +110,7 @@ class AnalysisSummary:
             if len(self.refactoring) > 5:
                 refactoring_str += f"\n  ... and {len(self.refactoring) - 5} more."
 
-        return base_summary + python_summary_str + hotspots_str + quality_str + refactoring_str
+        return base_summary + python_summary_str + js_ts_summary_str + hotspots_str + quality_str + refactoring_str
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable representation of the summary."""
@@ -102,15 +126,18 @@ class AnalysisSummary:
         if self.python_summary:
             # Manually convert dataclass to dict for nested serialization
             data["python_summary"] = asdict(self.python_summary)
+        if self.js_ts_summary:
+            data["js_ts_summary"] = asdict(self.js_ts_summary)
         return data
 
 
 class ProjectAnalyzer:
     """Aggregate scanner outputs into a concise summary."""
 
-    def __init__(self, root: Path, no_cache: bool = False) -> None:
+    def __init__(self, root: Path, no_cache: bool = False, perf_mode: bool = False) -> None:
         self.root = root
         self.no_cache = no_cache
+        self.perf_mode = perf_mode
         self.cache_manager = CacheManager(root)
         self.last_scan = self.cache_manager.load_last_scan()
         self.analysis_cache = {}
@@ -128,6 +155,7 @@ class ProjectAnalyzer:
 
     def summarize(self, files: Iterable[FileMetadata], top_n: int = 5) -> AnalysisSummary:
         """Compute aggregate metrics for ``files`` collection."""
+        start_time = time.time()
         all_files = list(files)
         file_count = len(all_files)
         total_size = sum(m.size_bytes for m in all_files)
@@ -191,6 +219,22 @@ class ProjectAnalyzer:
                 total_functions=py_total_functions,
                 total_potentially_unused_functions=py_total_unused,
                 avg_functions_per_file=py_total_functions / py_file_count if py_file_count else 0.0,
+            )
+
+        # JS/TS summary
+        js_ts_files = [
+            m for m in all_files if m.file_type in ("js", "ts", "jsx", "tsx") and m.language_analysis and not m.language_analysis.get("error")
+        ]
+        
+        js_ts_summary = None
+        if js_ts_files:
+            js_file_count = len(js_ts_files)
+            js_total_functions = sum(len(m.language_analysis.get("defined_functions", [])) for m in js_ts_files)
+            
+            js_ts_summary = JsTsProjectSummary(
+                total_files=js_file_count,
+                total_functions=js_total_functions,
+                avg_functions_per_file=js_total_functions / js_file_count if js_file_count else 0.0,
             )
 
         # Quality Analysis
@@ -276,12 +320,16 @@ class ProjectAnalyzer:
                         "severity": severity
                     })
 
+        if self.perf_mode:
+            logger.info(f"Analysis completed in {time.time() - start_time:.4f}s")
+
         return AnalysisSummary(
             file_count=file_count,
             total_size_bytes=total_size,
             by_extension=dict(extension_counter),
             average_size_bytes=average_size,
             python_summary=python_summary,
+            js_ts_summary=js_ts_summary,
             hotspots=hotspots,
             quality=quality_metrics,
             refactoring=refactoring_recommendations,

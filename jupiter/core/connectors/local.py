@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Any, Dict, Optional
 from pathlib import Path
 from jupiter.core.connectors.base import BaseConnector
@@ -6,12 +7,17 @@ from jupiter.core.scanner import ProjectScanner
 from jupiter.core.runner import run_command
 from jupiter.core.cache import CacheManager
 from jupiter.core.analyzer import ProjectAnalyzer
+from jupiter.config.config import ProjectApiConfig
+from jupiter.core.connectors.project_api import OpenApiConnector
+
+logger = logging.getLogger(__name__)
 
 class LocalConnector(BaseConnector):
     """Connector for local filesystem projects."""
 
-    def __init__(self, root_path: str):
+    def __init__(self, root_path: str, project_api_config: Optional[ProjectApiConfig] = None):
         self.root_path = Path(root_path).resolve()
+        self.project_api_config = project_api_config
 
     async def scan(self, options: Dict[str, Any]) -> Dict[str, Any]:
         loop = asyncio.get_running_loop()
@@ -26,6 +32,17 @@ class LocalConnector(BaseConnector):
         )
         
         files = list(scanner.iter_files())
+
+        quality_metrics: Dict[str, Any] = {}
+        refactoring: list[Dict[str, Any]] = []
+
+        try:
+            analyzer = ProjectAnalyzer(root=self.root_path)
+            summary = analyzer.summarize(files, top_n=5)
+            quality_metrics = summary.quality or {}
+            refactoring = summary.refactoring or []
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Failed to compute quality metrics: %s", exc)
         
         # Convert to dicts for the report
         file_dicts = []
@@ -44,6 +61,8 @@ class LocalConnector(BaseConnector):
             "files": file_dicts,
             "dynamic": None,
             "plugins": {}, # Plugins info should be injected by the caller
+            "quality": quality_metrics,
+            "refactoring": refactoring,
         }
         
         # Save to cache
@@ -54,7 +73,45 @@ class LocalConnector(BaseConnector):
 
     async def analyze(self, options: Dict[str, Any]) -> Dict[str, Any]:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._run_analyze_sync, options)
+        summary_dict = await loop.run_in_executor(None, self._run_analyze_sync, options)
+        
+        # Enrich with API info if configured
+        api_info = await self.get_api_info()
+        if api_info:
+            summary_dict["api"] = api_info
+            
+        return summary_dict
+
+    async def get_api_info(self) -> Optional[Dict[str, Any]]:
+        """Fetch API information if configured."""
+        if self.project_api_config:
+            logger.info(f"Fetching API info: type={self.project_api_config.type}, base_url={self.project_api_config.base_url}")
+            if self.project_api_config.type == "openapi" and self.project_api_config.base_url:
+                try:
+                    connector = OpenApiConnector(
+                        base_url=self.project_api_config.base_url,
+                        openapi_url=self.project_api_config.openapi_url
+                    )
+                    endpoints = await connector.get_endpoints()
+                    logger.info(f"Found {len(endpoints)} endpoints")
+                    return {
+                        "endpoints": [e.to_dict() for e in endpoints],
+                        "config": {
+                            "base_url": self.project_api_config.base_url,
+                            "openapi_url": self.project_api_config.openapi_url
+                        }
+                    }
+                except Exception as e:
+                    logger.error(f"Failed to fetch API info: {e}")
+                    # Return config even if endpoints fail, so UI shows "Connected"
+                    return {
+                        "endpoints": [],
+                        "config": {
+                            "base_url": self.project_api_config.base_url,
+                            "openapi_url": self.project_api_config.openapi_url
+                        }
+                    }
+        return None
 
     def _run_analyze_sync(self, options: Dict[str, Any]) -> Dict[str, Any]:
         scanner = ProjectScanner(

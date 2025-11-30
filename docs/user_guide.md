@@ -4,7 +4,10 @@ Jupiter is a tool for inspecting, analyzing, and observing your software project
 
 ## Installation
 
-### Windows Users (Recommended)
+### Windows Users (Standalone)
+Download the `jupiter.exe` executable. Double-click it to launch the application. No other dependencies are required.
+
+### Windows Users (Source)
 Simply double-click **`Jupiter UI.cmd`** in the project root. This script will:
 1. Create a virtual environment if needed.
 2. Install dependencies.
@@ -47,9 +50,20 @@ ui:
   theme: "dark"
   language: "en"
 
+performance:
+  parallel_scan: true
+  max_workers: null  # Auto-detect
+  graph_simplification: false
+  max_graph_nodes: 1000
+
 meeting:
   enabled: true
   deviceKey: "YOUR_DEVICE_KEY"
+
+project_api:
+  type: "openapi"
+  base_url: "http://localhost:8000"
+  openapi_url: "/openapi.json"
 ```
 
 ## Web Interface
@@ -69,6 +83,8 @@ Click the **Scan** button in the header to open the scan options:
 - **Include hidden files**: Toggle scanning of dotfiles.
 - **Incremental scan**: Use cache for faster results.
 - **Ignore patterns**: Specify glob patterns to exclude (e.g., `*.log`).
+- **Snapshot label**: Provide an optional text that will tag the resulting snapshot (defaults to an automatic timestamp).
+- **Skip snapshot**: Turn off snapshot persistence for experimental scans.
 
 #### Running Commands
 Click the **Run** button to execute shell commands within the project root:
@@ -84,6 +100,14 @@ The **Settings** view allows you to configure `jupiter.yaml` directly:
 - **Meeting**: Enable/Disable and set Device Key.
 - **Theme & Language**: Customize the UI appearance.
 - **Update**: Trigger a self-update from a ZIP file or Git URL.
+
+#### History
+The **History** view lists every stored snapshot (newest first) with their labels, timestamps, file counts, and size deltas. Select any two snapshots to render a diff showing:
+- Files added/removed/modified with size/function deltas.
+- Aggregate metrics delta (file count, project size, total/potentially unused functions).
+- Function-level additions/removals grouped by file.
+
+Snapshots are refreshed automatically after each scan (CLI, API, or GUI) and when other users trigger scans via WebSockets.
 
 ## CLI Commands (Advanced)
 
@@ -108,6 +132,15 @@ python -m jupiter.cli.main scan --incremental
 
 # Force scan without cache (clears existing cache)
 python -m jupiter.cli.main scan --no-cache
+
+# Assign a custom label to the stored snapshot
+python -m jupiter.cli.main scan --snapshot-label "pre-release"
+
+# Skip snapshot creation for this run
+python -m jupiter.cli.main scan --no-snapshot
+
+# Enable performance profiling
+python -m jupiter.cli.main scan --perf
 ```
 
 **Note on Caching:**
@@ -131,6 +164,9 @@ python -m jupiter.cli.main analyze --incremental
 
 # Force analysis without cache
 python -m jupiter.cli.main analyze --no-cache
+
+# Enable performance profiling
+python -m jupiter.cli.main analyze --perf
 ```
 
 **Note on Analysis Cache:**
@@ -153,6 +189,23 @@ Starts the web interface (and the server in the background).
 ```bash
 python -m jupiter.cli.main gui
 ```
+
+### `snapshots`
+
+Inspect the snapshot history saved under `.jupiter/snapshots/`.
+
+```bash
+# List available snapshots (newest first)
+python -m jupiter.cli.main snapshots list
+
+# Show metadata or (with --report) the full stored scan
+python -m jupiter.cli.main snapshots show scan-1700000000000 --report
+
+# Diff two snapshots to understand project evolution
+python -m jupiter.cli.main snapshots diff scan-1699999990000 scan-1700000000000
+```
+
+Add `--json` to any subcommand to integrate with scripts or dashboards.
 
 ### `watch`
 
@@ -199,10 +252,12 @@ Jupiter supports plugins to extend functionality.
 - Configure plugins in `jupiter.yaml`:
   ```yaml
   plugins:
-    enabled: ["ai_helper", "code_quality_stub"]
+    enabled: ["ai_helper", "code_quality_stub", "notifications_webhook"]
     disabled: []
   ```
 - Plugins can hook into `scan`, `analyze`, and `run` events.
+
+The **Plugins** view in the Web UI lists all loaded plugins, shows whether they are enabled, and (for configurable plugins such as `notifications_webhook`) exposes a small form to adjust settings (e.g. webhook URL).
 
 ### Meeting Integration
 
@@ -226,4 +281,101 @@ node_modules/
 - **Large Files**: Jupiter automatically skips files larger than 10MB to prevent memory issues.
 - **Caching**: Use incremental scans (default) to save time. Use `--no-cache` only when necessary.
 - **Dynamic Analysis**: Running `jupiter run` with tracing enabled can be slower; use it for targeted debugging.
+
+### Simulation
+
+You can simulate the removal of a file or function to see the potential impact on your project (broken imports, broken calls).
+
+**CLI:**
+```bash
+python -m jupiter.cli.main simulate remove jupiter/core/scanner.py
+python -m jupiter.cli.main simulate remove "jupiter/core/scanner.py::FileMetadata"
+```
+
+**Web UI:**
+In the **Files** or **Functions** view, click the trash icon (🗑️) next to an item to trigger the simulation. A modal will display the risk score and list of impacted files.
+
+### Live Map
+
+The **Live Map** view renders an interactive graph of your project:
+- Nodes represent files and functions (Python in blue, JS/TS in yellow).
+- Edges represent imports and function calls.
+- Node size and color can reflect size, complexity, or dynamic usage.
+
+Use zoom and pan to explore the structure, and click on a node to highlight its neighborhood.
+
+### Project APIs (OpenAPI)
+
+If you configure a `project_api` section in `jupiter.yaml`, Jupiter will:
+- Fetch your OpenAPI schema.
+- List endpoints (path, method, tags) in the **API** view.
+- Optionally correlate endpoints with files/handlers when possible.
+
+Example configuration:
+
+```yaml
+project_api:
+  type: "openapi"
+  base_url: "http://localhost:8000"
+  openapi_url: "/openapi.json"
+```
+
+### Polyglot Support (Python + JS/TS)
+
+Jupiter analyzes both Python and JavaScript/TypeScript code:
+- Detects `.py`, `.js`, `.ts`, `.jsx`, `.tsx` files.
+- Extracts functions and imports using language‑specific analyzers.
+
+## CI/CD Integration
+
+Jupiter can be used in your CI/CD pipelines to enforce quality gates.
+
+### Configuration
+
+Add a `ci` section to your `jupiter.yaml`:
+
+```yaml
+ci:
+  fail_on:
+    max_complexity: 20          # Fail if any file has complexity > 20
+    max_duplication_clusters: 5 # Fail if more than 5 duplication clusters found
+    max_unused_functions: 50    # Fail if more than 50 potentially unused functions found
+```
+
+### CLI Command
+
+Use the `ci` command in your pipeline script:
+
+```bash
+# Run analysis and check thresholds
+python -m jupiter.cli.main ci
+
+# Output JSON for parsing
+python -m jupiter.cli.main ci --json
+
+# Override thresholds via CLI
+python -m jupiter.cli.main ci --fail-on-complexity 15
+```
+
+If any threshold is exceeded, the command exits with code `1`, causing the pipeline step to fail.
+
+### GitHub Actions Example
+
+Create `.github/workflows/jupiter-ci.yml`:
+
+```yaml
+name: Jupiter CI
+on: [push, pull_request]
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - run: pip install -r requirements.txt
+      - run: python -m jupiter.cli.main ci --json
+```
+- Includes JS/TS metrics in analysis summaries and Live Map.
 

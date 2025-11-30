@@ -30,3 +30,8 @@
 
 - Added `JupiterAPIServer` stub with start/stop logging hooks.
 - Enabled permissive CORS middleware so the web UI Scan button can reach `/scan` without browser fetch errors.
+
+**Section 6 Implementation (AI Plugin Integration)**
+
+- Updated `GET /analyze` to convert the response model to a dictionary before calling `hook_on_analyze`.
+- This allows plugins (like `ai_helper`) to modify the response data (e.g., injecting suggestions) before it is returned to the client.

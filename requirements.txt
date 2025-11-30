@@ -4,6 +4,7 @@ fastapi
 uvicorn[standard]
 pydantic
 httpx
+python-multipart
 # Standard library only for now; GUI (http.server + static assets) does not add third-party needs yet.
 # Web interface refonte : toujours zéro dépendance externe côté Python/JS (vanilla assets uniquement).
 

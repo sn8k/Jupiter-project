@@ -75,9 +75,18 @@ class PluginManager:
                 is_enabled = False
             elif self.config.enabled and plugin.name not in self.config.enabled:
                 is_enabled = False
+            
+            # Configure plugin if it supports it
+            if hasattr(plugin, "configure"):
+                plugin_settings = self.config.settings.get(plugin.name, {})
+                try:
+                    plugin.configure(plugin_settings)
+                except Exception as e:
+                    logger.error("Failed to configure plugin %s: %s", plugin.name, e)
         
         self.plugin_status[plugin.name] = is_enabled
-        logger.info("Registered plugin: %s v%s (Enabled: %s)", plugin.name, plugin.version, is_enabled)
+        trust_level = getattr(plugin, "trust_level", "experimental")
+        logger.info("Registered plugin: %s v%s [%s] (Enabled: %s)", plugin.name, plugin.version, trust_level, is_enabled)
 
     def is_enabled(self, plugin_name: str) -> bool:
         return self.plugin_status.get(plugin_name, False)
@@ -91,6 +100,18 @@ class PluginManager:
         if any(p.name == plugin_name for p in self.plugins):
             self.plugin_status[plugin_name] = False
             logger.info("Plugin %s disabled", plugin_name)
+
+    def update_plugin_config(self, plugin_name: str, config: Dict[str, Any]) -> None:
+        """Update configuration for a plugin."""
+        for plugin in self.plugins:
+            if plugin.name == plugin_name:
+                if hasattr(plugin, "configure"):
+                    plugin.configure(config)
+                    if self.config:
+                        self.config.settings[plugin_name] = config
+                    logger.info("Updated config for plugin %s", plugin_name)
+                return
+        logger.warning("Plugin %s not found or not configurable", plugin_name)
 
     def hook_on_scan(self, report: Dict[str, Any]) -> None:
         """Dispatch on_scan hook."""
@@ -117,7 +138,8 @@ class PluginManager:
                 "name": p.name,
                 "version": p.version,
                 "description": getattr(p, "description", ""),
-                "enabled": self.is_enabled(p.name)
+                "enabled": self.is_enabled(p.name),
+                "config": getattr(p, "config", {})
             }
             for p in self.plugins
         ]

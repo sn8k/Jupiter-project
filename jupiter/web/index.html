@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title data-i18n="app_title">Jupiter – Interface</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
   </head>
   <body>
     <div class="app-shell">
@@ -21,11 +22,12 @@
           <div class="context">
             <p class="label" data-i18n="served_root">Racine servie</p>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <p class="value" id="root-path" data-i18n="loading">Chargement…</p>
-              <button class="ghost small" data-action="browse-root" title="Parcourir">📂</button>
+              <p class="value" id="root-path" data-i18n="loading" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;">Chargement…</p>
+              <button class="ghost small" data-action="browse-root" title="Parcourir" style="padding: 4px 8px;">📂</button>
             </div>
           </div>
           <div class="actions">
+            <button class="ghost" id="user-profile-btn" onclick="openLoginModal()" title="Non connecté">👤</button>
             <button class="ghost" data-action="load-sample" data-i18n="sample_button">Exemple</button>
             <button class="primary" data-action="open-scan-modal" data-i18n="scan_button">Scan</button>
             <button class="primary" data-action="open-run-modal" data-i18n="run_button">Run</button>
@@ -42,8 +44,12 @@
           <button class="nav-btn" data-view="diagnostics" data-i18n="diagnostic_view">Diagnostic</button>
           <button class="nav-btn" data-view="files" data-i18n="files_view">Fichiers</button>
           <button class="nav-btn" data-view="functions" data-i18n="functions_view">Fonctions</button>
+          <button class="nav-btn" data-view="graph" data-i18n="graph_view">Live Map</button>
+          <button class="nav-btn" data-view="api" data-i18n="api_view">API</button>
+          <button class="nav-btn" data-view="history" data-i18n="history_view">Historique</button>
           <button class="nav-btn" data-view="settings" data-i18n="settings_view">Paramètres</button>
           <button class="nav-btn" data-view="plugins" data-i18n="plugins_view">Plugins</button>
+          <button class="nav-btn" data-view="suggestions" data-i18n="suggestions_view">Suggestions IA</button>
         </nav>
 
         <main class="content">
@@ -267,10 +273,10 @@
                 <table aria-label="Liste des fichiers">
                   <thead>
                     <tr>
-                      <th data-i18n="files_path">Chemin</th>
-                      <th class="numeric" data-i18n="files_size">Taille</th>
-                      <th class="numeric" data-i18n="files_modified">Modifié</th>
-                      <th class="numeric" data-i18n="files_funcs">Fonctions</th>
+                      <th data-i18n="files_path" onclick="handleSort('files', 'path')" style="cursor: pointer">Chemin</th>
+                      <th class="numeric" data-i18n="files_size" onclick="handleSort('files', 'size_bytes')" style="cursor: pointer">Taille</th>
+                      <th class="numeric" data-i18n="files_modified" onclick="handleSort('files', 'modified_timestamp')" style="cursor: pointer">Modifié</th>
+                      <th class="numeric" data-i18n="files_funcs" onclick="handleSort('files', 'func_count')" style="cursor: pointer">Fonctions</th>
                     </tr>
                   </thead>
                   <tbody id="files-body"></tbody>
@@ -293,10 +299,10 @@
                 <table aria-label="Liste des fonctions">
                   <thead>
                     <tr>
-                      <th data-i18n="func_name">Nom</th>
-                      <th data-i18n="func_file">Fichier</th>
-                      <th class="numeric" data-i18n="func_calls">Appels (Dyn)</th>
-                      <th data-i18n="func_status">Statut</th>
+                      <th data-i18n="func_name" onclick="handleSort('functions', 'name')" style="cursor: pointer">Nom</th>
+                      <th data-i18n="func_file" onclick="handleSort('functions', 'file')" style="cursor: pointer">Fichier</th>
+                      <th class="numeric" data-i18n="func_calls" onclick="handleSort('functions', 'calls')" style="cursor: pointer">Appels (Dyn)</th>
+                      <th data-i18n="func_status" onclick="handleSort('functions', 'status')" style="cursor: pointer">Statut</th>
                     </tr>
                   </thead>
                   <tbody id="functions-body"></tbody>
@@ -319,6 +325,123 @@
             </section>
           </section>
 
+          <section class="view hidden" data-view="api" aria-label="Vue API">
+            <section class="panel">
+              <header>
+                <div>
+                  <p class="eyebrow">Intégration</p>
+                  <h2>API du Projet</h2>
+                  <p class="muted">Endpoints détectés via le connecteur configuré.</p>
+                </div>
+                <div class="badges" id="api-status-badge"></div>
+              </header>
+              
+              <div class="api-docs-intro" style="margin-bottom: 1rem; padding: 1rem; background: var(--panel-contrast); border-radius: 8px; border: 1px solid var(--border);">
+                  <h4 data-i18n="api_docs_title">Documentation & Configuration</h4>
+                  <p data-i18n="api_docs_intro">Jupiter analyse automatiquement les endpoints API de votre projet (FastAPI, Flask, Django, etc.).</p>
+                  <p data-i18n="api_docs_config">Pour configurer la détection, assurez-vous que votre fichier <code>jupiter.yaml</code> contient la section <code>api</code> correcte.</p>
+                  <pre style="background: var(--bg); padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; overflow-x: auto;">
+api:
+  connector: "fastapi"  # ou "flask", "django"
+  app_var: "app"        # nom de la variable d'application
+  path: "src/main.py"   # chemin vers le fichier principal</pre>
+              </div>
+
+              <div class="table-wrapper">
+                <table aria-label="Endpoints API">
+                  <thead>
+                    <tr>
+                      <th>Méthode</th>
+                      <th>Chemin</th>
+                      <th>Résumé</th>
+                      <th>Tags</th>
+                    </tr>
+                  </thead>
+                  <tbody id="api-endpoints-body"></tbody>
+                </table>
+                <p class="empty" id="api-empty">Aucune API configurée ou détectée.</p>
+              </div>
+            </section>
+          </section>
+
+          <section class="view hidden" data-view="graph" aria-label="Vue Live Map">
+            <section class="panel full-height">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="graph_eyebrow">Visualisation</p>
+                  <h2 data-i18n="graph_title">Live Map</h2>
+                  <p class="muted" data-i18n="graph_subtitle">Graphe de dépendances interactif.</p>
+                </div>
+                <div class="actions">
+                  <button class="ghost small" data-action="refresh-graph" data-i18n="graph_refresh">Rafraîchir</button>
+                </div>
+              </header>
+              <div id="graph-container" style="width: 100%; height: 600px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: var(--bg-subtle);"></div>
+            </section>
+          </section>
+
+          <section class="view hidden" data-view="history" aria-label="Vue historique">
+            <div class="grid two-cols">
+              <section class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="history_eyebrow">Historique</p>
+                    <h2 data-i18n="history_title">Snapshots enregistrés</h2>
+                    <p class="muted" data-i18n="history_subtitle">Chaque scan persiste un instantané diffable.</p>
+                  </div>
+                  <div class="actions">
+                    <button class="ghost small" data-action="refresh-snapshots" data-i18n="history_refresh">Rafraîchir</button>
+                  </div>
+                </header>
+                <div class="table-wrapper">
+                  <table aria-label="Snapshots">
+                    <thead>
+                      <tr>
+                        <th data-i18n="history_col_label">Libellé</th>
+                        <th data-i18n="history_col_date">Date</th>
+                        <th class="numeric" data-i18n="history_col_files">Fichiers</th>
+                        <th class="numeric" data-i18n="history_col_size">Taille</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="snapshot-table-body"></tbody>
+                  </table>
+                  <p class="empty hidden" id="snapshots-empty" data-i18n="history_empty">Aucun snapshot enregistré.</p>
+                </div>
+              </section>
+
+              <section class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="history_diff_eyebrow">Comparaison</p>
+                    <h2 data-i18n="history_diff_title">Comparer deux scans</h2>
+                    <p class="muted" data-i18n="history_diff_subtitle">Sélectionnez deux snapshots pour analyser les écarts.</p>
+                  </div>
+                </header>
+                <div class="history-controls" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                  <div class="selectors" style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                    <label style="flex:1; min-width: 200px;">
+                      <span data-i18n="history_select_a">Snapshot A</span>
+                      <select id="snapshot-select-a" style="width: 100%;"></select>
+                    </label>
+                    <label style="flex:1; min-width: 200px;">
+                      <span data-i18n="history_select_b">Snapshot B</span>
+                      <select id="snapshot-select-b" style="width: 100%;"></select>
+                    </label>
+                  </div>
+                  <div class="actions">
+                    <button id="snapshot-diff-btn" class="primary" data-i18n="history_diff_button">Comparer</button>
+                  </div>
+                </div>
+                <div class="history-meta" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 1rem;">
+                  <div class="card" id="snapshot-meta-a"></div>
+                  <div class="card" id="snapshot-meta-b"></div>
+                </div>
+                <div class="history-diff" style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius);" id="snapshot-diff-output"></div>
+              </section>
+            </div>
+          </section>
+
           <section class="view hidden" data-view="plugins" aria-label="Vue plugins">
             <section class="panel">
               <header>
@@ -333,130 +456,290 @@
           </section>
 
           <section class="view hidden" data-view="settings" aria-label="Vue paramètres">
-            <div class="grid two-cols">
-              <section class="panel">
-                <header>
-                  <div>
-                    <p class="eyebrow" data-i18n="s_eyebrow">Paramètres</p>
-                    <h2 data-i18n="s_title">Configuration</h2>
-                    <p class="muted" data-i18n="s_subtitle">Modifiez le fichier jupiter.yaml directement.</p>
-                  </div>
-                </header>
-                <form id="settings-form" class="settings-form">
-                  <div class="form-group">
-                    <label for="conf-server-host">Server Host</label>
-                    <input type="text" id="conf-server-host" name="server_host" />
-                  </div>
-                  <div class="form-group">
-                    <label for="conf-server-port">Server Port</label>
-                    <input type="number" id="conf-server-port" name="server_port" />
-                  </div>
-                  <div class="form-group">
-                    <label for="conf-gui-host">GUI Host</label>
-                    <input type="text" id="conf-gui-host" name="gui_host" />
-                  </div>
-                  <div class="form-group">
-                    <label for="conf-gui-port">GUI Port</label>
-                    <input type="number" id="conf-gui-port" name="gui_port" />
-                  </div>
-                  <div class="form-group">
-                    <label for="conf-meeting-enabled">Meeting Enabled</label>
-                    <input type="checkbox" id="conf-meeting-enabled" name="meeting_enabled" />
-                  </div>
-                  <div class="form-group">
-                    <label for="conf-meeting-key">Device Key</label>
-                    <input type="text" id="conf-meeting-key" name="meeting_device_key" />
-                  </div>
-                  <div class="form-group">
-                    <label for="conf-ui-theme">Theme</label>
-                    <select id="conf-ui-theme" name="ui_theme">
-                        <option value="dark">Dark</option>
-                        <option value="light">Light</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label for="conf-ui-lang">Language</label>
-                    <select id="conf-ui-lang" name="ui_language">
-                        <option value="fr">Français</option>
-                        <option value="en">English</option>
-                    </select>
-                  </div>
-                  <div class="form-actions">
-                    <button type="submit" class="primary" data-i18n="save_settings">Enregistrer</button>
-                  </div>
-                </form>
-              </section>
+            <div class="settings-layout">
+                <form id="settings-form" class="settings-form-grid">
+                    <!-- Network Section -->
+                    <section class="panel settings-section">
+                        <header>
+                            <h3 data-i18n="settings_network_title">Réseau</h3>
+                        </header>
+                        <div class="form-group">
+                            <label for="conf-server-host">Server Host</label>
+                            <input type="text" id="conf-server-host" name="server_host" />
+                        </div>
+                        <div class="form-group">
+                            <label for="conf-server-port">Server Port</label>
+                            <input type="number" id="conf-server-port" name="server_port" />
+                        </div>
+                        <div class="form-group">
+                            <label for="conf-gui-host">GUI Host</label>
+                            <input type="text" id="conf-gui-host" name="gui_host" />
+                        </div>
+                        <div class="form-group">
+                            <label for="conf-gui-port">GUI Port</label>
+                            <input type="number" id="conf-gui-port" name="gui_port" />
+                        </div>
+                    </section>
 
-              <section class="panel">
-                <header>
-                  <div>
-                    <p class="eyebrow" data-i18n="update_eyebrow">Mise à jour</p>
-                    <h2 data-i18n="update_title">Mettre à jour Jupiter</h2>
-                  </div>
-                </header>
-                <div class="update-box">
-                    <div class="form-group">
-                        <label for="update-source">Source (ZIP ou Git URL)</label>
-                        <input type="text" id="update-source" placeholder="path/to/update.zip" />
+                    <!-- UI & Meeting Section -->
+                    <section class="panel settings-section">
+                        <header>
+                            <h3 data-i18n="settings_ui_title">Interface & Meeting</h3>
+                        </header>
+                        <div class="form-group">
+                            <label for="conf-ui-theme">Theme</label>
+                            <select id="conf-ui-theme" name="ui_theme">
+                                <option value="dark">Dark</option>
+                                <option value="light">Light</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="conf-ui-lang">Language</label>
+                            <select id="conf-ui-lang" name="ui_language">
+                                <option value="fr">Français</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label for="conf-meeting-enabled">Meeting Enabled</label>
+                            <input type="checkbox" id="conf-meeting-enabled" name="meeting_enabled" />
+                        </div>
+                        <div class="form-group">
+                            <label for="conf-meeting-key">Device Key</label>
+                            <input type="text" id="conf-meeting-key" name="meeting_device_key" />
+                        </div>
+                    </section>
+
+                    <!-- Performance Section (New) -->
+                    <section class="panel settings-section">
+                        <header>
+                            <h3 data-i18n="settings_perf_title">Performance</h3>
+                        </header>
+                        <div class="form-group checkbox-group">
+                            <label for="conf-perf-parallel">Parallel Scan</label>
+                            <input type="checkbox" id="conf-perf-parallel" name="perf_parallel_scan" />
+                        </div>
+                        <div class="form-group">
+                            <label for="conf-perf-workers">Max Workers (0 = Auto)</label>
+                            <input type="number" id="conf-perf-workers" name="perf_max_workers" />
+                        </div>
+                        <div class="form-group">
+                            <label for="conf-perf-timeout">Scan Timeout (sec)</label>
+                            <input type="number" id="conf-perf-timeout" name="perf_scan_timeout" />
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label for="conf-perf-graph-simple">Graph Simplification</label>
+                            <input type="checkbox" id="conf-perf-graph-simple" name="perf_graph_simplification" />
+                        </div>
+                        <div class="form-group">
+                            <label for="conf-perf-graph-nodes">Max Graph Nodes</label>
+                            <input type="number" id="conf-perf-graph-nodes" name="perf_max_graph_nodes" />
+                        </div>
+                    </section>
+
+                    <!-- Security Section (New) -->
+                    <section class="panel settings-section">
+                        <header>
+                            <h3 data-i18n="settings_security_title">Sécurité</h3>
+                        </header>
+                        <div class="form-group checkbox-group" title="Autoriser l'exécution de commandes shell via l'interface">
+                            <label for="conf-sec-allow-run">Allow Run Command</label>
+                            <input type="checkbox" id="conf-sec-allow-run" name="sec_allow_run" />
+                        </div>
+                    </section>
+
+                    <!-- API Inspection Section (New) -->
+                    <section class="panel settings-section">
+                        <header>
+                            <h3 data-i18n="settings_api_title">Inspection API</h3>
+                        </header>
+                        <div class="form-group" title="Framework utilisé (fastapi, flask, django)">
+                            <label for="conf-api-connector">Connector</label>
+                            <select id="conf-api-connector" name="api_connector">
+                                <option value="">(Aucun)</option>
+                                <option value="local">Local (Jupiter)</option>
+                                <option value="fastapi">FastAPI</option>
+                                <option value="flask">Flask</option>
+                                <option value="django">Django</option>
+                            </select>
+                        </div>
+                        <div class="form-group" title="Nom de la variable d'application (ex: app)">
+                            <label for="conf-api-app-var">App Variable</label>
+                            <input type="text" id="conf-api-app-var" name="api_app_var" placeholder="app" />
+                        </div>
+                        <div class="form-group" title="Chemin vers le fichier principal (ex: src/main.py)">
+                            <label for="conf-api-path">Main File Path</label>
+                            <input type="text" id="conf-api-path" name="api_path" placeholder="src/main.py" />
+                        </div>
+                    </section>
+                    
+                    <!-- User Management Section (New) -->
+                    <section class="panel settings-section">
+                        <header>
+                            <h3 data-i18n="settings_users_title">Utilisateurs</h3>
+                        </header>
+                        <div class="table-wrapper">
+                            <table aria-label="Utilisateurs">
+                                <thead>
+                                    <tr>
+                                        <th>Nom</th>
+                                        <th>Rôle</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+                            <h4 class="small muted">Ajouter un utilisateur</h4>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <input type="text" id="new-user-name" placeholder="Nom" style="flex: 1;" />
+                                <input type="text" id="new-user-token" placeholder="Token" style="flex: 1;" />
+                                <select id="new-user-role" style="width: 100px;">
+                                    <option value="viewer">Viewer</option>
+                                    <option value="editor">Editor</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                                <button type="button" class="primary small" data-action="add-user">Ajouter</button>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- Actions -->
+                    <div class="settings-actions" style="grid-column: 1 / -1; margin-top: 1rem; display: flex; gap: 1rem; align-items: center;">
+                        <button type="submit" class="primary" data-i18n="save_settings">Enregistrer</button>
+                        <button type="button" class="secondary" data-action="open-raw-config" data-i18n="edit_raw_config">Éditer YAML</button>
                     </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="update-force" /> Force
-                        </label>
+                </form>
+
+                <!-- Update Section (Separate) -->
+                <section class="panel settings-section" style="margin-top: 2rem;">
+                    <header>
+                        <h3 data-i18n="update_title">Mise à jour</h3>
+                    </header>
+                    <div class="update-box">
+                        <div class="form-group">
+                            <label for="update-source">Source (ZIP ou Git URL)</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="update-source" placeholder="path/to/update.zip" style="flex: 1;" />
+                                <input type="file" id="update-file-input" accept=".zip" style="display: none;" />
+                                <button type="button" class="secondary" onclick="document.getElementById('update-file-input').click()">Parcourir...</button>
+                            </div>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label for="update-force">Force</label>
+                            <input type="checkbox" id="update-force" />
+                        </div>
+                        <button class="primary" data-action="trigger-update" data-i18n="update_btn">Mettre à jour</button>
                     </div>
-                    <button class="primary" data-action="trigger-update" data-i18n="update_btn">Mettre à jour</button>
-                </div>
-              </section>
+                </section>
+            </div>
+          </section>
+          <section class="view hidden" data-view="suggestions" aria-label="Vue Suggestions IA">
+            <header class="view-header">
+              <div>
+                <h2 data-i18n="suggestions_title">Suggestions IA</h2>
+                <p class="muted" data-i18n="suggestions_subtitle">Propositions d'amélioration et de refactoring.</p>
+              </div>
+              <div class="actions">
+                 <button class="secondary" data-action="refresh-suggestions">Actualiser</button>
+              </div>
+            </header>
+            <div class="panel">
+               <div id="suggestions-list" class="list-group">
+                  <p class="muted">Aucune suggestion pour le moment. Lancez une analyse.</p>
+               </div>
             </div>
           </section>
         </main>
       </div>
     </div>
-    <script type="module" src="app.js?v=0.1.4"></script>
-    <div style="position: fixed; bottom: 5px; right: 5px; font-size: 10px; color: var(--text-muted); opacity: 0.5;">v0.1.4</div>
+    <script type="module" src="app.js?v=1.0.1"></script>
+    <div style="position: fixed; bottom: 5px; right: 5px; font-size: 10px; color: var(--text-muted); opacity: 0.5;">v1.0.1</div>
 
     <!-- Modals -->
     <div id="scan-modal" class="modal-overlay hidden">
-        <div class="modal">
-            <h2 data-i18n="scan_options_title">Options de Scan</h2>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="scan-show-hidden" /> <span data-i18n="scan_opt_hidden">Inclure fichiers cachés</span>
-                </label>
-            </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="scan-incremental" /> <span data-i18n="scan_opt_incremental">Scan incrémental</span>
-                </label>
-            </div>
-            <div class="form-group">
-                <label for="scan-ignore">Ignorer (glob patterns, séparés par virgule)</label>
-                <input type="text" id="scan-ignore" placeholder="*.log, tmp/*" />
-            </div>
-            <div class="actions">
-                <button class="ghost" data-action="close-scan-modal" data-i18n="cancel">Annuler</button>
-                <button class="primary" data-action="confirm-scan" data-i18n="start_scan">Lancer</button>
-            </div>
+      <div class="modal">
+        <header>
+          <h3 data-i18n="scan_modal_title">Lancer un scan</h3>
+          <button class="ghost small" data-action="close-scan-modal">✕</button>
+        </header>
+        <div class="modal-body scan-modal-body">
+          <div class="scan-options-grid">
+            <label class="scan-toggle" for="scan-show-hidden">
+              <span data-i18n="scan_opt_hidden">Inclure fichiers cachés</span>
+              <input type="checkbox" id="scan-show-hidden" />
+            </label>
+            <label class="scan-toggle" for="scan-incremental">
+              <span data-i18n="scan_opt_inc">Scan incrémental</span>
+              <input type="checkbox" id="scan-incremental" />
+            </label>
+          </div>
+          <div class="form-group scan-ignore-field">
+            <label for="scan-ignore" data-i18n="scan_opt_ignore">Ignorer (glob patterns, séparés par virgule)</label>
+            <input type="text" id="scan-ignore" placeholder="*.log, temp/*" />
+          </div>
         </div>
+        <footer>
+          <button class="secondary" data-action="close-scan-modal" data-i18n="cancel">Annuler</button>
+          <button class="primary" data-action="confirm-scan" data-i18n="scan_confirm">Scanner</button>
+        </footer>
+      </div>
     </div>
 
     <div id="run-modal" class="modal-overlay hidden">
         <div class="modal">
-            <h2 data-i18n="run_title">Exécuter une commande</h2>
-            <div class="form-group">
-                <label for="run-command">Commande</label>
-                <input type="text" id="run-command" placeholder="python script.py" />
+            <header>
+                <h3 data-i18n="run_modal_title">Exécuter une commande</h3>
+                <button class="ghost small" data-action="close-run-modal">✕</button>
+            </header>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="run-command" data-i18n="run_cmd_label">Commande</label>
+                    <input type="text" id="run-command" placeholder="pytest tests/" />
+                </div>
+                <div class="form-group checkbox-group">
+                    <label for="run-dynamic" data-i18n="run_opt_dynamic">Activer l'analyse dynamique (trace)</label>
+                    <input type="checkbox" id="run-dynamic" />
+                </div>
+                <pre id="run-output" class="code-block hidden" style="max-height: 200px; overflow: auto; margin-top: 1rem;"></pre>
             </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="run-dynamic" /> <span data-i18n="run_opt_dynamic">Activer l'analyse dynamique</span>
-                </label>
+            <footer>
+                <button class="secondary" data-action="close-run-modal" data-i18n="cancel">Fermer</button>
+                <button class="primary" data-action="confirm-run" data-i18n="run_confirm">Exécuter</button>
+            </footer>
+        </div>
+    </div>
+
+    <div id="raw-config-modal" class="modal-overlay hidden">
+        <div class="modal" style="width: 800px; max-width: 90vw;">
+            <header>
+                <h3 data-i18n="raw_config_title">Éditeur YAML (jupiter.yaml)</h3>
+                <button class="ghost small" data-action="close-raw-config">✕</button>
+            </header>
+            <div class="modal-body">
+                <p class="muted small" style="margin-bottom: 1rem;">Attention : Une syntaxe invalide peut empêcher le serveur de redémarrer.</p>
+                <textarea id="raw-config-editor" style="width: 100%; height: 400px; font-family: monospace; background: var(--bg-subtle); color: var(--text); border: 1px solid var(--border); padding: 0.5rem;"></textarea>
             </div>
-            <div class="actions">
-                <button class="ghost" data-action="close-run-modal" data-i18n="cancel">Annuler</button>
-                <button class="primary" data-action="confirm-run" data-i18n="execute">Exécuter</button>
+            <footer>
+                <button class="secondary" data-action="close-raw-config" data-i18n="cancel">Annuler</button>
+                <button class="primary" data-action="save-raw-config" data-i18n="save">Enregistrer</button>
+            </footer>
+        </div>
+    </div>
+
+
+
+    <div id="simulation-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>Simulation d'impact</h2>
+                <button class="close-btn" onclick="document.getElementById('simulation-modal').classList.add('hidden')">×</button>
+            </header>
+            <div id="simulation-content"></div>
+            <div class="actions" style="margin-top: 1rem;">
+                <button class="primary" onclick="document.getElementById('simulation-modal').classList.add('hidden')">Fermer</button>
             </div>
-            <div id="run-output" class="console-output hidden"></div>
         </div>
     </div>
 
@@ -477,6 +760,34 @@
           <button class="ghost" data-action="close-modal" data-i18n="cancel">Annuler</button>
           <button class="primary" data-action="confirm-path" data-i18n="select">Sélectionner</button>
         </footer>
+      </div>
+    </dialog>
+    <!-- Login Modal -->
+    <dialog id="login-modal" class="modal" style="min-width: 350px;">
+      <div class="modal-content">
+        <header>
+          <h2 data-i18n="login_title">Connexion</h2>
+        </header>
+        <div class="modal-body">
+          <form id="login-form" onsubmit="event.preventDefault(); handleLogin();">
+            <div class="form-group">
+              <label for="login-username">Nom d'utilisateur</label>
+              <input type="text" id="login-username" placeholder="admin" required />
+            </div>
+            <div class="form-group">
+              <label for="login-password">Mot de passe (Token)</label>
+              <input type="password" id="login-password" placeholder="••••••••" required />
+            </div>
+            <div class="form-group checkbox-group">
+              <label for="login-remember">Se souvenir de moi</label>
+              <input type="checkbox" id="login-remember" />
+            </div>
+            <div id="login-error" class="error hidden" style="margin-top: 1rem; color: var(--text-error);"></div>
+            <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+              <button type="submit" class="primary" data-i18n="login_button" style="width: 100%;">Connexion</button>
+            </div>
+          </form>
+        </div>
       </div>
     </dialog>
   </body>

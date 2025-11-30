@@ -29,7 +29,7 @@ if ($IsWindows) {
 }
 
 Write-Host "Running PyInstaller..."
-pyinstaller --noconfirm --onefile --console --name "jupiter" `
+python -m PyInstaller --noconfirm --onefile --console --name "jupiter" `
     --add-data "jupiter/web;jupiter/web" `
     --hidden-import "uvicorn.logging" `
     --hidden-import "uvicorn.loops" `

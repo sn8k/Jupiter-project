@@ -19,6 +19,16 @@ const state = {
     isLicensed: false,
     remainingSeconds: null,
     message: null
+  },
+  snapshots: [],
+  snapshotDiff: null,
+  snapshotSelection: { a: null, b: null },
+  lastSnapshotFetch: 0,
+  token: null,
+  userRole: null,
+  sortState: {
+    files: { key: 'size_bytes', dir: 'desc' },
+    functions: { key: 'calls', dir: 'desc' }
   }
 };
 
@@ -67,6 +77,18 @@ const sampleReport = {
     { name: "notify_webhook", status: "disabled", description: "Notification webhook (placeholder)" },
   ],
 };
+
+function formatBytes(value) {
+  if (!value) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let idx = 0;
+  while (size >= 1024 && idx < units.length - 1) {
+    size /= 1024;
+    idx += 1;
+  }
+  return `${size.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
+}
 
 // --- I18n & Theming ---
 
@@ -149,7 +171,7 @@ async function startScan(options = {}) {
 
   try {
     const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
-    const response = await fetch(`${apiBaseUrl}/scan`, {
+    const response = await apiFetch(`${apiBaseUrl}/scan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(payload),
@@ -166,6 +188,7 @@ async function startScan(options = {}) {
     renderReport(report);
     addLog(t("scan_complete_log"));
     pushLiveEvent(t("scan_button"), t("scan_live_event_complete"));
+    await loadSnapshots(true);
   } catch (error) {
     console.error("Error during scan:", error);
     let errorMessage = error.message;
@@ -201,18 +224,40 @@ function handleAction(action, data) {
           connectWebSocket();
       }
       break;
-    case "open-scan-modal":
+    case "open-scan-modal": {
+      const hiddenInput = document.getElementById("scan-show-hidden");
+      const incrementalInput = document.getElementById("scan-incremental");
+      const ignoreInput = document.getElementById("scan-ignore");
+
+      const savedHidden = localStorage.getItem("jupiter_scan_hidden");
+      const savedIncremental = localStorage.getItem("jupiter_scan_incremental");
+      const savedIgnore = localStorage.getItem("jupiter_scan_ignore");
+
+      if (hiddenInput && savedHidden !== null) hiddenInput.checked = savedHidden === "true";
+      if (incrementalInput && savedIncremental !== null) incrementalInput.checked = savedIncremental === "true";
+      if (ignoreInput && savedIgnore !== null) ignoreInput.value = savedIgnore;
+
       openModal("scan-modal");
       break;
+    }
     case "close-scan-modal":
       closeModal("scan-modal");
       break;
     case "confirm-scan":
       startScanWithOptions();
       break;
-    case "open-run-modal":
+    case "open-run-modal": {
+      const runCommandInput = document.getElementById("run-command");
+      const runDynamicInput = document.getElementById("run-dynamic");
+      const savedRunCommand = localStorage.getItem("jupiter_run_command");
+      const savedRunDynamic = localStorage.getItem("jupiter_run_dynamic");
+
+      if (runCommandInput && savedRunCommand !== null) runCommandInput.value = savedRunCommand;
+      if (runDynamicInput && savedRunDynamic !== null) runDynamicInput.checked = savedRunDynamic === "true";
+
       openModal("run-modal");
       break;
+    }
     case "close-run-modal":
       closeModal("run-modal");
       break;
@@ -255,6 +300,38 @@ function handleAction(action, data) {
     case "toggle-plugin":
       togglePlugin(data.pluginName, data.pluginState === 'true');
       break;
+    case "refresh-snapshots":
+      loadSnapshots(true);
+      break;
+    case "refresh-graph":
+      renderGraph();
+      break;
+    case "refresh-suggestions":
+      if (state.report) renderSuggestions();
+      else addLog("No report available to refresh suggestions from.");
+      break;
+    case "copy-snapshot-id":
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(data.snapshotId).then(() => addLog(`Snapshot ${data.snapshotId} copied.`));
+      } else {
+        alert(data.snapshotId);
+      }
+      break;
+    case "open-raw-config":
+      openRawConfigEditor();
+      break;
+    case "close-raw-config":
+      closeModal("raw-config-modal");
+      break;
+    case "save-raw-config":
+      saveRawConfig();
+      break;
+    case "add-user":
+      addUser();
+      break;
+    case "delete-user":
+      deleteUser(data.name);
+      break;
     default:
       console.warn(`Unknown action: ${action}`);
       break;
@@ -272,25 +349,42 @@ function closeModal(id) {
 }
 
 async function startScanWithOptions() {
-    const showHidden = document.getElementById("scan-show-hidden").checked;
-    const incremental = document.getElementById("scan-incremental").checked;
-    const ignoreStr = document.getElementById("scan-ignore").value;
-    const ignoreGlobs = ignoreStr ? ignoreStr.split(",").map(s => s.trim()).filter(s => s) : [];
+  const hiddenInput = document.getElementById("scan-show-hidden");
+  const incrementalInput = document.getElementById("scan-incremental");
+  const ignoreInput = document.getElementById("scan-ignore");
 
-    closeModal("scan-modal");
+  const showHidden = hiddenInput ? hiddenInput.checked : false;
+  const incremental = incrementalInput ? incrementalInput.checked : false;
+  const ignoreStr = ignoreInput ? ignoreInput.value : "";
+  const ignoreGlobs = ignoreStr ? ignoreStr.split(",").map(s => s.trim()).filter(s => s) : [];
 
-    await startScan({ show_hidden: showHidden, incremental, ignore_globs: ignoreGlobs });
+  localStorage.setItem("jupiter_scan_hidden", showHidden ? "true" : "false");
+  localStorage.setItem("jupiter_scan_incremental", incremental ? "true" : "false");
+  localStorage.setItem("jupiter_scan_ignore", ignoreStr);
+
+  closeModal("scan-modal");
+
+  await startScan({ show_hidden: showHidden, incremental, ignore_globs: ignoreGlobs });
 }
 
 async function runCommand() {
-    const commandStr = document.getElementById("run-command").value;
-    const withDynamic = document.getElementById("run-dynamic").checked;
-    const outputDiv = document.getElementById("run-output");
+  const commandInput = document.getElementById("run-command");
+  const dynamicInput = document.getElementById("run-dynamic");
+  const outputDiv = document.getElementById("run-output");
+
+  if (!commandInput || !dynamicInput || !outputDiv) return;
+
+  const commandStr = commandInput.value;
+  const withDynamic = dynamicInput.checked;
     
-    if (!commandStr) return;
+  if (!commandStr) return;
+
+  // Save settings
+  localStorage.setItem("jupiter_run_command", commandStr);
+  localStorage.setItem("jupiter_run_dynamic", withDynamic ? "true" : "false");
     
-    outputDiv.textContent = "Running...";
-    outputDiv.classList.remove("hidden");
+  outputDiv.textContent = "Running...";
+  outputDiv.classList.remove("hidden");
     
     try {
         const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
@@ -300,7 +394,7 @@ async function runCommand() {
         // The API expects a list of strings.
         const command = commandStr.split(" "); 
         
-        const response = await fetch(`${apiBaseUrl}/run`, {
+        const response = await apiFetch(`${apiBaseUrl}/run`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -354,20 +448,55 @@ async function triggerUpdate() {
 async function loadSettings() {
     if (!state.apiBaseUrl) return;
     try {
-        const response = await fetch(`${state.apiBaseUrl}/config`);
+        const response = await apiFetch(`${state.apiBaseUrl}/config`);
         if (response.ok) {
             const config = await response.json();
-            document.getElementById("conf-server-host").value = config.server_host;
-            document.getElementById("conf-server-port").value = config.server_port;
-            document.getElementById("conf-gui-host").value = config.gui_host;
-            document.getElementById("conf-gui-port").value = config.gui_port;
-            document.getElementById("conf-meeting-enabled").checked = config.meeting_enabled;
-            document.getElementById("conf-meeting-key").value = config.meeting_device_key || "";
-            document.getElementById("conf-ui-theme").value = config.ui_theme;
-            document.getElementById("conf-ui-lang").value = config.ui_language;
+            console.log("Loaded config:", config);
+            if (document.getElementById("conf-server-host")) document.getElementById("conf-server-host").value = config.server_host || "127.0.0.1";
+            if (document.getElementById("conf-server-port")) document.getElementById("conf-server-port").value = config.server_port || 8000;
+            if (document.getElementById("conf-gui-host")) document.getElementById("conf-gui-host").value = config.gui_host || "127.0.0.1";
+            if (document.getElementById("conf-gui-port")) document.getElementById("conf-gui-port").value = config.gui_port || 8050;
+            
+            // Meeting
+            if (document.getElementById("conf-meeting-enabled")) {
+                document.getElementById("conf-meeting-enabled").checked = !!config.meeting_enabled;
+            }
+            if (document.getElementById("conf-meeting-key")) {
+                document.getElementById("conf-meeting-key").value = config.meeting_device_key || "";
+            }
+
+            if (document.getElementById("conf-ui-theme")) document.getElementById("conf-ui-theme").value = config.ui_theme || "dark";
+            if (document.getElementById("conf-ui-lang")) document.getElementById("conf-ui-lang").value = config.ui_language || "fr";
+            
+            // Performance
+            if (document.getElementById("conf-perf-parallel")) document.getElementById("conf-perf-parallel").checked = config.perf_parallel_scan !== false;
+            if (document.getElementById("conf-perf-workers")) document.getElementById("conf-perf-workers").value = config.perf_max_workers || 0;
+            if (document.getElementById("conf-perf-timeout")) document.getElementById("conf-perf-timeout").value = config.perf_scan_timeout || 300;
+            if (document.getElementById("conf-perf-graph-simple")) document.getElementById("conf-perf-graph-simple").checked = config.perf_graph_simplification || false;
+            if (document.getElementById("conf-perf-graph-nodes")) document.getElementById("conf-perf-graph-nodes").value = config.perf_max_graph_nodes || 1000;
+            
+            // Security
+            if (document.getElementById("conf-sec-allow-run")) document.getElementById("conf-sec-allow-run").checked = config.sec_allow_run !== false;
+
+            // API Inspection
+            if (document.getElementById("conf-api-connector")) {
+                document.getElementById("conf-api-connector").value = config.api_connector || "";
+                // Trigger change event to update UI state
+                document.getElementById("conf-api-connector").dispatchEvent(new Event('change'));
+            }
+            if (document.getElementById("conf-api-app-var")) document.getElementById("conf-api-app-var").value = config.api_app_var || "";
+            if (document.getElementById("conf-api-path")) document.getElementById("conf-api-path").value = config.api_path || "";
+
+            // Load Users
+            loadUsers();
+
+        } else {
+            console.error("Failed to load settings:", response.status);
+            addLog(`Failed to load settings: ${response.status}`, "ERROR");
         }
     } catch (e) {
         console.error("Failed to load settings", e);
+        addLog(`Failed to load settings: ${e.message}`, "ERROR");
     }
 }
 
@@ -386,11 +515,26 @@ async function saveSettings(e) {
         ui_theme: formData.get("ui_theme"),
         ui_language: formData.get("ui_language"),
         plugins_enabled: [], // TODO: Handle plugins list
-        plugins_disabled: []
+        plugins_disabled: [],
+        
+        // Performance
+        perf_parallel_scan: formData.get("perf_parallel_scan") === "on",
+        perf_max_workers: parseInt(formData.get("perf_max_workers")) || null,
+        perf_scan_timeout: parseInt(formData.get("perf_scan_timeout")) || 300,
+        perf_graph_simplification: formData.get("perf_graph_simplification") === "on",
+        perf_max_graph_nodes: parseInt(formData.get("perf_max_graph_nodes")) || 1000,
+        
+        // Security
+        sec_allow_run: formData.get("sec_allow_run") === "on",
+
+        // API Inspection
+        api_connector: formData.get("api_connector") || null,
+        api_app_var: formData.get("api_app_var") || null,
+        api_path: formData.get("api_path") || null
     };
     
     try {
-        const response = await fetch(`${state.apiBaseUrl}/config`, {
+        const response = await apiFetch(`${state.apiBaseUrl}/config`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config)
@@ -412,7 +556,7 @@ async function saveSettings(e) {
 async function changeRoot(path) {
   if (!state.apiBaseUrl) return;
   try {
-    const response = await fetch(`${state.apiBaseUrl}/config/root`, {
+    const response = await apiFetch(`${state.apiBaseUrl}/config/root`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path })
@@ -448,6 +592,7 @@ function renderReport(report) {
   renderUploadMeta(report);
   renderFiles(report);
   renderFunctions(report);
+  renderApi(report);
   renderAnalysis(report);
   renderHotspots(report);
   renderAlerts(report);
@@ -455,6 +600,11 @@ function renderReport(report) {
   renderStatusBadges(report);
   renderQuality(report);
   renderDiagnostics(report);
+  
+  if (state.view === 'suggestions') {
+      renderSuggestions();
+  }
+
   if (report) {
     addLog("UI updated with new report.");
   }
@@ -499,6 +649,19 @@ function renderUploadMeta(report) {
     container.innerHTML = `<p class="small muted">${fileCount} ${t('files_view')} importés — racine : ${report.root || "?"}</p>`;
 }
 
+function handleSort(view, key) {
+  const current = state.sortState[view];
+  if (current.key === key) {
+    current.dir = current.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    current.key = key;
+    current.dir = 'desc'; // Default to desc for numbers usually
+  }
+  
+  if (view === 'files') renderFiles(state.report);
+  if (view === 'functions') renderFunctions(state.report);
+}
+
 function renderFiles(report) {
     const files = Array.isArray(report?.files) ? [...report.files] : [];
     const body = document.getElementById("files-body");
@@ -512,13 +675,38 @@ function renderFiles(report) {
         return;
     }
     empty.style.display = "none";
+
+    const { key, dir } = state.sortState.files;
+    files.sort((a, b) => {
+        let valA, valB;
+        if (key === 'func_count') {
+            valA = a.language_analysis?.defined_functions?.length || 0;
+            valB = b.language_analysis?.defined_functions?.length || 0;
+        } else {
+            valA = a[key] || 0;
+            valB = b[key] || 0;
+        }
+        
+        if (typeof valA === 'string') {
+            return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        return dir === 'asc' ? valA - valB : valB - valA;
+    });
+
     files
-        .sort((a, b) => (b.size_bytes || 0) - (a.size_bytes || 0))
         .slice(0, 200)
         .forEach((file) => {
             const funcCount = file.language_analysis?.defined_functions?.length || 0;
             const row = document.createElement("tr");
-            row.innerHTML = `<td>${file.path}</td><td class="numeric">${bytesToHuman(file.size_bytes || 0)}</td><td class="numeric">${formatDate(file.modified_timestamp)}</td><td class="numeric">${funcCount}</td>`;
+            row.innerHTML = `
+                <td>${file.path}</td>
+                <td class="numeric">${bytesToHuman(file.size_bytes || 0)}</td>
+                <td class="numeric">${formatDate(file.modified_timestamp)}</td>
+                <td class="numeric">${funcCount}</td>
+                <td class="actions">
+                    <button class="btn-icon" onclick="triggerSimulation('file', '${file.path.replace(/\\/g, '\\\\')}')" title="Simulate Removal">🗑️</button>
+                </td>
+            `;
             body.appendChild(row);
         });
 }
@@ -577,7 +765,15 @@ function renderFunctions(report) {
     }
     empty.style.display = "none";
 
-    allFunctions.sort((a, b) => b.calls - a.calls);
+    const { key, dir } = state.sortState.functions;
+    allFunctions.sort((a, b) => {
+        const valA = a[key];
+        const valB = b[key];
+        if (typeof valA === 'string') {
+            return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        return dir === 'asc' ? valA - valB : valB - valA;
+    });
 
     allFunctions.forEach(func => {
         const row = document.createElement("tr");
@@ -586,6 +782,53 @@ function renderFunctions(report) {
             <td>${func.file}</td>
             <td class="numeric">${func.calls}</td>
             <td>${func.status}</td>
+            <td class="actions">
+                <button class="btn-icon" onclick="triggerSimulation('function', '${func.file.replace(/\\/g, '\\\\')}', '${func.name}')" title="Simulate Removal">🗑️</button>
+            </td>
+        `;
+        body.appendChild(row);
+    });
+}
+
+function renderApi(report) {
+    const body = document.getElementById("api-endpoints-body");
+    const empty = document.getElementById("api-empty");
+    const badge = document.getElementById("api-status-badge");
+    if (!body || !empty) return;
+    
+    body.innerHTML = "";
+    
+    const apiData = report?.api;
+    
+    if (!apiData || !apiData.endpoints || !apiData.endpoints.length) {
+        // If we have a config but no endpoints, it might be a connection error or empty API
+        if (apiData && apiData.config && apiData.config.base_url) {
+             empty.style.display = "block";
+             empty.textContent = "Aucun endpoint détecté ou erreur de connexion.";
+             if (badge) badge.innerHTML = `<span class="badge active">Connecté: ${apiData.config.base_url}</span>`;
+             return;
+        }
+
+        empty.style.display = "block";
+        empty.textContent = "Aucune API configurée ou détectée.";
+        if (badge) badge.innerHTML = `<span class="badge">Non configuré</span>`;
+        return;
+    }
+    
+    empty.style.display = "none";
+    if (badge) {
+        const url = apiData.config?.base_url || "Configuré";
+        badge.innerHTML = `<span class="badge active">Connecté: ${url}</span>`;
+    }
+    
+    apiData.endpoints.forEach(ep => {
+        const row = document.createElement("tr");
+        const tags = ep.tags ? ep.tags.map(t => `<span class="tag">${t}</span>`).join(" ") : "";
+        row.innerHTML = `
+            <td><span class="method method-${ep.method.toLowerCase()}">${ep.method}</span></td>
+            <td><code>${ep.path}</code></td>
+            <td>${ep.summary || "-"}</td>
+            <td>${tags}</td>
         `;
         body.appendChild(row);
     });
@@ -617,6 +860,14 @@ function renderAnalysis(report) {
         { label: t("analysis_avg_size"), value: bytesToHuman(avgSize) },
         { label: t("analysis_freshest"), value: freshest ? freshest.path : "-" },
     ];
+
+    // Add JS/TS stats if available
+    const jsFiles = files.filter(f => ["js", "ts", "jsx", "tsx"].includes(f.file_type));
+    if (jsFiles.length > 0) {
+        const jsFuncCount = jsFiles.reduce((acc, f) => acc + (f.language_analysis?.defined_functions?.length || 0), 0);
+        stats.push({ label: "Fichiers JS/TS", value: jsFiles.length });
+        stats.push({ label: "Fonctions JS/TS", value: jsFuncCount });
+    }
 
     stats.forEach((stat) => {
         const card = document.createElement("div");
@@ -779,6 +1030,20 @@ function renderPluginList(plugins) {
     const statusText = plugin.enabled ? t("plugin_enabled") : t("plugin_disabled");
     const statusClass = plugin.enabled ? "status-ok" : "status-disabled";
     
+    let configHtml = "";
+    if (plugin.name === "notifications_webhook" && plugin.enabled) {
+        const url = plugin.config && plugin.config.url ? plugin.config.url : "";
+        configHtml = `
+            <div class="plugin-config" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                <label class="small muted" style="display:block; margin-bottom: 5px;">Webhook URL</label>
+                <div style="display:flex; gap: 5px;">
+                    <input type="text" class="webhook-url-input" value="${url}" placeholder="http://..." style="flex:1; padding: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main);">
+                    <button class="small primary save-webhook-btn" data-plugin="${plugin.name}">Save</button>
+                </div>
+            </div>
+        `;
+    }
+
     card.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:start; width:100%">
         <div>
@@ -790,15 +1055,44 @@ function renderPluginList(plugins) {
             ${plugin.enabled ? "Désactiver" : "Activer"}
         </button>
       </div>
+      ${configHtml}
     `;
+    
+    const saveBtn = card.querySelector(".save-webhook-btn");
+    if (saveBtn) {
+        saveBtn.addEventListener("click", (e) => {
+            const input = card.querySelector(".webhook-url-input");
+            savePluginConfig(plugin.name, { url: input.value });
+        });
+    }
+
     container.appendChild(card);
   });
+}
+
+async function savePluginConfig(name, config) {
+    if (!state.apiBaseUrl) return;
+    try {
+        const response = await fetch(`${state.apiBaseUrl}/plugins/${name}/config`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(config)
+        });
+        if (response.ok) {
+            // alert("Configuration saved!"); // Optional: show feedback
+            fetchPlugins(); 
+        } else {
+            console.error("Failed to save configuration.");
+        }
+    } catch (e) {
+        console.error("Failed to save plugin config", e);
+    }
 }
 
 async function fetchPlugins() {
     if (!state.apiBaseUrl) return;
     try {
-        const response = await fetch(`${state.apiBaseUrl}/plugins`);
+        const response = await apiFetch(`${state.apiBaseUrl}/plugins`);
         if (response.ok) {
             const plugins = await response.json();
             renderPluginList(plugins);
@@ -811,7 +1105,7 @@ async function fetchPlugins() {
 async function togglePlugin(name, enable) {
     if (!state.apiBaseUrl) return;
     try {
-        const response = await fetch(`${state.apiBaseUrl}/plugins/${name}/toggle?enable=${enable}`, { method: "POST" });
+        const response = await apiFetch(`${state.apiBaseUrl}/plugins/${name}/toggle?enable=${enable}`, { method: "POST" });
         if (response.ok) {
             fetchPlugins(); // Refresh list
             addLog(`Plugin ${name} ${enable ? "enabled" : "disabled"}`);
@@ -1048,7 +1342,7 @@ async function loadContext() {
 async function loadCachedReport() {
   if (!state.apiBaseUrl) return null;
   try {
-    const response = await fetch(`${state.apiBaseUrl}/reports/last`);
+    const response = await apiFetch(`${state.apiBaseUrl}/reports/last`);
     if (!response.ok) {
       if (response.status !== 404) {
         addLog(`Cached report request failed (${response.status})`, "WARN");
@@ -1064,6 +1358,183 @@ async function loadCachedReport() {
     console.warn("Failed to restore cached report:", error);
     return null;
   }
+}
+
+async function loadSnapshots(force = false) {
+  if (!state.apiBaseUrl) return;
+  const now = Date.now();
+  if (!force && state.lastSnapshotFetch && now - state.lastSnapshotFetch < 5000) {
+    return;
+  }
+
+  try {
+    const response = await apiFetch(`${state.apiBaseUrl}/snapshots`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    state.snapshots = payload.snapshots || [];
+    state.lastSnapshotFetch = now;
+    renderSnapshots();
+  } catch (error) {
+    console.error("Failed to load snapshots", error);
+    addLog(`Snapshot fetch failed: ${error.message}`, "ERROR");
+  }
+}
+
+async function fetchSnapshotDiff() {
+  if (!state.apiBaseUrl) return;
+  const { a, b } = state.snapshotSelection;
+  if (!a || !b) {
+    alert(t("history_diff_missing"));
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({ id_a: a, id_b: b });
+    const response = await apiFetch(`${state.apiBaseUrl}/snapshots/diff?${params.toString()}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    state.snapshotDiff = payload;
+    renderSnapshotDiff();
+    addLog(`Loaded diff ${a} → ${b}`);
+  } catch (error) {
+    console.error("Failed to diff snapshots", error);
+    addLog(`Snapshot diff failed: ${error.message}`, "ERROR");
+  }
+}
+
+function renderSnapshots() {
+  updateSnapshotSelectors();
+  renderSnapshotSelectionMeta();
+
+  const body = document.getElementById("snapshot-table-body");
+  const empty = document.getElementById("snapshots-empty");
+  if (!body || !empty) return;
+
+  body.innerHTML = "";
+  if (!state.snapshots.length) {
+    empty.textContent = t("history_empty");
+    empty.classList.remove("hidden");
+    return;
+  }
+
+  empty.classList.add("hidden");
+  state.snapshots.forEach((snap) => {
+    const row = document.createElement("tr");
+    const ts = new Date(snap.timestamp * 1000);
+    row.innerHTML = `
+      <td>${snap.label}</td>
+      <td>${ts.toLocaleString()}</td>
+      <td class="numeric">${snap.file_count}</td>
+      <td class="numeric">${formatBytes(snap.total_size_bytes)}</td>
+      <td>
+        <button class="ghost small" data-action="copy-snapshot-id" data-snapshot-id="${snap.id}">${t("history_copy_id")}</button>
+      </td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+function updateSnapshotSelectors() {
+  const selectA = document.getElementById("snapshot-select-a");
+  const selectB = document.getElementById("snapshot-select-b");
+  if (!selectA || !selectB) return;
+
+  const buildOptions = (selected) => {
+    const fragment = document.createDocumentFragment();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = t("history_select_placeholder");
+    fragment.appendChild(placeholder);
+    state.snapshots.forEach((snap) => {
+      const option = document.createElement("option");
+      option.value = snap.id;
+      option.textContent = `${snap.label} (${new Date(snap.timestamp * 1000).toLocaleString()})`;
+      if (snap.id === selected) option.selected = true;
+      fragment.appendChild(option);
+    });
+    return fragment;
+  };
+
+  selectA.innerHTML = "";
+  selectA.appendChild(buildOptions(state.snapshotSelection.a));
+  selectB.innerHTML = "";
+  selectB.appendChild(buildOptions(state.snapshotSelection.b));
+}
+
+function renderSnapshotSelectionMeta() {
+  const metaA = document.getElementById("snapshot-meta-a");
+  const metaB = document.getElementById("snapshot-meta-b");
+  if (!metaA || !metaB) return;
+
+  const render = (snap) => {
+    if (!snap) return `<p class="muted">${t("history_slot_empty")}</p>`;
+    const ts = new Date(snap.timestamp * 1000).toLocaleString();
+    return `
+      <p class="strong">${snap.label}</p>
+      <p class="muted">${ts}</p>
+      <p>${t("history_files")}: ${snap.file_count} · ${t("history_functions")}: ${snap.function_count}</p>
+    `;
+  };
+
+  const currentA = state.snapshots.find((s) => s.id === state.snapshotSelection.a);
+  const currentB = state.snapshots.find((s) => s.id === state.snapshotSelection.b);
+  metaA.innerHTML = render(currentA);
+  metaB.innerHTML = render(currentB);
+}
+
+function renderSnapshotDiff() {
+  const container = document.getElementById("snapshot-diff-output");
+  if (!container) return;
+
+  if (!state.snapshotDiff) {
+    container.innerHTML = `<p class="muted">${t("history_diff_placeholder")}</p>`;
+    return;
+  }
+
+  const diff = state.snapshotDiff;
+  const metrics = diff.diff.metrics_delta;
+  const files = diff.diff;
+  container.innerHTML = `
+    <div class="stats-grid">
+      <div><strong>${t("history_metric_files")}</strong><p>${metrics.file_count}</p></div>
+      <div><strong>${t("history_metric_size")}</strong><p>${formatBytes(metrics.total_size_bytes)}</p></div>
+      <div><strong>${t("history_metric_funcs")}</strong><p>${metrics.function_count}</p></div>
+      <div><strong>${t("history_metric_unused")}</strong><p>${metrics.unused_function_count}</p></div>
+    </div>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:0.5rem;">
+      <p>${t("history_added")}: ${files.files_added.length}</p>
+      <p>${t("history_removed")}: ${files.files_removed.length}</p>
+      <p>${t("history_modified")}: ${files.files_modified.length}</p>
+    </div>
+  `;
+}
+
+function bindHistoryControls() {
+  const selectA = document.getElementById("snapshot-select-a");
+  const selectB = document.getElementById("snapshot-select-b");
+  const diffBtn = document.getElementById("snapshot-diff-btn");
+
+  if (selectA) {
+    selectA.addEventListener("change", (event) => {
+      state.snapshotSelection.a = event.target.value || null;
+      renderSnapshotSelectionMeta();
+    });
+  }
+
+  if (selectB) {
+    selectB.addEventListener("change", (event) => {
+      state.snapshotSelection.b = event.target.value || null;
+      renderSnapshotSelectionMeta();
+    });
+  }
+
+  if (diffBtn) {
+    diffBtn.addEventListener("click", fetchSnapshotDiff);
+  }
+
+  updateSnapshotSelectors();
+  renderSnapshotSelectionMeta();
+  renderSnapshotDiff();
 }
 
 function showOnboarding() {
@@ -1116,7 +1587,42 @@ function setView(view) {
     if (state.report && state.report.dynamic) {
       renderDynamicGraph(state.report.dynamic);
     }
+  } else if (view === "history") {
+    loadSnapshots();
+  } else if (view === "graph") {
+    renderGraph();
+  } else if (view === "suggestions") {
+    renderSuggestions();
   }
+}
+
+function renderSuggestions() {
+  const list = document.getElementById("suggestions-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  if (!state.report) {
+    list.innerHTML = '<p class="muted">Aucun rapport disponible. Lancez une analyse.</p>';
+    return;
+  }
+
+  if (!state.report.refactoring || state.report.refactoring.length === 0) {
+    list.innerHTML = '<p class="muted">Aucune suggestion de refactoring trouvée pour ce scan.</p>';
+    return;
+  }
+
+  state.report.refactoring.forEach(s => {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    item.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong>${s.path}</strong>
+        <span class="badge ${s.severity === 'critical' ? 'error' : s.severity === 'warning' ? 'warning' : 'info'}">${s.severity}</span>
+      </div>
+      <p><em>${s.type}</em>: ${s.details}</p>
+    `;
+    list.appendChild(item);
+  });
 }
 
 function showPlaceholder(action) {
@@ -1212,6 +1718,11 @@ function connectWebSocket() {
     ws.onmessage = (event) => {
       pushLiveEvent("Server", event.data);
       addLog(`WS: ${event.data}`);
+
+      if (typeof event.data === "string" && event.data.startsWith("Snapshot stored")) {
+          loadSnapshots(true);
+          if (state.view === "graph") renderGraph();
+      }
       
       const watchList = document.getElementById("watch-events");
       if (watchList) {
@@ -1306,7 +1817,7 @@ async function fetchFs(path) {
     // Ensure path is clean before sending
     const cleanPath = path.replace(/^"|"$/g, '');
     console.log(`Fetching ${state.apiBaseUrl}/fs/list?path=${encodeURIComponent(cleanPath)}`);
-    const response = await fetch(`${state.apiBaseUrl}/fs/list?path=${encodeURIComponent(cleanPath)}`);
+    const response = await apiFetch(`${state.apiBaseUrl}/fs/list?path=${encodeURIComponent(cleanPath)}`);
     if (response.ok) {
       const data = await response.json();
       currentBrowserPath = data.current;
@@ -1351,7 +1862,7 @@ function confirmBrowserSelection() {
 async function fetchBackends() {
   if (!state.apiBaseUrl) return;
   try {
-    const response = await fetch(`${state.apiBaseUrl}/backends`);
+    const response = await apiFetch(`${state.apiBaseUrl}/backends`);
     if (response.ok) {
       state.backends = await response.json();
       // Default to first backend if not set
@@ -1427,7 +1938,7 @@ function renderBackendSelector() {
 
 // --- Initialization ---
 async function init() {
-  addLog("App initialized v0.1.4", "INFO");
+  addLog("App initialized v1.0.1", "INFO");
   const savedLang = localStorage.getItem("jupiter-lang") || "fr";
   await setLanguage(savedLang);
   
@@ -1435,6 +1946,29 @@ async function init() {
   setTheme(savedTheme);
 
   state.apiBaseUrl = inferApiBaseUrl();
+
+  // Load Token
+  const savedToken = localStorage.getItem("jupiter-token");
+  if (savedToken) {
+      state.token = savedToken;
+      // Verify silently
+      try {
+          const response = await fetch(`${state.apiBaseUrl}/me`, {
+              headers: { 'Authorization': `Bearer ${savedToken}` }
+          });
+          if (response.ok) {
+              const data = await response.json();
+              state.userRole = data.role;
+          } else {
+              state.token = null;
+              localStorage.removeItem("jupiter-token");
+          }
+      } catch (e) {
+          console.warn("Could not verify token on init");
+      }
+  }
+  updateProfileUI();
+
   renderDiagnostics(state.report);
   renderStatusBadges(state.report);
   
@@ -1445,8 +1979,526 @@ async function init() {
   connectWebSocket();
   bindUpload();
   bindActions();
-  renderReport(null);
+  bindHistoryControls();
+  // renderReport(null); // Do not reset report if loaded from cache
   pushLiveEvent("Startup", "UI ready. Load a report or use the sample.");
 }
 
 window.addEventListener("DOMContentLoaded", init);
+
+// --- Simulation ---
+
+async function triggerSimulation(type, path, funcName = null) {
+    const modal = document.getElementById("simulation-modal");
+    const content = document.getElementById("simulation-content");
+    if (!modal || !content) return;
+    
+    content.innerHTML = `<p>${t("loading")}</p>`;
+    modal.classList.remove("hidden");
+    
+    try {
+        const response = await fetch(`${state.apiBaseUrl}/simulate/remove`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                target_type: type,
+                path: path,
+                function_name: funcName
+            })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Simulation failed");
+        }
+        
+        const result = await response.json();
+        renderSimulationResult(result);
+    } catch (e) {
+        content.innerHTML = `<div class="error">Error: ${e.message}</div>`;
+    }
+}
+
+window.triggerSimulation = triggerSimulation;
+
+// --- Authentication ---
+
+async function apiFetch(url, options = {}) {
+    if (!options.headers) options.headers = {};
+    if (state.token) {
+        options.headers['Authorization'] = `Bearer ${state.token}`;
+    }
+    
+    const response = await fetch(url, options);
+    
+    if (response.status === 401) {
+        addLog("Authentication required", "WARNING");
+        state.token = null;
+        state.userRole = null;
+        localStorage.removeItem("jupiter-token");
+        updateProfileUI();
+        openLoginModal();
+        throw new Error("Unauthorized");
+    }
+    
+    return response;
+}
+
+function openLoginModal() {
+    const modal = document.getElementById("login-modal");
+    if (modal) {
+        modal.showModal();
+        // Prevent closing by escape key if not logged in
+        modal.addEventListener('cancel', (event) => {
+            if (!state.token) {
+                event.preventDefault();
+            }
+        });
+    }
+}
+
+async function handleLogin() {
+    const usernameInput = document.getElementById("login-username");
+    const passwordInput = document.getElementById("login-password");
+    const rememberInput = document.getElementById("login-remember");
+    const errorDiv = document.getElementById("login-error");
+    
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value.trim();
+    
+    if (!username || !password) return;
+    
+    try {
+        const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+        const response = await fetch(`${apiBaseUrl}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            state.token = data.token;
+            state.userRole = data.role;
+            
+            if (rememberInput.checked) {
+                localStorage.setItem("jupiter-token", data.token);
+                localStorage.setItem("jupiter-username", data.name);
+            } else {
+                sessionStorage.setItem("jupiter-token", data.token);
+            }
+            
+            updateProfileUI();
+            document.getElementById("login-modal").close();
+            addLog(`Logged in as ${data.name} (${data.role})`, "SUCCESS");
+            
+            // Refresh data
+            if (state.view === "dashboard") startScan();
+        } else {
+            errorDiv.textContent = "Identifiants invalides";
+            errorDiv.classList.remove("hidden");
+        }
+    } catch (e) {
+        console.error(e);
+        errorDiv.textContent = "Erreur de connexion";
+        errorDiv.classList.remove("hidden");
+    }
+}
+
+// Expose functions to window for inline onclick handlers
+window.openLoginModal = openLoginModal;
+window.handleLogin = handleLogin;
+
+function logout() {
+    state.token = null;
+    state.userRole = null;
+    localStorage.removeItem("jupiter-token");
+    localStorage.removeItem("jupiter-username");
+    sessionStorage.removeItem("jupiter-token");
+    updateProfileUI();
+    addLog("Logged out", "INFO");
+    
+    // Force login modal
+    openLoginModal();
+}
+
+function updateProfileUI() {
+    const btn = document.getElementById("user-profile-btn");
+    if (!btn) return;
+    
+    if (state.token) {
+        const username = localStorage.getItem("jupiter-username") || "User";
+        btn.textContent = "👤 " + username;
+        btn.title = "Click to logout";
+        btn.onclick = () => {
+            if (confirm("Logout?")) logout();
+        };
+        btn.classList.add("active");
+    } else {
+        btn.textContent = "👤";
+        btn.title = "Not connected";
+        btn.onclick = openLoginModal;
+        btn.classList.remove("active");
+    }
+}
+
+function checkAutoLogin() {
+    const token = localStorage.getItem("jupiter-token") || sessionStorage.getItem("jupiter-token");
+    if (token) {
+        // Verify token validity
+        const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+        fetch(`${apiBaseUrl}/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).then(res => {
+            if (res.ok) {
+                return res.json().then(data => {
+                    state.token = token;
+                    state.userRole = data.role;
+                    updateProfileUI();
+                    addLog("Auto-login successful");
+                    if (state.view === "dashboard") startScan();
+                });
+            } else {
+                // Token invalid
+                logout();
+            }
+        }).catch(() => {
+            // Offline or error, maybe keep token but show warning?
+            // For security, better to logout if we can't verify
+            logout();
+        });
+    } else {
+        openLoginModal();
+    }
+}
+
+// Call checkAutoLogin on init
+document.addEventListener("DOMContentLoaded", () => {
+    // ... existing init code ...
+    // We need to make sure this runs after other inits or is part of init
+    setTimeout(checkAutoLogin, 500);
+});
+
+function renderSimulationResult(result) {
+    const content = document.getElementById("simulation-content");
+    if (!content) return;
+    
+    let html = `<h3>Simulation: ${result.target}</h3>`;
+    html += `<div class="risk-score risk-${result.risk_score}">${t("risk")}: ${result.risk_score.toUpperCase()}</div>`;
+    
+    if (!result.impacts || result.impacts.length === 0) {
+        html += `<p>${t("no_impacts")}</p>`;
+    } else {
+        html += `<ul class="impact-list">`;
+        result.impacts.forEach(imp => {
+            html += `<li class="impact-item severity-${imp.severity}">
+                <span class="severity">[${imp.severity.toUpperCase()}]</span>
+                <span class="target">${imp.target}</span>
+                <span class="details">${imp.details}</span>
+            </li>`;
+        });
+        html += `</ul>`;
+    }
+    content.innerHTML = html;
+}
+
+async function renderGraph() {
+  const container = document.getElementById("graph-container");
+  if (!container) return;
+  
+  container.innerHTML = '<p style="padding: 1rem;">Chargement du graphe...</p>';
+  
+  try {
+    const response = await apiFetch(`${state.apiBaseUrl}/graph`);
+    if (!response.ok) throw new Error("Failed to fetch graph");
+    const graphData = await response.json();
+    
+    container.innerHTML = ""; // Clear loading
+    
+    if (!graphData.nodes || graphData.nodes.length === 0) {
+      container.innerHTML = '<p style="padding: 1rem;">Aucune donnée de graphe disponible.</p>';
+      return;
+    }
+    
+    // D3.js rendering
+    if (typeof d3 === 'undefined') {
+      container.innerHTML = '<p style="padding: 1rem;">Erreur: D3.js non chargé. Vérifiez votre connexion internet.</p>';
+      return;
+    }
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const svg = d3.select("#graph-container").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .attr("viewBox", [0, 0, width, height])
+        .attr("style", "max-width: 100%; height: auto;");
+
+    // Add zoom capabilities
+    const g = svg.append("g");
+    
+    svg.call(d3.zoom()
+        .extent([[0, 0], [width, height]])
+        .scaleExtent([0.1, 8])
+        .on("zoom", ({transform}) => {
+            g.attr("transform", transform);
+        }));
+
+    const simulation = d3.forceSimulation(graphData.nodes)
+        .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(60))
+        .force("charge", d3.forceManyBody().strength(-100))
+        .force("collide", d3.forceCollide().radius(15))
+        .force("center", d3.forceCenter(width / 2, height / 2));
+
+    const link = g.append("g")
+        .attr("stroke", "#999")
+        .attr("stroke-opacity", 0.6)
+      .selectAll("line")
+      .data(graphData.links)
+      .join("line")
+        .attr("stroke-width", d => Math.sqrt(d.weight || 1));
+
+    const node = g.append("g")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1.5)
+      .selectAll("circle")
+      .data(graphData.nodes)
+      .join("circle")
+        .attr("r", 5)
+        .attr("fill", d => {
+            if (d.group === "js_file") return "#f1e05a"; // JS yellow
+            if (d.group === "py_file") return "#3572A5"; // Python blue
+            return d.type === "file" ? "#69b3a2" : "#ff7f0e";
+        })
+        .call(drag(simulation));
+
+    node.append("title")
+        .text(d => d.label);
+
+    simulation.on("tick", () => {
+      link
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+
+      node
+          .attr("cx", d => d.x)
+          .attr("cy", d => d.y);
+    });
+
+    function drag(simulation) {
+      function dragstarted(event) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
+      }
+      
+      function dragged(event) {
+        event.subject.fx = event.x;
+        event.subject.fy = event.y;
+      }
+      
+      function dragended(event) {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
+      }
+      
+      return d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended);
+    }
+
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = `<p style="padding: 1rem; color: red;">Erreur: ${e.message}</p>`;
+  }
+}
+
+async function openRawConfigEditor() {
+    if (!state.apiBaseUrl) return;
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/config/raw`);
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById("raw-config-editor").value = data.content;
+            openModal("raw-config-modal");
+        } else {
+            alert("Failed to load raw config.");
+        }
+    } catch (e) {
+        alert("Error loading raw config: " + e.message);
+    }
+}
+
+async function saveRawConfig() {
+    if (!state.apiBaseUrl) return;
+    const content = document.getElementById("raw-config-editor").value;
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/config/raw`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content })
+        });
+        
+        if (response.ok) {
+            alert("Configuration saved. Please restart the server if you changed critical settings.");
+            closeModal("raw-config-modal");
+        } else {
+            const err = await response.json();
+            alert("Failed to save config: " + (err.detail || "Unknown error"));
+        }
+    } catch (e) {
+        alert("Error saving config: " + e.message);
+    }
+}
+
+// --- User Management ---
+
+async function loadUsers() {
+    if (!state.apiBaseUrl) return;
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/users`);
+        if (response.ok) {
+            const users = await response.json();
+            renderUsers(users);
+        }
+    } catch (e) {
+        console.error("Failed to load users", e);
+    }
+}
+
+function renderUsers(users) {
+    const tbody = document.getElementById("users-table-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    
+    users.forEach(user => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${user.name}</td>
+            <td>${user.role}</td>
+            <td>
+                <button class="btn-icon" onclick="handleAction('delete-user', {name: '${user.name}'})" title="Delete">🗑️</button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+async function addUser() {
+    const name = document.getElementById("new-user-name").value;
+    const token = document.getElementById("new-user-token").value;
+    const role = document.getElementById("new-user-role").value;
+    
+    if (!name || !token) {
+        alert("Name and Token are required");
+        return;
+    }
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/users`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, token, role })
+        });
+        
+        if (response.ok) {
+            const users = await response.json();
+            renderUsers(users);
+            document.getElementById("new-user-name").value = "";
+            document.getElementById("new-user-token").value = "";
+            addLog(`User ${name} added`);
+        } else {
+            alert("Failed to add user");
+        }
+    } catch (e) {
+        alert("Error adding user: " + e.message);
+    }
+}
+
+async function deleteUser(name) {
+    if (!confirm(`Delete user ${name}?`)) return;
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/users/${name}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            const users = await response.json();
+            renderUsers(users);
+            addLog(`User ${name} deleted`);
+        } else {
+            alert("Failed to delete user");
+        }
+    } catch (e) {
+        alert("Error deleting user: " + e.message);
+    }
+}
+
+// Update File Upload Listener
+document.addEventListener('DOMContentLoaded', () => {
+    // API Connector UI Logic
+    const connectorSelect = document.getElementById('conf-api-connector');
+    const appVarInput = document.getElementById('conf-api-app-var');
+    const pathInput = document.getElementById('conf-api-path');
+
+    if (connectorSelect) {
+        connectorSelect.addEventListener('change', () => {
+            const isLocal = connectorSelect.value === 'local';
+            if (appVarInput) {
+                appVarInput.disabled = isLocal;
+                if (isLocal) appVarInput.placeholder = "(Auto: Jupiter API)";
+                else appVarInput.placeholder = "app";
+            }
+            if (pathInput) {
+                pathInput.disabled = isLocal;
+                if (isLocal) pathInput.placeholder = "(Auto: Internal)";
+                else pathInput.placeholder = "src/main.py";
+            }
+        });
+    }
+
+    const fileInput = document.getElementById('update-file-input');
+    if (fileInput) {
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+                // Need token for upload if protected
+                const headers = {};
+                if (state.token) {
+                    headers['Authorization'] = `Bearer ${state.token}`;
+                }
+
+                const response = await fetch(`${apiBaseUrl}/update/upload`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('update-source').value = data.path;
+                    addLog(`Update file uploaded: ${data.filename}`);
+                } else {
+                    const err = await response.json();
+                    alert("Upload failed: " + (err.detail || response.statusText));
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Upload error: " + e.message);
+            }
+        });
+    }
+});
