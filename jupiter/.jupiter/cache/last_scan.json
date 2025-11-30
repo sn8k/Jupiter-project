@@ -1,0 +1,3366 @@
+{
+  "report_schema_version": "1.0",
+  "root": "C:\\Dev_VSCode\\Jupiter-project\\jupiter",
+  "files": [
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\__init__.py",
+      "size_bytes": 497,
+      "modified_timestamp": 1764503988.8226552,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "pathlib.Path"
+        ],
+        "defined_functions": [],
+        "function_calls": [
+          "Path",
+          "exists",
+          "read_text",
+          "strip"
+        ],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+      "size_bytes": 20328,
+      "modified_timestamp": 1764511795.1783285,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "dataclasses.asdict",
+          "dataclasses.dataclass",
+          "json",
+          "jupiter.config.JupiterConfig",
+          "jupiter.config.PerformanceConfig",
+          "jupiter.config.PluginsConfig",
+          "jupiter.config.load_config",
+          "jupiter.core.ProjectAnalyzer",
+          "jupiter.core.ProjectScanner",
+          "jupiter.core.ScanReport",
+          "jupiter.core.cache.CacheManager",
+          "jupiter.core.history.HistoryManager",
+          "jupiter.core.plugin_manager.PluginManager",
+          "jupiter.core.runner.run_command",
+          "jupiter.core.simulator.ProjectSimulator",
+          "jupiter.core.state.save_last_root",
+          "jupiter.core.updater.apply_update",
+          "jupiter.server.JupiterAPIServer",
+          "jupiter.web.launch_web_ui",
+          "logging",
+          "pathlib.Path",
+          "shlex",
+          "sys",
+          "threading",
+          "time",
+          "typing.Any",
+          "webbrowser"
+        ],
+        "defined_functions": [
+          "_build_analyzer",
+          "_build_scan_options",
+          "_collect_scan_payload",
+          "_evaluate_ci_thresholds",
+          "_init_workflow_services",
+          "_persist_scan_artifacts",
+          "handle_analyze",
+          "handle_app",
+          "handle_ci",
+          "handle_gui",
+          "handle_run",
+          "handle_scan",
+          "handle_server",
+          "handle_simulate_remove",
+          "handle_snapshot_diff",
+          "handle_snapshot_list",
+          "handle_snapshot_show",
+          "handle_update",
+          "handle_watch",
+          "scan_and_get_files_dict"
+        ],
+        "function_calls": [
+          "CacheManager",
+          "HistoryManager",
+          "JupiterAPIServer",
+          "Path",
+          "PluginManager",
+          "ProjectAnalyzer",
+          "ProjectScanner",
+          "ProjectSimulator",
+          "ScanOptions",
+          "SnapshotOptions",
+          "SystemExit",
+          "Thread",
+          "WorkflowServices",
+          "_build_analyzer",
+          "_build_scan_options",
+          "_collect_scan_payload",
+          "_evaluate_ci_thresholds",
+          "_init_workflow_services",
+          "_persist_scan_artifacts",
+          "append",
+          "apply_update",
+          "asdict",
+          "compare_snapshots",
+          "copy",
+          "create_snapshot",
+          "describe",
+          "discover_and_load",
+          "dumps",
+          "error",
+          "exit",
+          "from_files",
+          "get",
+          "getLogger",
+          "get_plugins_info",
+          "get_snapshot",
+          "hook_on_analyze",
+          "hook_on_scan",
+          "info",
+          "items",
+          "iter_files",
+          "keys",
+          "launch_web_ui",
+          "len",
+          "list_snapshots",
+          "load_config",
+          "load_last_scan",
+          "localtime",
+          "merge_dynamic_data",
+          "open",
+          "print",
+          "resolve",
+          "run_command",
+          "save_last_scan",
+          "scan_and_get_files_dict",
+          "simulate_remove_file",
+          "simulate_remove_function",
+          "sleep",
+          "split",
+          "start",
+          "str",
+          "strftime",
+          "strip",
+          "summarize",
+          "to_dict",
+          "upper",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "handle_analyze",
+          "handle_app",
+          "handle_ci",
+          "handle_gui",
+          "handle_run",
+          "handle_scan",
+          "handle_server",
+          "handle_simulate_remove",
+          "handle_snapshot_diff",
+          "handle_snapshot_list",
+          "handle_snapshot_show",
+          "handle_update",
+          "handle_watch"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\main.py",
+      "size_bytes": 11056,
+      "modified_timestamp": 1764511787.4173734,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "argparse",
+          "jupiter.__version__",
+          "jupiter.cli.command_handlers.handle_analyze",
+          "jupiter.cli.command_handlers.handle_app",
+          "jupiter.cli.command_handlers.handle_ci",
+          "jupiter.cli.command_handlers.handle_gui",
+          "jupiter.cli.command_handlers.handle_run",
+          "jupiter.cli.command_handlers.handle_scan",
+          "jupiter.cli.command_handlers.handle_server",
+          "jupiter.cli.command_handlers.handle_simulate_remove",
+          "jupiter.cli.command_handlers.handle_snapshot_diff",
+          "jupiter.cli.command_handlers.handle_snapshot_list",
+          "jupiter.cli.command_handlers.handle_snapshot_show",
+          "jupiter.cli.command_handlers.handle_update",
+          "jupiter.cli.command_handlers.handle_watch",
+          "jupiter.cli.utils.resolve_root_argument",
+          "jupiter.config.load_config",
+          "jupiter.core.state.save_last_root",
+          "logging",
+          "pathlib.Path"
+        ],
+        "defined_functions": [
+          "build_parser",
+          "main"
+        ],
+        "function_calls": [
+          "ArgumentParser",
+          "ValueError",
+          "add_argument",
+          "add_parser",
+          "add_subparsers",
+          "basicConfig",
+          "build_parser",
+          "getLogger",
+          "getattr",
+          "handle_analyze",
+          "handle_app",
+          "handle_ci",
+          "handle_gui",
+          "handle_run",
+          "handle_scan",
+          "handle_server",
+          "handle_simulate_remove",
+          "handle_snapshot_diff",
+          "handle_snapshot_list",
+          "handle_snapshot_show",
+          "handle_update",
+          "handle_watch",
+          "info",
+          "load_config",
+          "main",
+          "parse_args",
+          "print",
+          "resolve_root_argument",
+          "save_last_root",
+          "write_text"
+        ],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\utils.py",
+      "size_bytes": 652,
+      "modified_timestamp": 1764507308.0785673,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "jupiter.core.state.load_last_root",
+          "pathlib.Path"
+        ],
+        "defined_functions": [
+          "_clean_root_argument",
+          "resolve_root_argument"
+        ],
+        "function_calls": [
+          "Path",
+          "_clean_root_argument",
+          "cwd",
+          "load_last_root",
+          "str",
+          "strip"
+        ],
+        "potentially_unused_functions": [
+          "resolve_root_argument"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\__init__.py",
+      "size_bytes": 30,
+      "modified_timestamp": 1764252712.2183323,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [],
+        "defined_functions": [],
+        "function_calls": [],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\config\\config.py",
+      "size_bytes": 16588,
+      "modified_timestamp": 1764511383.342743,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "dataclasses.dataclass",
+          "dataclasses.field",
+          "logging",
+          "os",
+          "pathlib.Path",
+          "typing.Any",
+          "typing.Optional",
+          "yaml"
+        ],
+        "defined_functions": [
+          "_serialize_backends",
+          "_serialize_performance",
+          "_serialize_project_api",
+          "_update_yaml_section",
+          "from_dict",
+          "get_global_config_path",
+          "load_config",
+          "load_global_config",
+          "load_merged_config",
+          "save_config",
+          "save_global_config",
+          "save_global_settings",
+          "save_project_settings"
+        ],
+        "function_calls": [
+          "CiConfig",
+          "GlobalConfig",
+          "GuiConfig",
+          "JupiterConfig",
+          "MeetingConfig",
+          "Path",
+          "PerformanceConfig",
+          "PluginsConfig",
+          "ProjectApiConfig",
+          "ProjectBackendConfig",
+          "ProjectDefinition",
+          "SecurityConfig",
+          "ServerConfig",
+          "TokenConfig",
+          "UIConfig",
+          "UserConfig",
+          "_serialize_backends",
+          "_serialize_performance",
+          "_serialize_project_api",
+          "_update_yaml_section",
+          "cls",
+          "debug",
+          "dump",
+          "error",
+          "exists",
+          "field",
+          "from_dict",
+          "get",
+          "getLogger",
+          "get_global_config_path",
+          "home",
+          "info",
+          "is_file",
+          "isinstance",
+          "items",
+          "load_config",
+          "mkdir",
+          "open",
+          "pop",
+          "resolve",
+          "safe_load",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "load_global_config",
+          "load_merged_config",
+          "save_config",
+          "save_global_config",
+          "save_global_settings",
+          "save_project_settings"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\config\\__init__.py",
+      "size_bytes": 283,
+      "modified_timestamp": 1764463103.004784,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "config.CiConfig",
+          "config.JupiterConfig",
+          "config.PerformanceConfig",
+          "config.PluginsConfig",
+          "config.UserConfig",
+          "config.load_config",
+          "config.save_config"
+        ],
+        "defined_functions": [],
+        "function_calls": [],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\analyzer.py",
+      "size_bytes": 14605,
+      "modified_timestamp": 1764504535.6383028,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "cache.CacheManager",
+          "collections.Counter",
+          "dataclasses.asdict",
+          "dataclasses.dataclass",
+          "dataclasses.field",
+          "logging",
+          "pathlib.Path",
+          "quality.complexity.estimate_complexity",
+          "quality.complexity.estimate_js_complexity",
+          "quality.duplication.find_duplications",
+          "scanner.FileMetadata",
+          "time",
+          "typing.Any",
+          "typing.Dict",
+          "typing.Iterable",
+          "typing.List",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "__init__",
+          "describe",
+          "summarize",
+          "to_dict"
+        ],
+        "function_calls": [
+          "AnalysisSummary",
+          "CacheManager",
+          "Counter",
+          "JsTsProjectSummary",
+          "PythonProjectSummary",
+          "append",
+          "as_posix",
+          "asdict",
+          "capitalize",
+          "dataclass",
+          "dict",
+          "estimate_complexity",
+          "estimate_js_complexity",
+          "extend",
+          "field",
+          "find_duplications",
+          "float",
+          "get",
+          "getLogger",
+          "info",
+          "isinstance",
+          "items",
+          "join",
+          "len",
+          "list",
+          "load_analysis_cache",
+          "load_last_scan",
+          "relative_to",
+          "replace",
+          "save_analysis_cache",
+          "set",
+          "sort",
+          "sorted",
+          "str",
+          "sum",
+          "time",
+          "upper"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "describe",
+          "summarize",
+          "to_dict"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\cache.py",
+      "size_bytes": 4952,
+      "modified_timestamp": 1764510299.4600058,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "json",
+          "logging",
+          "pathlib.Path",
+          "shutil",
+          "typing.Any",
+          "typing.Dict",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_ensure_cache_dir",
+          "_normalize_report",
+          "clear_cache",
+          "load_analysis_cache",
+          "load_last_scan",
+          "merge_dynamic_data",
+          "save_analysis_cache",
+          "save_last_scan"
+        ],
+        "function_calls": [
+          "_ensure_cache_dir",
+          "_normalize_report",
+          "dict",
+          "dump",
+          "exists",
+          "get",
+          "getLogger",
+          "isinstance",
+          "items",
+          "load",
+          "load_last_scan",
+          "mkdir",
+          "open",
+          "pop",
+          "rmtree",
+          "save_last_scan",
+          "setdefault",
+          "values",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "clear_cache",
+          "load_analysis_cache",
+          "merge_dynamic_data",
+          "save_analysis_cache"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\events.py",
+      "size_bytes": 680,
+      "modified_timestamp": 1764510329.1410573,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "dataclasses.asdict",
+          "dataclasses.dataclass",
+          "time",
+          "typing.Any",
+          "typing.Dict",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "__post_init__",
+          "to_dict"
+        ],
+        "function_calls": [
+          "asdict",
+          "time"
+        ],
+        "potentially_unused_functions": [
+          "__post_init__",
+          "to_dict"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\exceptions.py",
+      "size_bytes": 1203,
+      "modified_timestamp": 1764431478.7805727,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [],
+        "defined_functions": [
+          "__init__"
+        ],
+        "function_calls": [
+          "__init__",
+          "super"
+        ],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\graph.py",
+      "size_bytes": 5591,
+      "modified_timestamp": 1764451085.3530567,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "dataclasses.asdict",
+          "dataclasses.dataclass",
+          "pathlib.Path",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional",
+          "typing.Set"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_build_detailed",
+          "_build_simplified",
+          "_process_file",
+          "_resolve_import_path",
+          "build",
+          "to_dict"
+        ],
+        "function_calls": [
+          "DependencyGraph",
+          "GraphEdge",
+          "GraphNode",
+          "Path",
+          "_build_detailed",
+          "_build_simplified",
+          "_process_file",
+          "_resolve_import_path",
+          "add",
+          "append",
+          "asdict",
+          "endswith",
+          "get",
+          "items",
+          "len",
+          "list",
+          "replace",
+          "set",
+          "split",
+          "str",
+          "values"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "build",
+          "to_dict"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+      "size_bytes": 11596,
+      "modified_timestamp": 1764432145.748864,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "dataclasses.asdict",
+          "dataclasses.dataclass",
+          "json",
+          "jupiter.__version__",
+          "logging",
+          "pathlib.Path",
+          "time",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_build_metadata",
+          "_compute_function_delta",
+          "_default_label",
+          "_ensure_snapshots_dir",
+          "_extract_functions",
+          "_has_changed",
+          "_metadata_from_payload",
+          "_now_ts",
+          "compare_snapshots",
+          "create_snapshot",
+          "get_snapshot",
+          "list_snapshots",
+          "to_dict"
+        ],
+        "function_calls": [
+          "FileChange",
+          "Path",
+          "SnapshotDiff",
+          "SnapshotMetadata",
+          "ValueError",
+          "_build_metadata",
+          "_compute_function_delta",
+          "_default_label",
+          "_ensure_snapshots_dir",
+          "_extract_functions",
+          "_has_changed",
+          "_metadata_from_payload",
+          "_now_ts",
+          "append",
+          "asdict",
+          "dump",
+          "exists",
+          "get",
+          "getLogger",
+          "get_snapshot",
+          "glob",
+          "hasattr",
+          "info",
+          "int",
+          "isinstance",
+          "items",
+          "len",
+          "load",
+          "localtime",
+          "mkdir",
+          "open",
+          "set",
+          "sort",
+          "sorted",
+          "str",
+          "strftime",
+          "sum",
+          "time",
+          "to_dict",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "compare_snapshots",
+          "create_snapshot",
+          "list_snapshots"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\metrics.py",
+      "size_bytes": 1679,
+      "modified_timestamp": 1764503988.8226552,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "jupiter.__version__",
+          "jupiter.core.history.HistoryManager",
+          "jupiter.core.plugin_manager.PluginManager",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List"
+        ],
+        "defined_functions": [
+          "__init__",
+          "collect"
+        ],
+        "function_calls": [
+          "get_plugins_info",
+          "len",
+          "list_snapshots",
+          "round",
+          "sum"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "collect"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\plugin_manager.py",
+      "size_bytes": 6019,
+      "modified_timestamp": 1764449539.5103452,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "importlib",
+          "jupiter.config.config.PluginsConfig",
+          "jupiter.plugins",
+          "jupiter.plugins.Plugin",
+          "logging",
+          "pathlib.Path",
+          "pkgutil",
+          "sys",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Type"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_load_from_package",
+          "_register_plugins_from_module",
+          "disable_plugin",
+          "discover_and_load",
+          "enable_plugin",
+          "get_plugins_info",
+          "hook_on_analyze",
+          "hook_on_scan",
+          "is_enabled",
+          "register",
+          "update_plugin_config"
+        ],
+        "function_calls": [
+          "_load_from_package",
+          "_register_plugins_from_module",
+          "any",
+          "append",
+          "attr",
+          "configure",
+          "dir",
+          "error",
+          "exists",
+          "get",
+          "getLogger",
+          "getattr",
+          "hasattr",
+          "import_module",
+          "info",
+          "is_enabled",
+          "isinstance",
+          "iter_modules",
+          "on_analyze",
+          "on_scan",
+          "register",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "disable_plugin",
+          "discover_and_load",
+          "enable_plugin",
+          "get_plugins_info",
+          "hook_on_analyze",
+          "hook_on_scan",
+          "update_plugin_config"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\report.py",
+      "size_bytes": 2139,
+      "modified_timestamp": 1764431478.7825723,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "dataclasses.dataclass",
+          "pathlib.Path",
+          "scanner.FileMetadata",
+          "typing.Any",
+          "typing.Iterable",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "_serialize_file",
+          "from_files",
+          "to_dict"
+        ],
+        "function_calls": [
+          "ScanReport",
+          "_serialize_file",
+          "dataclass",
+          "list",
+          "str"
+        ],
+        "potentially_unused_functions": [
+          "from_files",
+          "to_dict"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\runner.py",
+      "size_bytes": 3016,
+      "modified_timestamp": 1764431478.7825723,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "json",
+          "logging",
+          "os",
+          "pathlib.Path",
+          "pydantic.BaseModel",
+          "subprocess",
+          "sys",
+          "tempfile",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "run_command"
+        ],
+        "function_calls": [
+          "CommandResult",
+          "close",
+          "endswith",
+          "error",
+          "exists",
+          "getLogger",
+          "info",
+          "join",
+          "len",
+          "load",
+          "mkstemp",
+          "open",
+          "remove",
+          "run",
+          "str",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "run_command"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\scanner.py",
+      "size_bytes": 9636,
+      "modified_timestamp": 1764504416.0182228,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "concurrent.futures",
+          "dataclasses.dataclass",
+          "fnmatch",
+          "jupiter.core.cache.CacheManager",
+          "jupiter.core.language.js_ts.analyze_js_ts_source",
+          "jupiter.core.language.python.analyze_python_source",
+          "logging",
+          "os",
+          "pathlib.Path",
+          "time",
+          "typing.Any",
+          "typing.Dict",
+          "typing.Iterable",
+          "typing.Iterator",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_load_cache",
+          "_process_single_file",
+          "_resolve_ignore_patterns",
+          "_should_ignore",
+          "_walk_files",
+          "from_path",
+          "iter_files"
+        ],
+        "function_calls": [
+          "CacheManager",
+          "Path",
+          "ThreadPoolExecutor",
+          "_load_cache",
+          "_resolve_ignore_patterns",
+          "_should_ignore",
+          "_walk_files",
+          "analyze_js_ts_source",
+          "analyze_python_source",
+          "any",
+          "append",
+          "as_posix",
+          "clear_cache",
+          "cls",
+          "dataclass",
+          "endswith",
+          "exists",
+          "extend",
+          "fnmatch",
+          "from_path",
+          "get",
+          "getLogger",
+          "info",
+          "len",
+          "list",
+          "load_last_scan",
+          "lower",
+          "lstrip",
+          "map",
+          "range",
+          "read_text",
+          "relative_to",
+          "rstrip",
+          "splitlines",
+          "startswith",
+          "stat",
+          "str",
+          "strip",
+          "time",
+          "walk",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "_process_single_file",
+          "iter_files"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\simulator.py",
+      "size_bytes": 7139,
+      "modified_timestamp": 1764447544.6548922,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "dataclasses.dataclass",
+          "dataclasses.field",
+          "jupiter.core.scanner.FileMetadata",
+          "pathlib.Path",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional",
+          "typing.Set"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_build_indices",
+          "_finalize_result",
+          "_path_to_module",
+          "simulate_remove_file",
+          "simulate_remove_function"
+        ],
+        "function_calls": [
+          "Impact",
+          "Path",
+          "SimulationResult",
+          "_build_indices",
+          "_finalize_result",
+          "_path_to_module",
+          "any",
+          "append",
+          "as_posix",
+          "get",
+          "items",
+          "replace",
+          "set",
+          "startswith",
+          "with_suffix"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "simulate_remove_file",
+          "simulate_remove_function"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\state.py",
+      "size_bytes": 1449,
+      "modified_timestamp": 1764431478.7835715,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "json",
+          "pathlib.Path",
+          "typing.Any",
+          "typing.Dict"
+        ],
+        "defined_functions": [
+          "_ensure_state_dir",
+          "_read_state",
+          "_write_state",
+          "load_last_root",
+          "save_last_root"
+        ],
+        "function_calls": [
+          "Path",
+          "_ensure_state_dir",
+          "_read_state",
+          "_write_state",
+          "dumps",
+          "exists",
+          "get",
+          "home",
+          "is_dir",
+          "loads",
+          "mkdir",
+          "read_text",
+          "resolve",
+          "str",
+          "write_text"
+        ],
+        "potentially_unused_functions": [
+          "load_last_root",
+          "save_last_root"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\tracer.py",
+      "size_bytes": 3663,
+      "modified_timestamp": 1764431478.7845707,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "atexit",
+          "collections.defaultdict",
+          "json",
+          "os",
+          "sys",
+          "time",
+          "traceback"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_get_func_key",
+          "main",
+          "save_results",
+          "trace_func"
+        ],
+        "function_calls": [
+          "Tracer",
+          "_get_func_key",
+          "abspath",
+          "compile",
+          "defaultdict",
+          "dict",
+          "dirname",
+          "dump",
+          "exec",
+          "exit",
+          "insert",
+          "items",
+          "len",
+          "main",
+          "open",
+          "perf_counter",
+          "pop",
+          "print",
+          "print_exc",
+          "read",
+          "register",
+          "relpath",
+          "settrace",
+          "startswith"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "save_results",
+          "trace_func"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\updater.py",
+      "size_bytes": 1663,
+      "modified_timestamp": 1764431478.7845707,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "logging",
+          "pathlib.Path",
+          "shutil",
+          "subprocess",
+          "zipfile"
+        ],
+        "defined_functions": [
+          "apply_update"
+        ],
+        "function_calls": [
+          "Path",
+          "ValueError",
+          "ZipFile",
+          "cwd",
+          "endswith",
+          "error",
+          "extractall",
+          "getLogger",
+          "info",
+          "is_file",
+          "startswith"
+        ],
+        "potentially_unused_functions": [
+          "apply_update"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\__init__.py",
+      "size_bytes": 336,
+      "modified_timestamp": 1764244416.219283,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "analyzer.AnalysisSummary",
+          "analyzer.ProjectAnalyzer",
+          "report.ScanReport",
+          "scanner.FileMetadata",
+          "scanner.ProjectScanner"
+        ],
+        "defined_functions": [],
+        "function_calls": [],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\base.py",
+      "size_bytes": 812,
+      "modified_timestamp": 1764431478.7795675,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "abc.ABC",
+          "abc.abstractmethod",
+          "typing.Any",
+          "typing.Dict",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "analyze",
+          "get_api_base_url",
+          "run_command",
+          "scan"
+        ],
+        "function_calls": [],
+        "potentially_unused_functions": [
+          "analyze",
+          "get_api_base_url",
+          "run_command",
+          "scan"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\local.py",
+      "size_bytes": 6066,
+      "modified_timestamp": 1764505777.9802668,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "asyncio",
+          "jupiter.config.config.ProjectApiConfig",
+          "jupiter.core.analyzer.ProjectAnalyzer",
+          "jupiter.core.cache.CacheManager",
+          "jupiter.core.connectors.base.BaseConnector",
+          "jupiter.core.connectors.project_api.OpenApiConnector",
+          "jupiter.core.runner.run_command",
+          "jupiter.core.scanner.ProjectScanner",
+          "logging",
+          "pathlib.Path",
+          "typing.Any",
+          "typing.Dict",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_merge_dynamic_data",
+          "_run_analyze_sync",
+          "_run_scan_sync",
+          "analyze",
+          "get_api_base_url",
+          "get_api_info",
+          "run_command",
+          "scan"
+        ],
+        "function_calls": [
+          "CacheManager",
+          "OpenApiConnector",
+          "Path",
+          "ProjectAnalyzer",
+          "ProjectScanner",
+          "append",
+          "dict",
+          "error",
+          "get",
+          "getLogger",
+          "get_api_info",
+          "get_endpoints",
+          "get_running_loop",
+          "info",
+          "iter_files",
+          "len",
+          "list",
+          "merge_dynamic_data",
+          "resolve",
+          "run_in_executor",
+          "save_last_scan",
+          "str",
+          "summarize",
+          "to_dict",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "_merge_dynamic_data",
+          "_run_analyze_sync",
+          "_run_scan_sync",
+          "analyze",
+          "get_api_base_url",
+          "run_command",
+          "scan"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\project_api.py",
+      "size_bytes": 2007,
+      "modified_timestamp": 1764447956.3217032,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "abc.ABC",
+          "abc.abstractmethod",
+          "dataclasses.asdict",
+          "dataclasses.dataclass",
+          "httpx",
+          "logging",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_parse_openapi",
+          "get_endpoints",
+          "to_dict"
+        ],
+        "function_calls": [
+          "AsyncClient",
+          "EndpointInfo",
+          "_parse_openapi",
+          "append",
+          "asdict",
+          "get",
+          "getLogger",
+          "info",
+          "items",
+          "json",
+          "lower",
+          "raise_for_status",
+          "rstrip",
+          "upper",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "get_endpoints",
+          "to_dict"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\README.md",
+      "size_bytes": 1637,
+      "modified_timestamp": 1764431478.7795675,
+      "file_type": "md",
+      "language_analysis": null
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\remote.py",
+      "size_bytes": 3831,
+      "modified_timestamp": 1764449576.280605,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "httpx",
+          "jupiter.core.connectors.base.BaseConnector",
+          "logging",
+          "typing.Any",
+          "typing.Dict",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "__init__",
+          "analyze",
+          "get_api_base_url",
+          "run_command",
+          "scan"
+        ],
+        "function_calls": [
+          "AsyncClient",
+          "error",
+          "get",
+          "getLogger",
+          "json",
+          "lower",
+          "post",
+          "raise_for_status",
+          "rstrip",
+          "str"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "analyze",
+          "get_api_base_url",
+          "run_command",
+          "scan"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\__init__.py",
+      "size_bytes": 0,
+      "modified_timestamp": 1764431478.7795675,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [],
+        "defined_functions": [],
+        "function_calls": [],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\language\\js_ts.py",
+      "size_bytes": 2414,
+      "modified_timestamp": 1764448856.4281814,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "re",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Set"
+        ],
+        "defined_functions": [
+          "analyze_js_ts_source"
+        ],
+        "function_calls": [
+          "add",
+          "compile",
+          "finditer",
+          "group",
+          "list",
+          "set",
+          "sorted"
+        ],
+        "potentially_unused_functions": [
+          "analyze_js_ts_source"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\language\\python.py",
+      "size_bytes": 2156,
+      "modified_timestamp": 1764251668.1154041,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "ast",
+          "typing.Any",
+          "typing.Dict",
+          "typing.Set"
+        ],
+        "defined_functions": [
+          "__init__",
+          "analyze_python_source",
+          "visit_AsyncFunctionDef",
+          "visit_Call",
+          "visit_FunctionDef",
+          "visit_Import",
+          "visit_ImportFrom"
+        ],
+        "function_calls": [
+          "PythonCodeAnalyzer",
+          "add",
+          "generic_visit",
+          "isinstance",
+          "list",
+          "parse",
+          "set",
+          "sorted",
+          "visit"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "analyze_python_source",
+          "visit_AsyncFunctionDef",
+          "visit_Call",
+          "visit_FunctionDef",
+          "visit_Import",
+          "visit_ImportFrom"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\language\\__init__.py",
+      "size_bytes": 60,
+      "modified_timestamp": 1764251660.2324967,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [],
+        "defined_functions": [],
+        "function_calls": [],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\quality\\complexity.py",
+      "size_bytes": 1879,
+      "modified_timestamp": 1764504488.4181333,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "ast",
+          "pathlib.Path",
+          "re"
+        ],
+        "defined_functions": [
+          "estimate_complexity",
+          "estimate_js_complexity"
+        ],
+        "function_calls": [
+          "findall",
+          "isinstance",
+          "len",
+          "open",
+          "parse",
+          "read",
+          "walk"
+        ],
+        "potentially_unused_functions": [
+          "estimate_complexity",
+          "estimate_js_complexity"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\quality\\duplication.py",
+      "size_bytes": 2360,
+      "modified_timestamp": 1764504478.9876082,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "hashlib",
+          "pathlib.Path",
+          "typing.Dict",
+          "typing.List",
+          "typing.Tuple"
+        ],
+        "defined_functions": [
+          "find_duplications"
+        ],
+        "function_calls": [
+          "append",
+          "encode",
+          "endswith",
+          "enumerate",
+          "hexdigest",
+          "items",
+          "join",
+          "len",
+          "md5",
+          "open",
+          "range",
+          "readlines",
+          "sort",
+          "startswith",
+          "str",
+          "strip"
+        ],
+        "potentially_unused_functions": [
+          "find_duplications"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\quality\\__init__.py",
+      "size_bytes": 38,
+      "modified_timestamp": 1764431478.781572,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [],
+        "defined_functions": [],
+        "function_calls": [],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\ai_helper.py",
+      "size_bytes": 7047,
+      "modified_timestamp": 1764503988.8296626,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "dataclasses.asdict",
+          "dataclasses.dataclass",
+          "jupiter.__version__",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_generate_suggestions",
+          "configure",
+          "on_analyze",
+          "on_scan"
+        ],
+        "function_calls": [
+          "AISuggestion",
+          "_generate_suggestions",
+          "any",
+          "append",
+          "get",
+          "int",
+          "split"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "configure",
+          "on_analyze",
+          "on_scan"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\code_quality_stub.py",
+      "size_bytes": 1151,
+      "modified_timestamp": 1764503988.8226552,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "jupiter.__version__",
+          "logging",
+          "typing.Any"
+        ],
+        "defined_functions": [
+          "on_analyze",
+          "on_scan"
+        ],
+        "function_calls": [
+          "getLogger",
+          "info"
+        ],
+        "potentially_unused_functions": [
+          "on_analyze",
+          "on_scan"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\example_plugin.py",
+      "size_bytes": 894,
+      "modified_timestamp": 1764503988.8226552,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "jupiter.__version__",
+          "typing.Any",
+          "typing.Dict"
+        ],
+        "defined_functions": [
+          "on_analyze",
+          "on_scan"
+        ],
+        "function_calls": [],
+        "potentially_unused_functions": [
+          "on_analyze",
+          "on_scan"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\notifications_webhook.py",
+      "size_bytes": 4361,
+      "modified_timestamp": 1764510356.012057,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "asyncio",
+          "httpx",
+          "jupiter.__version__",
+          "jupiter.core.events.JupiterEvent",
+          "jupiter.core.events.PLUGIN_NOTIFICATION",
+          "jupiter.server.ws.manager",
+          "logging",
+          "typing.Any",
+          "typing.Dict"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_dispatch_notification",
+          "_emit_local_notification",
+          "_schedule_notification",
+          "_send_webhook",
+          "configure",
+          "hook_on_scan",
+          "on_analyze",
+          "on_scan",
+          "runner"
+        ],
+        "function_calls": [
+          "AsyncClient",
+          "JupiterEvent",
+          "_dispatch_notification",
+          "_emit_local_notification",
+          "_schedule_notification",
+          "_send_webhook",
+          "broadcast",
+          "create_task",
+          "error",
+          "get",
+          "getLogger",
+          "get_running_loop",
+          "info",
+          "len",
+          "on_scan",
+          "post",
+          "run",
+          "runner",
+          "set",
+          "time",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "configure",
+          "hook_on_scan",
+          "on_analyze"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\__init__.py",
+      "size_bytes": 537,
+      "modified_timestamp": 1764431478.7845707,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "typing.Any",
+          "typing.Protocol",
+          "typing.runtime_checkable"
+        ],
+        "defined_functions": [
+          "on_analyze",
+          "on_scan"
+        ],
+        "function_calls": [],
+        "potentially_unused_functions": [
+          "on_analyze",
+          "on_scan"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\api.py",
+      "size_bytes": 5585,
+      "modified_timestamp": 1764507906.5614734,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "dataclasses.dataclass",
+          "fastapi.FastAPI",
+          "fastapi.Request",
+          "fastapi.WebSocket",
+          "fastapi.middleware.cors.CORSMiddleware",
+          "fastapi.responses.JSONResponse",
+          "jupiter.config.JupiterConfig",
+          "jupiter.config.PluginsConfig",
+          "jupiter.config.load_config",
+          "jupiter.core.exceptions.AnalyzeError",
+          "jupiter.core.exceptions.JupiterError",
+          "jupiter.core.exceptions.MeetingError",
+          "jupiter.core.exceptions.RunError",
+          "jupiter.core.exceptions.ScanError",
+          "jupiter.core.history.HistoryManager",
+          "jupiter.core.plugin_manager.PluginManager",
+          "jupiter.core.state.save_last_root",
+          "jupiter.server.manager.ProjectManager",
+          "jupiter.server.meeting_adapter.MeetingAdapter",
+          "jupiter.server.routers.analyze",
+          "jupiter.server.routers.auth",
+          "jupiter.server.routers.scan",
+          "jupiter.server.routers.system",
+          "jupiter.server.ws.websocket_endpoint",
+          "logging",
+          "pathlib.Path",
+          "typing.Optional",
+          "uvicorn"
+        ],
+        "defined_functions": [
+          "analyze_exception_handler",
+          "jupiter_exception_handler",
+          "meeting_exception_handler",
+          "run_exception_handler",
+          "scan_exception_handler",
+          "start",
+          "stop",
+          "ws_endpoint_route"
+        ],
+        "function_calls": [
+          "FastAPI",
+          "HistoryManager",
+          "JSONResponse",
+          "MeetingAdapter",
+          "PluginManager",
+          "ProjectManager",
+          "add_middleware",
+          "close",
+          "cwd",
+          "discover_and_load",
+          "error",
+          "exception_handler",
+          "getLogger",
+          "include_router",
+          "info",
+          "len",
+          "load_config",
+          "run",
+          "save_last_root",
+          "str",
+          "validate_feature_access",
+          "warning",
+          "websocket",
+          "websocket_endpoint"
+        ],
+        "potentially_unused_functions": [
+          "analyze_exception_handler",
+          "jupiter_exception_handler",
+          "meeting_exception_handler",
+          "run_exception_handler",
+          "scan_exception_handler",
+          "start",
+          "stop",
+          "ws_endpoint_route"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\manager.py",
+      "size_bytes": 6933,
+      "modified_timestamp": 1764512430.4317415,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "jupiter.config.config.JupiterConfig",
+          "jupiter.config.config.ProjectBackendConfig",
+          "jupiter.config.config.ProjectDefinition",
+          "jupiter.config.config.load_config",
+          "jupiter.config.config.load_global_config",
+          "jupiter.config.config.save_global_config",
+          "jupiter.core.connectors.base.BaseConnector",
+          "jupiter.core.connectors.local.LocalConnector",
+          "jupiter.core.connectors.remote.RemoteConnector",
+          "logging",
+          "pathlib.Path",
+          "typing.Dict",
+          "typing.Optional",
+          "uuid"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_initialize_connectors",
+          "_resolve_local_path",
+          "create_project",
+          "delete_project",
+          "get_connector",
+          "get_default_connector",
+          "get_projects",
+          "list_backends",
+          "refresh_for_root",
+          "set_active_project"
+        ],
+        "function_calls": [
+          "LocalConnector",
+          "Path",
+          "ProjectBackendConfig",
+          "ProjectDefinition",
+          "RemoteConnector",
+          "_initialize_connectors",
+          "_resolve_local_path",
+          "append",
+          "clear",
+          "cwd",
+          "error",
+          "get",
+          "getLogger",
+          "info",
+          "is_absolute",
+          "list",
+          "load_config",
+          "load_global_config",
+          "next",
+          "refresh_for_root",
+          "remove",
+          "resolve",
+          "save_global_config",
+          "set_active_project",
+          "str",
+          "uuid4",
+          "values"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "create_project",
+          "delete_project",
+          "get_connector",
+          "get_default_connector",
+          "get_projects",
+          "list_backends"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\meeting_adapter.py",
+      "size_bytes": 4702,
+      "modified_timestamp": 1764431478.7875712,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "dataclasses.dataclass",
+          "dataclasses.field",
+          "datetime.datetime",
+          "jupiter.core.exceptions.MeetingError",
+          "logging",
+          "pathlib.Path"
+        ],
+        "defined_functions": [
+          "__post_init__",
+          "check_license",
+          "heartbeat",
+          "is_enabled",
+          "last_seen_payload",
+          "notify_online",
+          "register_device",
+          "validate_feature_access"
+        ],
+        "function_calls": [
+          "MeetingError",
+          "bool",
+          "check_license",
+          "debug",
+          "field",
+          "getLogger",
+          "heartbeat",
+          "info",
+          "int",
+          "is_enabled",
+          "isoformat",
+          "max",
+          "register_device",
+          "str",
+          "total_seconds",
+          "utcnow",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "__post_init__",
+          "last_seen_payload",
+          "notify_online",
+          "validate_feature_access"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\models.py",
+      "size_bytes": 8360,
+      "modified_timestamp": 1764506984.9408388,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "pydantic.BaseModel",
+          "pydantic.Field",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional"
+        ],
+        "defined_functions": [],
+        "function_calls": [
+          "Field"
+        ],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\system_services.py",
+      "size_bytes": 3067,
+      "modified_timestamp": 1764508458.5407858,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "fastapi.FastAPI",
+          "jupiter.config.config.JupiterConfig",
+          "jupiter.config.config.load_merged_config",
+          "jupiter.config.config.save_global_settings",
+          "jupiter.config.config.save_project_settings",
+          "jupiter.core.history.HistoryManager",
+          "jupiter.core.plugin_manager.PluginManager",
+          "jupiter.server.manager.ProjectManager",
+          "pathlib.Path"
+        ],
+        "defined_functions": [
+          "__init__",
+          "history_manager",
+          "install_path",
+          "load_effective_config",
+          "preserve_meeting_config",
+          "rebuild_runtime",
+          "root_path",
+          "save_effective_config"
+        ],
+        "function_calls": [
+          "HistoryManager",
+          "PluginManager",
+          "ProjectManager",
+          "discover_and_load",
+          "getattr",
+          "load_merged_config",
+          "refresh_for_root",
+          "save_global_settings",
+          "save_project_settings"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "history_manager",
+          "install_path",
+          "load_effective_config",
+          "preserve_meeting_config",
+          "rebuild_runtime",
+          "root_path",
+          "save_effective_config"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\ws.py",
+      "size_bytes": 2136,
+      "modified_timestamp": 1764455144.8351789,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "fastapi.WebSocket",
+          "fastapi.WebSocketDisconnect",
+          "json",
+          "jupiter.core.events.JupiterEvent",
+          "logging",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Union"
+        ],
+        "defined_functions": [
+          "__init__",
+          "broadcast",
+          "connect",
+          "disconnect",
+          "websocket_endpoint"
+        ],
+        "function_calls": [
+          "ConnectionManager",
+          "accept",
+          "append",
+          "connect",
+          "disconnect",
+          "dumps",
+          "getLogger",
+          "info",
+          "isinstance",
+          "receive_text",
+          "remove",
+          "send_text",
+          "str",
+          "to_dict",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "broadcast",
+          "websocket_endpoint"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\__init__.py",
+      "size_bytes": 177,
+      "modified_timestamp": 1764244416.220284,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "api.JupiterAPIServer",
+          "meeting_adapter.MeetingAdapter"
+        ],
+        "defined_functions": [],
+        "function_calls": [],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\analyze.py",
+      "size_bytes": 7811,
+      "modified_timestamp": 1764507647.890017,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "dataclasses.asdict",
+          "fastapi.APIRouter",
+          "fastapi.Depends",
+          "fastapi.HTTPException",
+          "fastapi.Request",
+          "jupiter.core.cache.CacheManager",
+          "jupiter.core.graph.GraphBuilder",
+          "jupiter.core.history.HistoryManager",
+          "jupiter.core.simulator.ProjectSimulator",
+          "jupiter.server.models.AnalyzeResponse",
+          "jupiter.server.models.Hotspot",
+          "jupiter.server.models.ImpactModel",
+          "jupiter.server.models.PythonProjectSummary",
+          "jupiter.server.models.RefactoringRecommendation",
+          "jupiter.server.models.SimulateRequest",
+          "jupiter.server.models.SimulateResponse",
+          "jupiter.server.models.SnapshotDiffResponse",
+          "jupiter.server.models.SnapshotListResponse",
+          "jupiter.server.models.SnapshotMetadataModel",
+          "jupiter.server.models.SnapshotResponse",
+          "jupiter.server.routers.auth.verify_token",
+          "logging",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "_history_manager",
+          "diff_snapshots",
+          "get_analyze",
+          "get_graph",
+          "get_snapshot",
+          "get_snapshots",
+          "simulate_remove"
+        ],
+        "function_calls": [
+          "APIRouter",
+          "AnalyzeResponse",
+          "CacheManager",
+          "Depends",
+          "GraphBuilder",
+          "HTTPException",
+          "HistoryManager",
+          "Hotspot",
+          "ImpactModel",
+          "ProjectSimulator",
+          "PythonProjectSummary",
+          "RefactoringRecommendation",
+          "SimulateResponse",
+          "SnapshotDiffResponse",
+          "SnapshotListResponse",
+          "SnapshotMetadataModel",
+          "SnapshotResponse",
+          "_history_manager",
+          "analyze",
+          "asdict",
+          "build",
+          "compare_snapshots",
+          "dict",
+          "error",
+          "get",
+          "getLogger",
+          "get_connector",
+          "get_default_connector",
+          "get_plugins_info",
+          "get_snapshot",
+          "getattr",
+          "hook_on_analyze",
+          "info",
+          "items",
+          "list_snapshots",
+          "load_last_scan",
+          "post",
+          "scan",
+          "simulate_remove_file",
+          "simulate_remove_function",
+          "str",
+          "to_dict"
+        ],
+        "potentially_unused_functions": [
+          "diff_snapshots",
+          "get_analyze",
+          "get_graph",
+          "get_snapshots",
+          "simulate_remove"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\auth.py",
+      "size_bytes": 6313,
+      "modified_timestamp": 1764511844.2112906,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "fastapi.APIRouter",
+          "fastapi.Depends",
+          "fastapi.HTTPException",
+          "fastapi.Request",
+          "fastapi.security.HTTPAuthorizationCredentials",
+          "fastapi.security.HTTPBearer",
+          "jupiter.config.config.UserConfig",
+          "jupiter.config.config.load_merged_config",
+          "jupiter.config.config.save_global_settings",
+          "jupiter.server.models.LoginRequest",
+          "jupiter.server.models.UserModel",
+          "logging",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "add_user",
+          "delete_user",
+          "get_me",
+          "get_users",
+          "log_action",
+          "login",
+          "require_admin",
+          "verify_token"
+        ],
+        "function_calls": [
+          "APIRouter",
+          "Depends",
+          "HTTPBearer",
+          "HTTPException",
+          "UserConfig",
+          "UserModel",
+          "append",
+          "bool",
+          "delete",
+          "dict",
+          "get",
+          "getLogger",
+          "getattr",
+          "info",
+          "load_merged_config",
+          "log_action",
+          "next",
+          "post",
+          "save_global_settings"
+        ],
+        "potentially_unused_functions": [
+          "add_user",
+          "delete_user",
+          "get_me",
+          "get_users",
+          "login",
+          "require_admin",
+          "verify_token"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\scan.py",
+      "size_bytes": 4476,
+      "modified_timestamp": 1764510299.4600058,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "fastapi.APIRouter",
+          "fastapi.Depends",
+          "fastapi.HTTPException",
+          "fastapi.Request",
+          "jupiter.core.cache.CacheManager",
+          "jupiter.core.events.JupiterEvent",
+          "jupiter.core.events.SCAN_FINISHED",
+          "jupiter.core.events.SCAN_STARTED",
+          "jupiter.core.history.HistoryManager",
+          "jupiter.server.models.FileAnalysis",
+          "jupiter.server.models.ScanReport",
+          "jupiter.server.models.ScanRequest",
+          "jupiter.server.routers.auth.verify_token",
+          "jupiter.server.ws.manager",
+          "logging"
+        ],
+        "defined_functions": [
+          "_history_manager",
+          "get_last_report",
+          "post_scan"
+        ],
+        "function_calls": [
+          "APIRouter",
+          "CacheManager",
+          "Depends",
+          "FileAnalysis",
+          "HTTPException",
+          "HistoryManager",
+          "JupiterEvent",
+          "ScanReport",
+          "_history_manager",
+          "broadcast",
+          "create_snapshot",
+          "dict",
+          "error",
+          "get",
+          "getLogger",
+          "get_api_info",
+          "get_connector",
+          "get_default_connector",
+          "get_plugins_info",
+          "getattr",
+          "hasattr",
+          "hook_on_scan",
+          "info",
+          "len",
+          "load_last_scan",
+          "post",
+          "resolve",
+          "save_last_scan",
+          "scan",
+          "str",
+          "warning"
+        ],
+        "potentially_unused_functions": [
+          "get_last_report",
+          "post_scan"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\system.py",
+      "size_bytes": 18754,
+      "modified_timestamp": 1764512438.0130844,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "fastapi.APIRouter",
+          "fastapi.Depends",
+          "fastapi.File",
+          "fastapi.HTTPException",
+          "fastapi.Request",
+          "fastapi.UploadFile",
+          "jupiter.config.config.ProjectApiConfig",
+          "jupiter.config.load_config",
+          "jupiter.config.save_config",
+          "jupiter.core.events.CONFIG_UPDATED",
+          "jupiter.core.events.JupiterEvent",
+          "jupiter.core.events.PLUGIN_TOGGLED",
+          "jupiter.core.events.RUN_FINISHED",
+          "jupiter.core.events.RUN_STARTED",
+          "jupiter.core.metrics.MetricsCollector",
+          "jupiter.core.plugin_manager.PluginManager",
+          "jupiter.core.state.save_last_root",
+          "jupiter.core.updater.apply_update",
+          "jupiter.server.meeting_adapter.MeetingAdapter",
+          "jupiter.server.models.ConfigModel",
+          "jupiter.server.models.FSListEntry",
+          "jupiter.server.models.FSListResponse",
+          "jupiter.server.models.HealthStatus",
+          "jupiter.server.models.MeetingStatus",
+          "jupiter.server.models.RawConfigModel",
+          "jupiter.server.models.RootUpdate",
+          "jupiter.server.models.RootUpdateResponse",
+          "jupiter.server.models.RunRequest",
+          "jupiter.server.models.RunResponse",
+          "jupiter.server.models.UpdateRequest",
+          "jupiter.server.routers.auth.log_action",
+          "jupiter.server.routers.auth.require_admin",
+          "jupiter.server.routers.auth.verify_token",
+          "jupiter.server.system_services.SystemState",
+          "jupiter.server.system_services.preserve_meeting_config",
+          "jupiter.server.ws.manager",
+          "logging",
+          "os",
+          "pathlib.Path",
+          "shutil",
+          "tempfile",
+          "typing.Any",
+          "typing.Dict",
+          "typing.List",
+          "typing.Optional"
+        ],
+        "defined_functions": [
+          "activate_project",
+          "configure_plugin",
+          "create_project",
+          "delete_project",
+          "get_backends",
+          "get_config",
+          "get_health",
+          "get_meeting_status",
+          "get_metrics",
+          "get_plugins",
+          "get_raw_config",
+          "init_project",
+          "list_fs",
+          "list_projects",
+          "post_run",
+          "toggle_plugin",
+          "trigger_update",
+          "update_config",
+          "update_raw_config",
+          "update_root",
+          "upload_update"
+        ],
+        "function_calls": [
+          "APIRouter",
+          "ConfigModel",
+          "Depends",
+          "FSListEntry",
+          "FSListResponse",
+          "File",
+          "HTTPException",
+          "HealthStatus",
+          "JupiterEvent",
+          "MeetingStatus",
+          "MetricsCollector",
+          "Path",
+          "ProjectApiConfig",
+          "RawConfigModel",
+          "RootUpdateResponse",
+          "RunResponse",
+          "SystemState",
+          "append",
+          "apply_update",
+          "broadcast",
+          "check_license",
+          "collect",
+          "copyfileobj",
+          "create_project",
+          "cwd",
+          "delete",
+          "delete_project",
+          "dict",
+          "disable_plugin",
+          "enable_plugin",
+          "error",
+          "exists",
+          "fdopen",
+          "get",
+          "getLogger",
+          "get_connector",
+          "get_default_connector",
+          "get_plugins_info",
+          "get_projects",
+          "getattr",
+          "hasattr",
+          "history_manager",
+          "info",
+          "is_dir",
+          "is_enabled",
+          "iterdir",
+          "join",
+          "list_backends",
+          "load_config",
+          "load_effective_config",
+          "log_action",
+          "mkstemp",
+          "next",
+          "post",
+          "preserve_meeting_config",
+          "read_text",
+          "rebuild_runtime",
+          "run_command",
+          "save_config",
+          "save_effective_config",
+          "save_last_root",
+          "set_active_project",
+          "sorted",
+          "startswith",
+          "str",
+          "strip",
+          "update_plugin_config",
+          "validate_feature_access",
+          "write_text"
+        ],
+        "potentially_unused_functions": [
+          "activate_project",
+          "configure_plugin",
+          "get_backends",
+          "get_config",
+          "get_health",
+          "get_meeting_status",
+          "get_metrics",
+          "get_plugins",
+          "get_raw_config",
+          "init_project",
+          "list_fs",
+          "list_projects",
+          "post_run",
+          "toggle_plugin",
+          "trigger_update",
+          "update_config",
+          "update_raw_config",
+          "update_root",
+          "upload_update"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\app.js",
+      "size_bytes": 99997,
+      "modified_timestamp": 1764512609.9780807,
+      "file_type": "js",
+      "language_analysis": {
+        "imports": [],
+        "defined_functions": [
+          "activateProject",
+          "addLog",
+          "addUser",
+          "apiFetch",
+          "avgSize",
+          "bindActions",
+          "bindHistoryControls",
+          "bindUpload",
+          "buildOptions",
+          "bytesToHuman",
+          "changeRoot",
+          "checkAutoLogin",
+          "checkProjectStatus",
+          "closeBrowser",
+          "closeModal",
+          "confirmBrowserSelection",
+          "connectWebSocket",
+          "createConfig",
+          "currentA",
+          "currentB",
+          "deleteProject",
+          "deleteUser",
+          "dominant",
+          "drag",
+          "dragended",
+          "dragged",
+          "dragstarted",
+          "exportData",
+          "extensionCount",
+          "fetchBackends",
+          "fetchFs",
+          "fetchMeetingStatus",
+          "fetchPlugins",
+          "fetchSnapshotDiff",
+          "filteredLogs",
+          "formatBytes",
+          "formatDate",
+          "freshest",
+          "handleAction",
+          "handleCreateProject",
+          "handleFile",
+          "handleLogin",
+          "handleSort",
+          "ignoreGlobs",
+          "inferApiBaseUrl",
+          "init",
+          "jsFiles",
+          "jsFuncCount",
+          "lastUpdated",
+          "loadCachedReport",
+          "loadContext",
+          "loadProjects",
+          "loadSettings",
+          "loadSnapshots",
+          "loadUsers",
+          "locs",
+          "logout",
+          "openBrowser",
+          "openBrowserForWizard",
+          "openLoginModal",
+          "openModal",
+          "openProjectWizard",
+          "openRawConfigEditor",
+          "pushLiveEvent",
+          "pythonFiles",
+          "refreshSuggestions",
+          "render",
+          "renderAlerts",
+          "renderAnalysis",
+          "renderApi",
+          "renderBackendSelector",
+          "renderBrowser",
+          "renderDiagnostics",
+          "renderDynamicGraph",
+          "renderFiles",
+          "renderFunctions",
+          "renderGraph",
+          "renderHotspots",
+          "renderLogs",
+          "renderPluginList",
+          "renderProjects",
+          "renderQuality",
+          "renderReport",
+          "renderSimulationResult",
+          "renderSnapshotDiff",
+          "renderSnapshotSelectionMeta",
+          "renderSnapshots",
+          "renderStats",
+          "renderStatusBadges",
+          "renderSuggestions",
+          "renderUploadMeta",
+          "renderUsers",
+          "runCommand",
+          "savePluginConfig",
+          "saveRawConfig",
+          "saveSettings",
+          "setLanguage",
+          "setTheme",
+          "setView",
+          "showOnboarding",
+          "showPlaceholder",
+          "startScan",
+          "startScanWithOptions",
+          "t",
+          "tags",
+          "togglePlugin",
+          "totalSize",
+          "translateUI",
+          "triggerSimulation",
+          "triggerUpdate",
+          "updateProfileUI",
+          "updateSnapshotSelectors"
+        ],
+        "function_calls": [],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\app.py",
+      "size_bytes": 5150,
+      "modified_timestamp": 1764431478.7885723,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "__future__.annotations",
+          "dataclasses.dataclass",
+          "functools.partial",
+          "http.server.SimpleHTTPRequestHandler",
+          "json",
+          "logging",
+          "os",
+          "pathlib.Path",
+          "socketserver.ThreadingTCPServer",
+          "typing.Callable"
+        ],
+        "defined_functions": [
+          "__init__",
+          "_build_handler",
+          "do_GET",
+          "end_headers",
+          "launch_web_ui",
+          "start",
+          "stop"
+        ],
+        "function_calls": [
+          "JupiterWebUI",
+          "Path",
+          "ThreadingTCPServer",
+          "WebUISettings",
+          "_build_handler",
+          "dataclass",
+          "do_GET",
+          "dumps",
+          "encode",
+          "end_headers",
+          "error",
+          "exists",
+          "get",
+          "getLogger",
+          "guess_type",
+          "info",
+          "len",
+          "lstrip",
+          "partial",
+          "read_bytes",
+          "send_header",
+          "send_response",
+          "serve_forever",
+          "server_close",
+          "shutdown",
+          "split",
+          "start",
+          "stop",
+          "str",
+          "strip",
+          "super",
+          "write"
+        ],
+        "potentially_unused_functions": [
+          "__init__",
+          "launch_web_ui"
+        ]
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\index.html",
+      "size_bytes": 46332,
+      "modified_timestamp": 1764512491.284129,
+      "file_type": "html",
+      "language_analysis": null
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\styles.css",
+      "size_bytes": 17638,
+      "modified_timestamp": 1764512092.3210003,
+      "file_type": "css",
+      "language_analysis": null
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\__init__.py",
+      "size_bytes": 289,
+      "modified_timestamp": 1764244474.3766835,
+      "file_type": "py",
+      "language_analysis": {
+        "imports": [
+          "app.JupiterWebUI",
+          "app.WebUISettings",
+          "app.launch_web_ui"
+        ],
+        "defined_functions": [],
+        "function_calls": [],
+        "potentially_unused_functions": []
+      }
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\lang\\en.json",
+      "size_bytes": 8827,
+      "modified_timestamp": 1764509712.2410586,
+      "file_type": "json",
+      "language_analysis": null
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\lang\\fr.json",
+      "size_bytes": 9594,
+      "modified_timestamp": 1764511584.9925554,
+      "file_type": "json",
+      "language_analysis": null
+    }
+  ],
+  "dynamic": null,
+  "plugins": [],
+  "quality": {
+    "complexity_per_file": [
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\app.js",
+        "score": 626
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+        "score": 55
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\analyzer.py",
+        "score": 52
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\system.py",
+        "score": 40
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\scanner.py",
+        "score": 40
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\config\\config.py",
+        "score": 33
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\plugin_manager.py",
+        "score": 31
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\cache.py",
+        "score": 31
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+        "score": 27
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\auth.py",
+        "score": 25
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\ai_helper.py",
+        "score": 25
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\graph.py",
+        "score": 23
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\simulator.py",
+        "score": 23
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\main.py",
+        "score": 22
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\manager.py",
+        "score": 21
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\tracer.py",
+        "score": 18
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\notifications_webhook.py",
+        "score": 17
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\analyze.py",
+        "score": 17
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\remote.py",
+        "score": 12
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\scan.py",
+        "score": 12
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\runner.py",
+        "score": 12
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\quality\\duplication.py",
+        "score": 12
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\local.py",
+        "score": 11
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\system_services.py",
+        "score": 11
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\quality\\complexity.py",
+        "score": 11
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\meeting_adapter.py",
+        "score": 10
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\ws.py",
+        "score": 10
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\updater.py",
+        "score": 10
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\api.py",
+        "score": 8
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\app.py",
+        "score": 8
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\language\\js_ts.py",
+        "score": 8
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\language\\python.py",
+        "score": 7
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\state.py",
+        "score": 7
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\project_api.py",
+        "score": 6
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\utils.py",
+        "score": 4
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\report.py",
+        "score": 3
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\example_plugin.py",
+        "score": 3
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\__init__.py",
+        "score": 3
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\metrics.py",
+        "score": 2
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\events.py",
+        "score": 2
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\exceptions.py",
+        "score": 2
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\base.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\code_quality_stub.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\__init__.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\models.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\__init__.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\__init__.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\config\\__init__.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\__init__.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\language\\__init__.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\quality\\__init__.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\__init__.py",
+        "score": 1
+      },
+      {
+        "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\__init__.py",
+        "score": 1
+      }
+    ],
+    "duplication_clusters": [
+      {
+        "hash": "3a8b7a6e6d7473c7d5a880002f59c1eb",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 71
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 202
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 282
+          }
+        ]
+      },
+      {
+        "hash": "c9d8c460e2458351ade79a293a739aea",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 72
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 203
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 283
+          }
+        ]
+      },
+      {
+        "hash": "c5e80070a32c36c746606c7c65273c76",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 73
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 204
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 284
+          }
+        ]
+      },
+      {
+        "hash": "071b921901b6391adddbca7adc7b7036",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 74
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 205
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 285
+          }
+        ]
+      },
+      {
+        "hash": "7fed2240aebc944e64006242f140ef5b",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\app.js",
+            "line": 1236
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\app.js",
+            "line": 1258
+          }
+        ]
+      },
+      {
+        "hash": "3141d058fdd593419fb1a702e9be909c",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 201
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 281
+          }
+        ]
+      },
+      {
+        "hash": "97f6e43afe4011a3b365cb39d741c344",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 206
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+            "line": 286
+          }
+        ]
+      },
+      {
+        "hash": "c4f202dd444432e9761aa828ec181534",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+            "line": 36
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\models.py",
+            "line": 255
+          }
+        ]
+      },
+      {
+        "hash": "04ac8b47eb0385a25681ac04a157cd55",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+            "line": 37
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\models.py",
+            "line": 256
+          }
+        ]
+      },
+      {
+        "hash": "fa04af3847a928a248d6d05b4c639d9f",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+            "line": 38
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\models.py",
+            "line": 257
+          }
+        ]
+      },
+      {
+        "hash": "5930253782a51f25cff71a6edd3f9581",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+            "line": 39
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\models.py",
+            "line": 258
+          }
+        ]
+      },
+      {
+        "hash": "1dead2504374c11d6aea87e52bc66b5c",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+            "line": 40
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\models.py",
+            "line": 259
+          }
+        ]
+      },
+      {
+        "hash": "45c7528726423d487810b426fc005c11",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+            "line": 41
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\models.py",
+            "line": 260
+          }
+        ]
+      },
+      {
+        "hash": "ac1e60bd1530242db9e8f77cfb9b7541",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\analyze.py",
+            "line": 24
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\scan.py",
+            "line": 10
+          }
+        ]
+      },
+      {
+        "hash": "d82294489616db75abe49ce7742cc4d5",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\analyze.py",
+            "line": 25
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\scan.py",
+            "line": 11
+          }
+        ]
+      },
+      {
+        "hash": "395719f125a64f7ad846524a47f83551",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\analyze.py",
+            "line": 27
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\scan.py",
+            "line": 13
+          }
+        ]
+      },
+      {
+        "hash": "8e0cf7933579a2dfac38d67b4a3c123b",
+        "occurrences": [
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\remote.py",
+            "line": 24
+          },
+          {
+            "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\remote.py",
+            "line": 51
+          }
+        ]
+      }
+    ]
+  },
+  "refactoring": [
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\system.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (40). Consider splitting functions.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (55). Consider splitting functions.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (27). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\config\\config.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (33). Consider splitting functions.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\plugin_manager.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (31). Consider splitting functions.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\manager.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (21). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\notifications_webhook.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (17). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\cache.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (31). Consider splitting functions.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\scanner.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (40). Consider splitting functions.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\auth.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (25). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\analyze.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (17). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\graph.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (23). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\simulator.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (23). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\plugins\\ai_helper.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (25). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\tracer.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (18). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\analyzer.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (52). Consider splitting functions.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\main.py",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (22). Consider splitting functions.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\app.js",
+      "type": "complexity",
+      "details": "High cyclomatic complexity (626). Consider splitting functions.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+      "type": "duplication",
+      "details": "Code duplicated 3 times in this file.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+      "type": "duplication",
+      "details": "Code duplicated 3 times in this file.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+      "type": "duplication",
+      "details": "Code duplicated 3 times in this file.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+      "type": "duplication",
+      "details": "Code duplicated 3 times in this file.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\web\\app.js",
+      "type": "duplication",
+      "details": "Code duplicated 2 times in this file.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+      "type": "duplication",
+      "details": "Code duplicated 2 times in this file.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\cli\\command_handlers.py",
+      "type": "duplication",
+      "details": "Code duplicated 2 times in this file.",
+      "severity": "medium"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+      "type": "duplication",
+      "details": "Code duplicated across 2 files.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+      "type": "duplication",
+      "details": "Code duplicated across 2 files.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+      "type": "duplication",
+      "details": "Code duplicated across 2 files.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+      "type": "duplication",
+      "details": "Code duplicated across 2 files.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+      "type": "duplication",
+      "details": "Code duplicated across 2 files.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\history.py",
+      "type": "duplication",
+      "details": "Code duplicated across 2 files.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\scan.py",
+      "type": "duplication",
+      "details": "Code duplicated across 2 files.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\scan.py",
+      "type": "duplication",
+      "details": "Code duplicated across 2 files.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\server\\routers\\scan.py",
+      "type": "duplication",
+      "details": "Code duplicated across 2 files.",
+      "severity": "high"
+    },
+    {
+      "path": "C:\\Dev_VSCode\\Jupiter-project\\jupiter\\core\\connectors\\remote.py",
+      "type": "duplication",
+      "details": "Code duplicated 2 times in this file.",
+      "severity": "medium"
+    }
+  ]
+}

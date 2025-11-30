@@ -17,6 +17,7 @@ Jupiter is a modular tool designed to scan, analyze, and observe software projec
 *   **Web Interface**: Visual dashboard for exploring your project.
 *   **Plugins & Webhooks**: Extensible plugin architecture with webhook notifications.
 *   **Meeting Integration**: License management and session control.
+*   **Multi-Project Management**: Manage multiple projects with distinct configurations and switch between them easily.
 
 ## Quick Start
 
@@ -45,6 +46,7 @@ You can still use the CLI for specific tasks:
 *   **Analyze**: `python -m jupiter.cli.main analyze`
 *   **Snapshots**: `python -m jupiter.cli.main snapshots list|show|diff`
 *   **Simulation**: `python -m jupiter.cli.main simulate remove <cible>`
+*   **CI**: `python -m jupiter.cli.main ci --json` to enforce quality gates with the exact same scanner/plugins as the other commands.
 
 ### Snapshot History & Diff
 
@@ -69,6 +71,10 @@ Snapshots power the new **History** panel in the Web UI and the `/snapshots` API
 
 When you change the served root in the Web UI or relaunch Jupiter without explicitly passing a directory, the tool reloads the last root saved in `~/.jupiter/state.json`, restores cached scan data from `.jupiter/cache/last_scan.json`, and keeps the snapshot history in `.jupiter/snapshots/` scoped per project so dashboards and diffs stay aligned with the same root.
 
+`scan`, `analyze`, and `ci` now share a unified workflow builder that wires plugins, caching, performance settings, and snapshot persistence the same way no matter which command you trigger. This removes the subtle drifts that previously existed between the commands.
+
+Cached reports are normalized before being written to `.jupiter/cache/last_scan.json`, keeping `/reports/last` compatible with the server schema even if plugin metadata evolves between versions.
+
 ## Documentation
 
 Full documentation is available in the `docs/` directory:
@@ -89,6 +95,7 @@ Jupiter is primarily a local development tool. However, when exposing the API (e
 
 ## Release Notes
 
+- **1.0.4** – Hardened `/reports/last` (cached data now matches the API schema) and added a local notification fallback when the webhook URL is missing.
 - **1.0.1** – Scan modal restyle (with persisted options) and automatic population of the Quality view right after each scan, even in Watch mode.
 - **1.0.0** – First stable release. Includes standalone executable, full CI/CD integration, AI plugin support, and performance optimizations for large repositories.
 - **0.1.5** – Ensures Web UI modals remain hidden (global `.hidden` helper) and fixes duplicated `startScan` logic that blocked the dashboard script.
@@ -118,6 +125,8 @@ python -m jupiter.cli.main scan
 ```bash
 python -m jupiter.cli.main gui
 ```
+
+_Note: the `scan` et `analyze` commands partagent désormais le même chemin d'initialisation (plugins + scanner) pour garantir un comportement cohérent._
 
 **Start the API Server:**
 ```bash

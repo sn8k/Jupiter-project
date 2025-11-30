@@ -141,41 +141,7 @@ class LocalConnector(BaseConnector):
 
     def _merge_dynamic_data(self, dynamic_data: Dict[str, Any]):
         cache_manager = CacheManager(self.root_path)
-        last_scan = cache_manager.load_last_scan()
-        if last_scan:
-            if "dynamic" not in last_scan or last_scan["dynamic"] is None:
-                last_scan["dynamic"] = {"calls": {}, "times": {}, "call_graph": {}}
-            
-            # Ensure structure is correct
-            if "calls" not in last_scan["dynamic"]:
-                old_calls = last_scan["dynamic"] if isinstance(last_scan["dynamic"], dict) else {}
-                last_scan["dynamic"] = {"calls": old_calls, "times": {}, "call_graph": {}}
-
-            # Merge calls
-            current_calls = last_scan["dynamic"].get("calls", {})
-            new_calls = dynamic_data.get("calls", {})
-            for func, count in new_calls.items():
-                current_calls[func] = current_calls.get(func, 0) + count
-            last_scan["dynamic"]["calls"] = current_calls
-
-            # Merge times
-            current_times = last_scan["dynamic"].get("times", {})
-            new_times = dynamic_data.get("times", {})
-            for func, time_val in new_times.items():
-                current_times[func] = current_times.get(func, 0.0) + time_val
-            last_scan["dynamic"]["times"] = current_times
-
-            # Merge call graph
-            current_graph = last_scan["dynamic"].get("call_graph", {})
-            new_graph = dynamic_data.get("call_graph", {})
-            for caller, callees in new_graph.items():
-                if caller not in current_graph:
-                    current_graph[caller] = {}
-                for callee, count in callees.items():
-                    current_graph[caller][callee] = current_graph[caller].get(callee, 0) + count
-            last_scan["dynamic"]["call_graph"] = current_graph
-
-            cache_manager.save_last_scan(last_scan)
+        cache_manager.merge_dynamic_data(dynamic_data)
 
     def get_api_base_url(self) -> Optional[str]:
         return None

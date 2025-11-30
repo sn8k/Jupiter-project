@@ -23,8 +23,11 @@ def find_duplications(files: List[Path], chunk_size: int = 6) -> List[Dict[str, 
                 
             # Filter empty lines and comments
             code_lines = []
+            is_python = str(file_path).endswith(".py")
+            comment_prefix = "#" if is_python else "//"
+            
             for i, line in enumerate(lines):
-                if line and not line.startswith("#"):
+                if line and not line.startswith(comment_prefix):
                     code_lines.append((line, i + 1))
             
             if len(code_lines) < chunk_size:

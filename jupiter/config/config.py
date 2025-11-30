@@ -102,6 +102,31 @@ class PerformanceConfig:
 
 
 @dataclass
+class ProjectDefinition:
+    """Definition of a registered project."""
+    id: str
+    name: str
+    path: str
+    config_file: str = "jupiter.yaml"
+
+
+@dataclass
+class GlobalConfig:
+    """Global application configuration."""
+    projects: list[ProjectDefinition] = field(default_factory=list)
+    default_project_id: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> GlobalConfig:
+        projects_data = data.get("projects", [])
+        projects = [ProjectDefinition(**p) for p in projects_data]
+        return cls(
+            projects=projects,
+            default_project_id=data.get("default_project_id")
+        )
+
+
+@dataclass
 class ProjectBackendConfig:
     """Configuration for a project backend."""
     name: str
@@ -290,6 +315,46 @@ def _update_yaml_section(file_path: Path, updates: dict[str, Any]) -> None:
         raise
 
 
+def _serialize_performance(performance: PerformanceConfig) -> dict[str, Any]:
+    """Convert performance config to a serializable dict."""
+    return {
+        "parallel_scan": performance.parallel_scan,
+        "max_workers": performance.max_workers,
+        "scan_timeout": performance.scan_timeout,
+        "graph_simplification": performance.graph_simplification,
+        "max_graph_nodes": performance.max_graph_nodes,
+        "large_file_threshold": performance.large_file_threshold,
+        "excluded_dirs": performance.excluded_dirs,
+    }
+
+
+def _serialize_backends(backends: list[ProjectBackendConfig]) -> list[dict[str, Any]]:
+    """Convert backend configs to a serializable list."""
+    return [
+        {
+            "name": backend.name,
+            "type": backend.type,
+            "path": backend.path,
+            "api_url": backend.api_url,
+        }
+        for backend in backends
+    ]
+
+
+def _serialize_project_api(project_api: ProjectApiConfig | None) -> dict[str, Any] | None:
+    """Convert optional project API config to a dict if present."""
+    if not project_api:
+        return None
+    return {
+        "type": project_api.type,
+        "base_url": project_api.base_url,
+        "openapi_url": project_api.openapi_url,
+        "connector": project_api.connector,
+        "app_var": project_api.app_var,
+        "path": project_api.path,
+    }
+
+
 def save_global_settings(config: JupiterConfig, install_path: Path) -> None:
     """Save only global settings (Server, GUI, Meeting, UI, Plugins) to the install path."""
     updates = {
@@ -306,35 +371,18 @@ def save_global_settings(config: JupiterConfig, install_path: Path) -> None:
 def save_project_settings(config: JupiterConfig, project_path: Path) -> None:
     """Save only project settings (Performance, CI, Backends, API) to the project path."""
     updates = {
-        "performance": {
-            "parallel_scan": config.performance.parallel_scan,
-            "max_workers": config.performance.max_workers,
-            "scan_timeout": config.performance.scan_timeout,
-            "graph_simplification": config.performance.graph_simplification,
-            "max_graph_nodes": config.performance.max_graph_nodes,
-            "large_file_threshold": config.performance.large_file_threshold,
-            "excluded_dirs": config.performance.excluded_dirs,
-        },
+        "performance": _serialize_performance(config.performance),
         "ci": {"fail_on": config.ci.fail_on},
-        "backends": [
-            {"name": b.name, "type": b.type, "path": b.path, "api_url": b.api_url}
-            for b in config.backends
-        ],
+        "backends": _serialize_backends(config.backends),
         "security": { # Security is usually project specific (allowed commands)
              "allow_run": config.security.allow_run,
              "allowed_commands": config.security.allowed_commands
         }
     }
     
-    if config.project_api:
-        updates["api"] = {
-            "type": config.project_api.type,
-            "base_url": config.project_api.base_url,
-            "openapi_url": config.project_api.openapi_url,
-            "connector": config.project_api.connector,
-            "app_var": config.project_api.app_var,
-            "path": config.project_api.path,
-        }
+    project_api_serialized = _serialize_project_api(config.project_api)
+    if project_api_serialized:
+        updates["api"] = project_api_serialized
 
     _update_yaml_section(project_path / CONFIG_FILE_NAME, updates)
 
@@ -367,35 +415,13 @@ def save_config(config: JupiterConfig, root_path: Path) -> None:
             "enabled": config.plugins.enabled,
             "disabled": config.plugins.disabled,
         },
-        "performance": {
-            "parallel_scan": config.performance.parallel_scan,
-            "max_workers": config.performance.max_workers,
-            "scan_timeout": config.performance.scan_timeout,
-            "graph_simplification": config.performance.graph_simplification,
-            "max_graph_nodes": config.performance.max_graph_nodes,
-            "large_file_threshold": config.performance.large_file_threshold,
-            "excluded_dirs": config.performance.excluded_dirs,
-        },
-        "backends": [
-            {
-                "name": b.name,
-                "type": b.type,
-                "path": b.path,
-                "api_url": b.api_url,
-            }
-            for b in config.backends
-        ],
+        "performance": _serialize_performance(config.performance),
+        "backends": _serialize_backends(config.backends),
     }
 
-    if config.project_api:
-        data["api"] = {
-            "type": config.project_api.type,
-            "base_url": config.project_api.base_url,
-            "openapi_url": config.project_api.openapi_url,
-            "connector": config.project_api.connector,
-            "app_var": config.project_api.app_var,
-            "path": config.project_api.path,
-        }
+    project_api_serialized = _serialize_project_api(config.project_api)
+    if project_api_serialized:
+        data["api"] = project_api_serialized
     
     try:
         with config_file.open("w", encoding="utf-8") as f:
@@ -404,3 +430,50 @@ def save_config(config: JupiterConfig, root_path: Path) -> None:
     except Exception as e:
         logger.error("Failed to save config file: %s", e)
         raise
+
+
+def get_global_config_path() -> Path:
+    """Get the path to the global configuration file."""
+    return Path.home() / ".jupiter" / "global.yaml"
+
+
+def load_global_config() -> GlobalConfig:
+    """Load the global configuration."""
+    path = get_global_config_path()
+    if not path.exists():
+        return GlobalConfig()
+    
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+            return GlobalConfig.from_dict(data)
+    except Exception as e:
+        logger.error("Failed to load global config: %s", e)
+        return GlobalConfig()
+
+
+def save_global_config(config: GlobalConfig) -> None:
+    """Save the global configuration."""
+    path = get_global_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    
+    data = {
+        "projects": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "path": p.path,
+                "config_file": p.config_file
+            }
+            for p in config.projects
+        ],
+        "default_project_id": config.default_project_id
+    }
+    
+    try:
+        with path.open("w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False)
+    except Exception as e:
+        logger.error("Failed to save global config: %s", e)
+        raise
+

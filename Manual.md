@@ -34,6 +34,12 @@ Cela va :
 
 Si aucun projet n'est configuré, un assistant vous proposera de créer une configuration par défaut.
 
+## Gestion des Projets (Nouveau v1.1.0)
+Jupiter supporte désormais la gestion de plusieurs projets.
+- Au premier lancement, si aucun projet n'est configuré, l'interface web s'ouvre et un assistant interactif vous guide pour ajouter votre premier projet.
+- Chaque projet possède sa propre configuration (`jupiter.yaml`) et son propre cache.
+- La configuration globale (liste des projets) est stockée dans `~/.jupiter/global.yaml`.
+
 ## Commandes avancées (CLI)
 Les commandes suivantes sont disponibles pour un usage avancé ou scripté :
 
@@ -41,10 +47,13 @@ Les commandes suivantes sont disponibles pour un usage avancé ou scripté :
 - `python -m jupiter.cli.main analyze <racine> [--top N] [--json] [--ignore <pattern>] [--show-hidden] [--incremental]` : calcule un résumé agrégé.
 - `python -m jupiter.cli.main server <racine> --host 0.0.0.0 --port 8000` : lance le serveur API.
 - `python -m jupiter.cli.main gui <racine> --host 0.0.0.0 --port 8050` : démarre le serveur statique de la GUI.
+- `python -m jupiter.cli.main ci [--json] [--fail-on-complexity 20] [--fail-on-duplication 5] [--fail-on-unused 50]` : exécute la même pipeline de scan/analyse en appliquant les seuils CI.
 
 > La racine servie et les données du dernier rapport (`.jupiter/cache/last_scan.json`) sont désormais restaurées automatiquement lors d'un redémarrage, en se basant sur la valeur enregistrée dans `~/.jupiter/state.json`.
+> Le cache normalise aussi les métadonnées (plugins, fichiers) avant écriture, ce qui évite les erreurs `/reports/last` lorsque le schéma évolue entre deux versions.
 - `python -m jupiter.cli.main update <source> [--force]` : met à jour Jupiter depuis un fichier ZIP ou un dépôt Git.
 - `python -m jupiter.cli.main --version` : affiche la version actuelle.
+- (Interne) `scan`, `analyze` **et** `ci` partagent désormais la même initialisation (plugins, cache, perf, snapshots). Toutes les commandes produisent donc exactement le même rapport et la même instrumentation, qu'on demande un JSON, un résumé humain ou une exécution CI.
 
 ### Historique des scans et snapshots
 
@@ -88,6 +97,11 @@ python -m jupiter.cli.main server
 ```
 
 > **Note** : Ne pas ajouter d'argument après `server` sauf si vous souhaitez spécifier un dossier racine différent du dossier courant. La commande `server start` est incorrecte si le dossier `start` n'existe pas.
+
+### Mise à jour de la racine via l'API `/config/root`
+- Le serveur recharge désormais automatiquement les connecteurs, le PluginManager et l'adaptateur Meeting dès que la racine change.
+- Si la nouvelle configuration ne possède pas de `deviceKey`, Jupiter réutilise celui de l'ancienne racine pour éviter les coupures de licence.
+- L'historique (`HistoryManager`) est synchronisé sur le nouveau dossier afin que les snapshots correspondent immédiatement à la nouvelle racine.
 
 - Ajoutez `--snapshot-label "Nom du jalon"` à `scan` pour annoter un point clé, ou `--no-snapshot` pour désactiver ponctuellement l'enregistrement.
 - Inspectez l'historique directement depuis la CLI :
@@ -172,6 +186,7 @@ Si un seuil est dépassé, la commande retourne un code d'erreur `1`, ce qui blo
 ## Plugins
 Jupiter est extensible via des plugins.
 - **Notifications Webhook** : Envoie un payload JSON à une URL configurée à la fin de chaque scan. Configurable dans l'onglet "Plugins".
+  - Si aucune URL n'est fournie, le plugin publie une notification locale (WebSocket + panneau "Live Events") au lieu de tenter une requête HTTP invalide.
 - **AI Helper** : Analyse le code pour suggérer des refactorings, des améliorations de documentation ou détecter des problèmes de sécurité. Les suggestions apparaissent dans l'onglet "Suggestions IA" du rapport.
 
 ## Configuration Multi-Projets

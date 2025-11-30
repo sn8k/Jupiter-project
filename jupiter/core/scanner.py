@@ -238,6 +238,9 @@ class ProjectScanner:
                 stripped = line.strip()
                 if not stripped or stripped.startswith("#"):
                     continue
+                # Normalize directory patterns (e.g. "dir/" -> "dir")
+                if stripped.endswith("/"):
+                    stripped = stripped.rstrip("/")
                 all_patterns.append(stripped)
 
         if patterns is not None:

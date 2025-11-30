@@ -62,9 +62,16 @@ def test_compare_snapshots_returns_structured_diff(tmp_path):
     ])
 
     meta_a = manager.create_snapshot(report_a)
+    import time
+    time.sleep(0.01)
     meta_b = manager.create_snapshot(report_b)
 
     diff = manager.compare_snapshots(meta_a.id, meta_b.id)
+
+    if len(diff.files_added) != 1:
+        print("Files added:", diff.files_added)
+        print("Report A files:", [f["path"] for f in report_a["files"]])
+        print("Report B files:", [f["path"] for f in report_b["files"]])
 
     assert diff.metrics_delta["file_count"] == 0
     assert len(diff.files_added) == 1
@@ -75,3 +82,16 @@ def test_compare_snapshots_returns_structured_diff(tmp_path):
     assert diff.files_modified[0].path == "shared.py"
     assert any(change["function"] == "extra" for change in diff.functions_added)
     assert any(change["function"] == "foo" for change in diff.functions_removed)
+
+
+def test_snapshot_schema_version(tmp_path):
+    manager = HistoryManager(tmp_path)
+    report = _report(tmp_path, [])
+    
+    meta = manager.create_snapshot(report)
+    snapshot = manager.get_snapshot(meta.id)
+    
+    assert snapshot is not None
+    assert "report" in snapshot
+    assert "report_schema_version" in snapshot["report"]
+    assert snapshot["report"]["report_schema_version"] == "1.0"

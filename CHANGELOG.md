@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.4 – Cache Schema & Notification Fallbacks
+- Normalized cached scan payloads (plugins serialized as lists) and forced the API to resave the enriched report so `/reports/last` never fails Pydantic validation after upgrading plugins.
+- Added a `PLUGIN_NOTIFICATION` event and taught the webhook plugin to emit local Live Events (via WebSocket) whenever no webhook URL is configured instead of logging errors.
+
+## 1.0.3 – CLI Workflow & System Router Service
+- Unified `scan`, `analyze`, and `ci` behind a shared CLI workflow (plugins, caching, snapshots) and exposed new helpers for CI gate evaluation.
+- Introduced `SystemState` helper to rebuild plugin/project managers, Meeting adapter, and history whenever the API root or config changes.
+- Root changes now preserve the last Meeting `deviceKey`, refresh plugin discovery once, and broadcast consistent state updates across WebSocket clients.
+- Documentation refreshed (README, Manual) to describe the CI command and the automatic root refresh behavior.
+- Fixed the Suggestions IA "Actualiser" button so it now calls the `/analyze` API and refreshes refactoring hints in-place with proper status feedback.
+
+## 1.0.2 – CLI & Config Deduplication
+- Refactored CLI scan/analyze setup to share a single options builder and scanner bootstrap, reducing duplicated logic.
+- Centralized dynamic analysis cache merging in `CacheManager` and reused it across CLI and local connector flows.
+- Consolidated configuration serialization helpers for performance/backends/API sections to avoid drift between project/global saves.
+
 ## 1.0.1 – UI Polish & Quality Data
 - **Scan Modal**: Rebuilt layout/padding and persisted the previous options automatically.
 - **Quality View**: Scan responses now embed complexity/duplication metrics so the Qualité page shows data immediately (even while watching a local backend).

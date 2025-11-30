@@ -300,3 +300,8 @@ class SimulateResponse(BaseModel):
     target: str
     impacts: List[ImpactModel]
     risk_score: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+

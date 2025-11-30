@@ -16,5 +16,7 @@
 - Updated `startScan` and `runCommand` to pass `backend_name` to the API.
 - Added `backends` and `currentBackend` to application state.
 - Added `loadCachedReport` plus `/reports/last` integration so the UI restores the last scan on startup and when the served root changes before issuing a new scan.
+- Wired the Suggestions IA "Actualiser" button to call `/analyze`, refresh `state.report.refactoring`, and provide loading feedback.
+- WebSocket handler now parses JSON events and renders `PLUGIN_NOTIFICATION` payloads inside the Live Events/log panels so local webhook fallbacks are visible to the user.
 
 

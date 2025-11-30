@@ -20,7 +20,7 @@
         </div>
         <div class="header-actions">
           <div class="context">
-            <p class="label" data-i18n="served_root">Racine servie</p>
+            <p class="label" data-i18n="current_project">Projet actuel</p>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <p class="value" id="root-path" data-i18n="loading" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;">Chargement…</p>
               <button class="ghost small" data-action="browse-root" title="Parcourir" style="padding: 4px 8px;">📂</button>
@@ -47,6 +47,7 @@
           <button class="nav-btn" data-view="graph" data-i18n="graph_view">Live Map</button>
           <button class="nav-btn" data-view="api" data-i18n="api_view">API</button>
           <button class="nav-btn" data-view="history" data-i18n="history_view">Historique</button>
+          <button class="nav-btn" data-view="projects" data-i18n="projects_view">Projets</button>
           <button class="nav-btn" data-view="settings" data-i18n="settings_view">Paramètres</button>
           <button class="nav-btn" data-view="plugins" data-i18n="plugins_view">Plugins</button>
           <button class="nav-btn" data-view="suggestions" data-i18n="suggestions_view">Suggestions IA</button>
@@ -150,6 +151,15 @@
           </section>
 
           <section class="view hidden" data-view="quality" aria-label="Vue qualité">
+            <header class="view-header">
+              <div>
+                <h2 data-i18n="quality_view">Qualité</h2>
+                <p class="muted" data-i18n="quality_subtitle">Métriques de qualité du code.</p>
+              </div>
+              <div class="actions">
+                 <button class="secondary" data-action="export-quality" data-i18n="export_report">Exporter Rapport</button>
+              </div>
+            </header>
             <div class="grid two-cols">
               <section class="panel">
                 <header>
@@ -642,13 +652,41 @@ api:
                 <p class="muted" data-i18n="suggestions_subtitle">Propositions d'amélioration et de refactoring.</p>
               </div>
               <div class="actions">
-                 <button class="secondary" data-action="refresh-suggestions">Actualiser</button>
+                 <button class="secondary" data-action="refresh-suggestions" data-i18n="refresh">Actualiser</button>
+                 <button class="secondary" data-action="export-suggestions" data-i18n="export_report">Exporter Rapport</button>
               </div>
             </header>
             <div class="panel">
                <div id="suggestions-list" class="list-group">
                   <p class="muted">Aucune suggestion pour le moment. Lancez une analyse.</p>
                </div>
+            </div>
+          </section>
+
+          <section class="view hidden" data-view="projects" aria-label="Vue Projets">
+            <header class="view-header">
+              <div>
+                <h2 data-i18n="projects_title">Gestion des Projets</h2>
+                <p class="muted" data-i18n="projects_subtitle">Gérez vos projets Jupiter et basculez de l'un à l'autre.</p>
+              </div>
+              <div class="actions">
+                 <button class="primary" data-action="open-project-wizard" data-i18n="add_project">Ajouter un projet</button>
+              </div>
+            </header>
+            <div class="panel">
+               <table class="data-table" id="projects-table" style="width: 100%;">
+                  <thead>
+                    <tr>
+                      <th data-i18n="project_name">Nom</th>
+                      <th data-i18n="project_path">Chemin</th>
+                      <th data-i18n="project_status">Statut</th>
+                      <th data-i18n="actions">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <!-- Projects will be loaded here -->
+                  </tbody>
+               </table>
             </div>
           </section>
         </main>
@@ -785,6 +823,36 @@ api:
             <div id="login-error" class="error hidden" style="margin-top: 1rem; color: var(--text-error);"></div>
             <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
               <button type="submit" class="primary" data-i18n="login_button" style="width: 100%;">Connexion</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Project Wizard Modal -->
+    <dialog id="project-wizard-modal" class="modal" style="min-width: 400px;">
+      <div class="modal-content">
+        <header>
+          <h2>Bienvenue sur Jupiter</h2>
+        </header>
+        <div class="modal-body">
+          <p style="margin-bottom: 1rem;">Aucun projet n'est configuré. Commençons par en créer un.</p>
+          <form id="project-wizard-form" onsubmit="event.preventDefault(); handleCreateProject();">
+            <div class="form-group">
+              <label for="project-path">Chemin du projet (absolu)</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <input type="text" id="project-path" placeholder="C:\Dev\MonProjet" required style="flex: 1;" />
+                <button type="button" class="ghost" onclick="openBrowserForWizard()" title="Parcourir">📂</button>
+              </div>
+              <p class="small muted">Le dossier doit exister.</p>
+            </div>
+            <div class="form-group">
+              <label for="project-name">Nom du projet</label>
+              <input type="text" id="project-name" placeholder="Mon Projet" required />
+            </div>
+            <div id="project-wizard-error" class="error hidden" style="margin-top: 1rem; color: var(--text-error);"></div>
+            <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+              <button type="submit" class="primary" style="width: 100%;">Créer le projet</button>
             </div>
           </form>
         </div>

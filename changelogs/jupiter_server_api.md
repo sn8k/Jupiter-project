@@ -24,6 +24,7 @@
 **Session persistence & cached data**
 
 - Added `GET /reports/last` so the Web UI can restore the most recent scan from `.jupiter/cache/last_scan.json` without running a new scan.
+- `POST /scan` now re-saves the enriched report (with plugin metadata) through `CacheManager` so cached payloads remain schema-compatible for `/reports/last`.
 - `POST /config/root` now reloads the new root's configuration/connectors/plugins and writes the fresh path to `~/.jupiter/state.json` so future launches start back where the user left off.
 
 **Previous entries**

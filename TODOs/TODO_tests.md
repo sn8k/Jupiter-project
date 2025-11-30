@@ -47,32 +47,32 @@ L’objectif de ces tests est de vérifier la capacité de Jupiter à se **teste
 
 #### **2.1. Tests des endpoints API**
 
-* [ ] **Test du endpoint `/scan`** :
+* [x] **Test du endpoint `/scan`** :
 
   * Vérifier que la commande `POST /scan` fonctionne correctement avec des options telles que `--incremental`, `--ignore`, et `--no-snapshot`.
-* [ ] **Test de l'endpoint `/analyze`** :
+* [x] **Test de l'endpoint `/analyze`** :
 
   * Vérifier que l'analyse fonctionne correctement avec des projets de taille moyenne et grande, et que le format du rapport est cohérent.
-* [ ] **Test de la simulation via API (`/simulate/remove`)** :
+* [x] **Test de la simulation via API (`/simulate/remove`)** :
 
   * Vérifier que l’endpoint `/simulate/remove` renvoie des résultats précis pour les fichiers et fonctions spécifiés.
-* [ ] **Test de la gestion des snapshots via API** :
+* [x] **Test de la gestion des snapshots via API** :
 
   * Vérifier les endpoints `/snapshots` et `/snapshots/diff` pour la gestion des snapshots historiques et la comparaison des versions.
 
 #### **2.2. Tests de la WebUI**
 
-* [ ] **Test de l'intégration WebUI avec l'API** :
+* [x] **Test de l'intégration WebUI avec l'API** :
 
   * Vérifier que la WebUI est bien reliée à l'API pour les commandes de scan, analyse, et simulation.
   * Vérifier l’affichage des résultats dans le tableau de bord (status badges, derniers scans, etc.).
-* [ ] **Test des vues de gestion de projet (Backend)** :
+* [x] **Test des vues de gestion de projet (Backend)** :
 
   * Vérifier la possibilité de sélectionner différents backends (local et distant) depuis l’UI et tester les interactions avec les API distantes.
-* [ ] **Test des vues Snapshot & Diff** :
+* [x] **Test des vues Snapshot & Diff** :
 
   * Vérifier l'affichage des snapshots dans l'UI et tester la fonctionnalité de "diff" entre deux snapshots.
-* [ ] **Test du module Live Map** :
+* [x] **Test du module Live Map** :
 
   * Vérifier que le graphe interactif (Live Map) fonctionne correctement et s'adapte bien aux projets de différentes tailles.
   * Vérifier que les nœuds sont bien colorés en fonction des métriques et du temps d'exécution.

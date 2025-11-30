@@ -43,8 +43,22 @@ class JupiterWebUI:
         root_str = str(self.settings.root).strip('"\'')
         config_path = self.settings.root / "jupiter.yaml"
         
+        project_name = self.settings.root.name
+        if config_path.exists():
+            try:
+                # Simple parse to avoid full dependency if possible, or just use load_config logic
+                # But here we want to be lightweight. Let's try to read it.
+                import yaml
+                with open(config_path, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                    if data and "project_name" in data:
+                        project_name = data["project_name"]
+            except Exception:
+                pass
+
         context = {
             "root": root_str,
+            "project_name": project_name,
             "api_base_url": api_base_url,
             "meeting": {"deviceKey": self.settings.device_key},
             "has_config_file": config_path.exists()

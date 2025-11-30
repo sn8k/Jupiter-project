@@ -11,7 +11,7 @@ import logging
 
 from .scanner import FileMetadata
 from .cache import CacheManager
-from .quality.complexity import estimate_complexity
+from .quality.complexity import estimate_complexity, estimate_js_complexity
 from .quality.duplication import find_duplications
 
 logger = logging.getLogger(__name__)
@@ -241,51 +241,61 @@ class ProjectAnalyzer:
         quality_metrics = {}
         refactoring_recommendations = []
         
+        # Complexity
+        complexity_scores = []
+        new_analysis_cache = {}
+        
+        # Combine files for processing
+        files_to_analyze = []
         if python_files:
-            # Complexity
-            complexity_scores = []
-            new_analysis_cache = {}
-
-            for m in python_files:
-                file_key = str(m.path)
-                # Check cache
-                cached_data = self.analysis_cache.get(file_key)
-                
-                if (
-                    not self.no_cache 
-                    and cached_data 
-                    and cached_data.get("mtime") == m.modified_timestamp
-                    and "complexity" in cached_data
-                ):
-                    score = cached_data["complexity"]
+            files_to_analyze.extend([(f, "py") for f in python_files])
+        if js_ts_files:
+            files_to_analyze.extend([(f, "js") for f in js_ts_files])
+            
+        for m, lang in files_to_analyze:
+            file_key = str(m.path)
+            # Check cache
+            cached_data = self.analysis_cache.get(file_key)
+            
+            if (
+                not self.no_cache 
+                and cached_data 
+                and cached_data.get("mtime") == m.modified_timestamp
+                and "complexity" in cached_data
+            ):
+                score = cached_data["complexity"]
+            else:
+                if m.size_bytes > 10 * 1024 * 1024: # 10 MB limit
+                    score = 0
                 else:
-                    if m.size_bytes > 10 * 1024 * 1024: # 10 MB limit
-                        score = 0
-                    else:
+                    if lang == "py":
                         score = estimate_complexity(m.path)
-                
-                # Update new cache
-                new_analysis_cache[file_key] = {
-                    "mtime": m.modified_timestamp,
-                    "complexity": score
-                }
+                    else:
+                        score = estimate_js_complexity(m.path)
+            
+            # Update new cache
+            new_analysis_cache[file_key] = {
+                "mtime": m.modified_timestamp,
+                "complexity": score
+            }
 
-                complexity_scores.append({"path": str(m.path), "score": score})
-                
-                # Refactoring recommendation for complexity
-                if score > 15:
-                    severity = "high" if score > 30 else "medium"
-                    refactoring_recommendations.append({
-                        "path": str(m.path),
-                        "type": "complexity",
-                        "details": f"High cyclomatic complexity ({score}). Consider splitting functions.",
-                        "severity": severity
-                    })
+            complexity_scores.append({"path": str(m.path), "score": score})
             
-            # Save cache
-            if not self.no_cache:
-                self.cache_manager.save_analysis_cache(new_analysis_cache)
-            
+            # Refactoring recommendation for complexity
+            if score > 15:
+                severity = "high" if score > 30 else "medium"
+                refactoring_recommendations.append({
+                    "path": str(m.path),
+                    "type": "complexity",
+                    "details": f"High cyclomatic complexity ({score}). Consider splitting functions.",
+                    "severity": severity
+                })
+        
+        # Save cache
+        if not self.no_cache:
+            self.cache_manager.save_analysis_cache(new_analysis_cache)
+        
+        if complexity_scores:
             complexity_scores.sort(key=lambda x: x["score"], reverse=True)
             quality_metrics["complexity_per_file"] = complexity_scores
             
@@ -295,9 +305,17 @@ class ProjectAnalyzer:
                 for item in complexity_scores[:top_n]
             ]
 
-            # Duplication
-            # Only check top 50 largest python files to save time for now, and skip large files
-            files_to_check = [m.path for m in python_files[:50] if m.size_bytes < 10 * 1024 * 1024]
+        # Duplication
+        # Check top 50 largest files (Python + JS/TS)
+        all_analyzable_files = []
+        if python_files: all_analyzable_files.extend(python_files)
+        if js_ts_files: all_analyzable_files.extend(js_ts_files)
+        
+        all_analyzable_files.sort(key=lambda m: m.size_bytes, reverse=True)
+        
+        files_to_check = [m.path for m in all_analyzable_files[:50] if m.size_bytes < 10 * 1024 * 1024]
+        
+        if files_to_check:
             duplications = find_duplications(files_to_check)
             quality_metrics["duplication_clusters"] = duplications
             

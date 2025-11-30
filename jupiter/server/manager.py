@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import Dict, Optional
 import logging
-from jupiter.config.config import JupiterConfig, ProjectBackendConfig
+import uuid
+from jupiter.config.config import JupiterConfig, ProjectBackendConfig, load_global_config, save_global_config, ProjectDefinition, load_config
 from jupiter.core.connectors.base import BaseConnector
 from jupiter.core.connectors.local import LocalConnector
 from jupiter.core.connectors.remote import RemoteConnector
@@ -10,16 +11,89 @@ logger = logging.getLogger(__name__)
 
 class ProjectManager:
     """
-    Manages project backends (local or remote).
+    Manages project backends (local or remote) and multiple projects.
     """
-    def __init__(self, config: JupiterConfig):
+    def __init__(self, config: Optional[JupiterConfig] = None):
+        self.global_config = load_global_config()
         self.config = config
         self.connectors: Dict[str, BaseConnector] = {}
-        self._initialize_connectors()
+        
+        if self.config:
+            self._initialize_connectors()
+        elif self.global_config.default_project_id:
+            self.set_active_project(self.global_config.default_project_id)
+
+    def create_project(self, path: str, name: str) -> ProjectDefinition:
+        """Register a new project."""
+        project_id = str(uuid.uuid4())
+        project_def = ProjectDefinition(
+            id=project_id,
+            name=name,
+            path=path
+        )
+        self.global_config.projects.append(project_def)
+        self.global_config.default_project_id = project_id
+        save_global_config(self.global_config)
+        
+        # Load it immediately
+        self.set_active_project(project_id)
+        return project_def
+
+    def set_active_project(self, project_id: str) -> bool:
+        """Switch to another project."""
+        project = next((p for p in self.global_config.projects if p.id == project_id), None)
+        if not project:
+            return False
+            
+        try:
+            # Load config from project path
+            project_path = Path(project.path)
+            new_config = load_config(project_path)
+            new_config.project_root = project_path # Ensure root is set
+            
+            self.refresh_for_root(new_config)
+            
+            # Update global default
+            self.global_config.default_project_id = project_id
+            save_global_config(self.global_config)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load project {project.name}: {e}")
+            return False
+
+    def get_projects(self) -> list[ProjectDefinition]:
+        return self.global_config.projects
+
+    def delete_project(self, project_id: str) -> bool:
+        """Remove a project from the registry."""
+        project = next((p for p in self.global_config.projects if p.id == project_id), None)
+        if not project:
+            return False
+            
+        self.global_config.projects.remove(project)
+        
+        # If we deleted the active project, unset default
+        if self.global_config.default_project_id == project_id:
+            self.global_config.default_project_id = None
+            # If there are other projects, pick the first one
+            if self.global_config.projects:
+                self.global_config.default_project_id = self.global_config.projects[0].id
+                # Try to activate it
+                self.set_active_project(self.global_config.default_project_id)
+            else:
+                # No projects left, we are in setup mode effectively
+                self.config = None
+                self.connectors.clear()
+        
+        save_global_config(self.global_config)
+        return True
 
     def _initialize_connectors(self) -> None:
         """Initialize connectors based on configuration."""
         self.connectors.clear()
+        if not self.config:
+            return
+
         if not self.config.backends:
             default_backend = ProjectBackendConfig(
                 name="local",
@@ -83,6 +157,8 @@ class ProjectManager:
 
     def list_backends(self) -> list[dict]:
         """List available backends."""
+        if not self.config:
+            return []
         return [
             {
                 "name": b.name,

@@ -1,5 +1,6 @@
 const state = {
   isScanning: false,
+  isRefreshingSuggestions: false,
   context: null,
   report: null,
   view: "dashboard",
@@ -297,6 +298,9 @@ function handleAction(action, data) {
       const onboardingModal = document.getElementById('onboarding-modal');
       if (onboardingModal) onboardingModal.remove();
       break;
+    case "open-project-wizard":
+      openProjectWizard();
+      break;
     case "toggle-plugin":
       togglePlugin(data.pluginName, data.pluginState === 'true');
       break;
@@ -307,8 +311,7 @@ function handleAction(action, data) {
       renderGraph();
       break;
     case "refresh-suggestions":
-      if (state.report) renderSuggestions();
-      else addLog("No report available to refresh suggestions from.");
+      refreshSuggestions();
       break;
     case "copy-snapshot-id":
       if (navigator.clipboard) {
@@ -331,6 +334,36 @@ function handleAction(action, data) {
       break;
     case "delete-user":
       deleteUser(data.name);
+      break;
+    case "export-quality":
+      if (state.report && state.report.quality) {
+        const exportPayload = {
+            context: {
+                project_root: state.report.root,
+                scan_timestamp: state.report.last_scan_timestamp,
+                type: "quality_report"
+            },
+            data: state.report.quality
+        };
+        exportData(exportPayload, "jupiter-quality-report.json");
+      } else {
+        alert(t("no_data_to_export") || "No data to export. Please run a scan first.");
+      }
+      break;
+    case "export-suggestions":
+      if (state.report && state.report.refactoring) {
+        const exportPayload = {
+            context: {
+                project_root: state.report.root,
+                scan_timestamp: state.report.last_scan_timestamp,
+                type: "suggestions_report"
+            },
+            data: state.report.refactoring
+        };
+        exportData(exportPayload, "jupiter-suggestions-report.json");
+      } else {
+        alert(t("no_data_to_export") || "No data to export. Please run a scan first.");
+      }
       break;
     default:
       console.warn(`Unknown action: ${action}`);
@@ -1115,6 +1148,129 @@ async function togglePlugin(name, enable) {
     }
 }
 
+// --- Projects Management ---
+
+async function loadProjects() {
+    if (!state.apiBaseUrl) state.apiBaseUrl = inferApiBaseUrl();
+    if (!state.apiBaseUrl) return;
+
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/system/projects`);
+        if (response.ok) {
+            const projects = await response.json();
+            renderProjects(projects);
+        } else {
+            console.error("Failed to load projects");
+            addLog("Erreur lors du chargement des projets", "ERROR");
+        }
+    } catch (e) {
+        console.error("Error loading projects", e);
+        addLog("Erreur réseau (projets)", "ERROR");
+    }
+}
+
+function renderProjects(projects) {
+    const tbody = document.querySelector("#projects-table tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    projects.forEach(p => {
+        const tr = document.createElement("tr");
+        
+        const nameTd = document.createElement("td");
+        nameTd.innerHTML = `<strong>${p.project_name}</strong>`;
+        tr.appendChild(nameTd);
+
+        const pathTd = document.createElement("td");
+        pathTd.textContent = p.project_path;
+        pathTd.classList.add("muted", "small", "mono");
+        tr.appendChild(pathTd);
+
+        const statusTd = document.createElement("td");
+        if (p.is_active) {
+            const badge = document.createElement("span");
+            badge.className = "badge active";
+            badge.textContent = t("active") || "Actif";
+            statusTd.appendChild(badge);
+        } else {
+            const badge = document.createElement("span");
+            badge.className = "badge";
+            badge.textContent = t("inactive") || "Inactif";
+            statusTd.appendChild(badge);
+        }
+        tr.appendChild(statusTd);
+
+        const actionsTd = document.createElement("td");
+        actionsTd.style.display = "flex";
+        actionsTd.style.gap = "0.5rem";
+
+        if (!p.is_active) {
+            const activateBtn = document.createElement("button");
+            activateBtn.className = "small primary";
+            activateBtn.textContent = t("activate") || "Activer";
+            activateBtn.onclick = () => activateProject(p.project_id);
+            actionsTd.appendChild(activateBtn);
+        }
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "small secondary";
+        deleteBtn.textContent = t("delete") || "Supprimer";
+        deleteBtn.onclick = () => deleteProject(p.project_id, p.project_name);
+        actionsTd.appendChild(deleteBtn);
+
+        tr.appendChild(actionsTd);
+        tbody.appendChild(tr);
+    });
+}
+
+async function activateProject(projectId) {
+    if (!state.apiBaseUrl) return;
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/system/projects/${projectId}/activate`, { method: "POST" });
+        if (response.ok) {
+            addLog(t("project_activated") || "Projet activé", "INFO");
+            window.location.reload(); 
+        } else {
+            const err = await response.json();
+            alert("Erreur: " + (err.detail || "Impossible d'activer le projet"));
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Erreur réseau");
+    }
+}
+
+async function deleteProject(projectId, projectName) {
+    const msg = (t("delete_confirm") || "Voulez-vous vraiment supprimer le projet \"{name}\" ?").replace("{name}", projectName);
+    if (!confirm(msg)) {
+        return;
+    }
+
+    if (!state.apiBaseUrl) return;
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/system/projects/${projectId}`, { method: "DELETE" });
+        if (response.ok) {
+            addLog(t("project_deleted") || "Projet supprimé", "INFO");
+            loadProjects(); 
+            // If we deleted the active project, the backend might have switched.
+            // We should check if we need to reload.
+            // But for now, loadProjects updates the list.
+            // If the active project was deleted, the backend sets another one as active.
+            // We might want to reload to reflect that in the UI context.
+            // Let's check if the deleted project was the active one.
+            // Actually, simpler to just reload if we deleted the active one, but we don't know easily here.
+            // Let's just reload context.
+            loadContext();
+        } else {
+            const err = await response.json();
+            alert("Erreur: " + (err.detail || "Impossible de supprimer le projet"));
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Erreur réseau");
+    }
+}
+
 function renderDynamicGraph(dynamicData) {
     const canvas = document.getElementById("dynamic-graph-canvas");
     if (!canvas || !dynamicData || !dynamicData.call_graph) return;
@@ -1324,7 +1480,12 @@ async function loadContext() {
     state.context = payload;
     state.apiBaseUrl = payload.api_base_url || inferApiBaseUrl();
     const rootLabel = document.getElementById("root-path");
-    if (rootLabel) rootLabel.textContent = payload.root || "(undefined)";
+    if (rootLabel) {
+        const name = payload.project_name || "Projet";
+        const root = payload.root || "(undefined)";
+        rootLabel.textContent = `${name} (${root})`;
+        rootLabel.title = root;
+    }
     const apiLabel = document.getElementById("api-base-url");
     if (apiLabel) apiLabel.textContent = state.apiBaseUrl;
     addLog(`${t("context_loaded")}: ${payload.root}`);
@@ -1593,6 +1754,69 @@ function setView(view) {
     renderGraph();
   } else if (view === "suggestions") {
     renderSuggestions();
+  } else if (view === "projects") {
+    loadProjects();
+  }
+}
+
+async function refreshSuggestions() {
+  if (!state.report) {
+    const message = t("suggestions_no_report") || "No report available. Please run a scan first.";
+    addLog(message, "WARN");
+    alert(message);
+    return;
+  }
+
+  if (state.isRefreshingSuggestions) {
+    return;
+  }
+
+  const apiBase = state.apiBaseUrl || inferApiBaseUrl();
+  if (!apiBase) {
+    const err = t("error_fetch") || "Missing API base URL.";
+    addLog(err, "ERROR");
+    alert(err);
+    return;
+  }
+
+  state.apiBaseUrl = apiBase;
+  state.isRefreshingSuggestions = true;
+  const button = document.querySelector('[data-action="refresh-suggestions"]');
+  const originalLabel = button ? button.textContent : null;
+  if (button) {
+    button.disabled = true;
+    button.dataset.originalLabel = originalLabel || "";
+    button.textContent = t("suggestions_refreshing") || "Refreshing…";
+  }
+
+  try {
+    const params = new URLSearchParams({ top: "5" });
+    if (state.currentBackend) {
+      params.set("backend_name", state.currentBackend);
+    }
+    const response = await apiFetch(`${apiBase}/analyze?${params.toString()}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status} – ${errorText}`);
+    }
+
+    const summary = await response.json();
+    state.report = state.report || {};
+    state.report.refactoring = summary.refactoring || [];
+    renderSuggestions();
+    addLog(t("suggestions_refresh_success") || "AI suggestions updated.");
+  } catch (error) {
+    console.error("Failed to refresh suggestions", error);
+    const message = t("suggestions_refresh_error") || "Unable to refresh suggestions";
+    addLog(`${message}: ${error.message}`, "ERROR");
+    alert(`${message}: ${error.message}`);
+  } finally {
+    state.isRefreshingSuggestions = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = button.dataset.originalLabel || t("history_refresh") || "Refresh";
+      delete button.dataset.originalLabel;
+    }
   }
 }
 
@@ -1716,12 +1940,36 @@ function connectWebSocket() {
     };
     
     ws.onmessage = (event) => {
-      pushLiveEvent("Server", event.data);
-      addLog(`WS: ${event.data}`);
+      let parsed = null;
+      if (typeof event.data === "string") {
+        try {
+          parsed = JSON.parse(event.data);
+        } catch (err) {
+          parsed = null;
+        }
+      }
 
-      if (typeof event.data === "string" && event.data.startsWith("Snapshot stored")) {
-          loadSnapshots(true);
-          if (state.view === "graph") renderGraph();
+      if (parsed && parsed.type === "PLUGIN_NOTIFICATION") {
+        const payload = parsed.payload || {};
+        const source = payload.source || "Plugin";
+        const detail = payload.message || JSON.stringify(payload.details || {});
+        pushLiveEvent(source, detail);
+        addLog(`${source}: ${detail}`);
+        return;
+      }
+
+      if (parsed) {
+        const detail = parsed.payload && Object.keys(parsed.payload).length ? JSON.stringify(parsed.payload) : "";
+        pushLiveEvent(parsed.type || "Server", detail || "(empty payload)");
+        addLog(`WS: ${parsed.type}`);
+      } else {
+        pushLiveEvent("Server", event.data);
+        addLog(`WS: ${event.data}`);
+      }
+
+      if (!parsed && typeof event.data === "string" && event.data.startsWith("Snapshot stored")) {
+        loadSnapshots(true);
+        if (state.view === "graph") renderGraph();
       }
       
       const watchList = document.getElementById("watch-events");
@@ -1791,6 +2039,10 @@ function openBrowser() {
       modal.showModal();
       // Strip quotes from root if present
       let rootToFetch = state.context?.root || ".";
+      if (state.browserMode === 'wizard') {
+          // In wizard mode, start from current directory if possible, or root
+          rootToFetch = ".";
+      }
       rootToFetch = rootToFetch.replace(/^"|"$/g, '');
       
       console.log("Fetching FS for:", rootToFetch);
@@ -1809,15 +2061,19 @@ function closeBrowser() {
 }
 
 async function fetchFs(path) {
-  if (!state.apiBaseUrl) {
-      console.error("No API Base URL defined");
-      return;
-  }
+  const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
   try {
     // Ensure path is clean before sending
     const cleanPath = path.replace(/^"|"$/g, '');
-    console.log(`Fetching ${state.apiBaseUrl}/fs/list?path=${encodeURIComponent(cleanPath)}`);
-    const response = await apiFetch(`${state.apiBaseUrl}/fs/list?path=${encodeURIComponent(cleanPath)}`);
+    console.log(`Fetching ${apiBaseUrl}/fs/list?path=${encodeURIComponent(cleanPath)}`);
+    
+    // Use fetch directly if no token (setup mode) or apiFetch if logged in
+    const headers = state.token ? { 'Authorization': `Bearer ${state.token}` } : {};
+    
+    const response = await fetch(`${apiBaseUrl}/fs/list?path=${encodeURIComponent(cleanPath)}`, {
+        headers: headers
+    });
+    
     if (response.ok) {
       const data = await response.json();
       currentBrowserPath = data.current;
@@ -1852,9 +2108,22 @@ function renderBrowser(data) {
 
 function confirmBrowserSelection() {
   if (currentBrowserPath) {
-    changeRoot(currentBrowserPath);
-    closeBrowser();
+    if (state.browserMode === 'wizard') {
+        const input = document.getElementById("project-path");
+        if (input) input.value = currentBrowserPath;
+        closeBrowser();
+        // Reset mode
+        state.browserMode = null;
+    } else {
+        changeRoot(currentBrowserPath);
+        closeBrowser();
+    }
   }
+}
+
+function openBrowserForWizard() {
+    state.browserMode = 'wizard';
+    openBrowser();
 }
 
 // --- Backend Management ---
@@ -2108,6 +2377,8 @@ async function handleLogin() {
 // Expose functions to window for inline onclick handlers
 window.openLoginModal = openLoginModal;
 window.handleLogin = handleLogin;
+window.openBrowserForWizard = openBrowserForWizard;
+window.handleCreateProject = handleCreateProject;
 
 function logout() {
     state.token = null;
@@ -2177,7 +2448,98 @@ document.addEventListener("DOMContentLoaded", () => {
     // ... existing init code ...
     // We need to make sure this runs after other inits or is part of init
     setTimeout(checkAutoLogin, 500);
+    setTimeout(checkProjectStatus, 1000);
 });
+
+async function checkProjectStatus() {
+    const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+    try {
+        // Try to get projects list. If empty, show wizard.
+        // Note: /projects requires auth usually, but for setup we might need a way to check status publicly or handle 401
+        // Actually, let's check /health or a specific status endpoint.
+        // If we are logged in, we can check /projects.
+        // If not logged in, we might need to login first? 
+        // Assumption: Setup wizard is for local usage where we might be admin or it's open.
+        // Let's try to fetch projects if we have a token, or if not, maybe we can't check?
+        // Better approach: The backend should tell us if it's in "setup mode" via /health or /config
+        
+        const response = await fetch(`${apiBaseUrl}/projects`, {
+             headers: state.token ? { 'Authorization': `Bearer ${state.token}` } : {}
+        });
+        
+        if (response.status === 401) {
+            // Not logged in, can't check projects. 
+            // But if it's a fresh install, maybe there is no auth yet?
+            // For now, let's assume if we can't list projects, we do nothing until login.
+            return;
+        }
+        
+        if (response.ok) {
+            const projects = await response.json();
+            if (projects.length === 0) {
+                openProjectWizard();
+            }
+        }
+    } catch (e) {
+        console.error("Failed to check project status", e);
+    }
+}
+
+function openProjectWizard() {
+    const modal = document.getElementById("project-wizard-modal");
+    if (modal) {
+        modal.showModal();
+        // Prevent closing
+        modal.addEventListener('cancel', (event) => event.preventDefault());
+    }
+}
+
+async function handleCreateProject() {
+    const pathInput = document.getElementById("project-path");
+    const nameInput = document.getElementById("project-name");
+    const errorDiv = document.getElementById("project-wizard-error");
+    
+    const path = pathInput.value.trim();
+    const name = nameInput.value.trim();
+    
+    if (!path || !name) return;
+    
+    try {
+        const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+        // We need to be admin to create project. If we are not logged in, this might fail.
+        // For the wizard to work on fresh install, we might need a special "setup" token or endpoint that is open if no projects exist.
+        // Or we assume the user logs in as default admin first.
+        // Let's try to create.
+        
+        const response = await fetch(`${apiBaseUrl}/projects`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                ...(state.token ? { 'Authorization': `Bearer ${state.token}` } : {})
+            },
+            body: JSON.stringify({ path, name })
+        });
+        
+        if (response.ok) {
+            const project = await response.json();
+            addLog((t("project_created") || "Projet créé") + ": " + project.name);
+            document.getElementById("project-wizard-modal").close();
+            
+            if (state.view === "projects") {
+                await loadProjects();
+            } else {
+                window.location.reload();
+            }
+        } else {
+            const err = await response.json();
+            errorDiv.textContent = "Erreur: " + (err.detail || "Impossible de créer le projet");
+            errorDiv.classList.remove("hidden");
+        }
+    } catch (e) {
+        errorDiv.textContent = "Erreur réseau: " + e.message;
+        errorDiv.classList.remove("hidden");
+    }
+}
 
 function renderSimulationResult(result) {
     const content = document.getElementById("simulation-content");
@@ -2502,3 +2864,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+function exportData(data, filename) {
+  const jsonStr = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  addLog((t('export_success') || 'Export successful') + ': ' + filename);
+}
+

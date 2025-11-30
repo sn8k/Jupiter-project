@@ -480,6 +480,59 @@ dialog.modal::backdrop {
     border-top: 1px solid var(--border);
 }
 
+/* Project Wizard Modal Specifics */
+#project-wizard-modal {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  color: var(--text-main);
+  max-width: 500px;
+  width: 100%;
+}
+
+#project-wizard-modal::backdrop {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+}
+
+#project-wizard-modal .modal-content {
+  padding: 0;
+}
+
+#project-wizard-modal header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+#project-wizard-modal header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--accent);
+}
+
+#project-wizard-modal .modal-body {
+  padding: 1.5rem;
+}
+
+#project-wizard-modal .form-group input[type="text"] {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+#project-wizard-modal .form-group input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
 /* Login Modal Specifics */
 #login-modal {
   padding: 0;
