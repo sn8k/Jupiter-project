@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Callable
 from pathlib import Path
 from jupiter.core.connectors.base import BaseConnector
 from jupiter.core.scanner import ProjectScanner
@@ -18,6 +18,16 @@ class LocalConnector(BaseConnector):
     def __init__(self, root_path: str, project_api_config: Optional[ProjectApiConfig] = None):
         self.root_path = Path(root_path).resolve()
         self.project_api_config = project_api_config
+        self._progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None
+
+    def set_progress_callback(self, callback: Optional[Callable[[str, Dict[str, Any]], None]]) -> None:
+        """Set a progress callback for real-time updates during scanning.
+        
+        Args:
+            callback: A function taking (event_type: str, payload: dict) to be called
+                     during scanning to report progress.
+        """
+        self._progress_callback = callback
 
     async def scan(self, options: Dict[str, Any]) -> Dict[str, Any]:
         loop = asyncio.get_running_loop()
@@ -29,6 +39,7 @@ class LocalConnector(BaseConnector):
             ignore_hidden=not options.get("show_hidden", False),
             ignore_globs=options.get("ignore_globs"),
             incremental=options.get("incremental", False),
+            progress_callback=self._progress_callback,
         )
         
         files = list(scanner.iter_files())
@@ -123,13 +134,18 @@ class LocalConnector(BaseConnector):
         summary = analyzer.summarize(scanner.iter_files(), top_n=options.get("top", 5))
         return summary.to_dict()
 
-    async def run_command(self, command: list[str], with_dynamic: bool = False) -> Dict[str, Any]:
+    async def run_command(self, command: list[str], with_dynamic: bool = False, cwd: Optional[str] = None) -> Dict[str, Any]:
+        # Determine working directory
+        working_dir = Path(cwd) if cwd else self.root_path
+        if not working_dir.is_absolute():
+            working_dir = self.root_path / working_dir
+        
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None, 
             run_command, 
             command, 
-            self.root_path, 
+            working_dir, 
             with_dynamic
         )
         

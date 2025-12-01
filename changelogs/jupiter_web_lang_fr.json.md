@@ -9,3 +9,5 @@
 - (UI) L'onglet Suggestions affiche désormais des extraits de code pour les doublons ; pas de nouvelles clés requises.
 - Ajout des clés pour l'édition des globs d'ignore par projet dans la page Projets.
 - Ajout des clés pour le nouveau formulaire de connecteur API par projet (titre, sous-titre, sauvegarde).
+- Ajout de la clé `update_current_version` pour légender la version affichée dans le panneau Mise à jour.
+- Ajout des traductions pour l'onglet Dashboard du plugin Code Quality et les hints du panneau de paramètres (chunk duplication, seuils, toggle tests).

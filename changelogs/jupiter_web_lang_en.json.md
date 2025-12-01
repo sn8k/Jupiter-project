@@ -9,3 +9,5 @@
 - (UI) Suggestions tab now also shows code excerpts for duplication hints; existing keys remain valid.
 - Added keys for per-project ignore globs editing on the Projects page.
 - Added keys for the new Project API connector form (title, subtitle, save feedback).
+- Added `update_current_version` so the update panel can label the displayed Jupiter version.
+- Added strings for the Code Quality dashboard tab plus the refreshed settings card (hints, duplication chunk size, dashboard eyebrow).

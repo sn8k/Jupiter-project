@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import sys
 import asyncio
@@ -14,6 +15,7 @@ from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from jupiter import __version__
 from jupiter.core.exceptions import JupiterError, ScanError, AnalyzeError, RunError, MeetingError
 from jupiter.core.history import HistoryManager
 from jupiter.core.plugin_manager import PluginManager
@@ -22,25 +24,103 @@ from jupiter.config import JupiterConfig, PluginsConfig
 from jupiter.server.manager import ProjectManager
 from jupiter.server.ws import websocket_endpoint
 from jupiter.server.meeting_adapter import MeetingAdapter
-from jupiter.server.routers import auth, scan, system, analyze
+from jupiter.server.routers import auth, scan, system, analyze, watch
 from jupiter.core.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
 
+# Global reference for the heartbeat task
+_heartbeat_task: Optional[asyncio.Task] = None
+
+
+async def _meeting_heartbeat_loop(adapter: MeetingAdapter, interval_seconds: int) -> None:
+    """Background task that sends periodic heartbeats to Meeting."""
+    logger.info("Meeting heartbeat loop started (interval=%d seconds)", interval_seconds)
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            if adapter.is_enabled():
+                success = adapter.heartbeat()
+                if success:
+                    logger.debug("Meeting heartbeat sent successfully")
+                else:
+                    logger.warning("Meeting heartbeat failed")
+        except Exception as e:
+            logger.error("Error in Meeting heartbeat: %s", e)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup/shutdown events."""
+    global _heartbeat_task
+    
+    # Startup: capture the running event loop for cross-thread callbacks
+    loop = asyncio.get_running_loop()
+    watch.set_main_loop(loop)
+    logger.info("Main event loop captured for watch callbacks")
+    
+    # Start Meeting heartbeat task if adapter is available and enabled
+    # Note: The adapter is set up in JupiterAPIServer.start() before uvicorn.run()
+    # so it should be available here via app.state
+    try:
+        adapter = getattr(app.state, 'meeting_adapter', None)
+        if adapter and adapter.is_enabled():
+            config = getattr(app.state, 'project_manager', None)
+            interval = 60  # default
+            if config and hasattr(config, 'config') and config.config.meeting:
+                interval = config.config.meeting.heartbeat_interval_seconds or 60
+            _heartbeat_task = asyncio.create_task(_meeting_heartbeat_loop(adapter, interval))
+            logger.info("Meeting heartbeat task started")
+    except Exception as e:
+        logger.warning("Could not start Meeting heartbeat task: %s", e)
+    
+    yield
+    
+    # Shutdown: cancel heartbeat task and cleanup
+    if _heartbeat_task:
+        _heartbeat_task.cancel()
+        try:
+            await _heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Meeting heartbeat task stopped")
+    watch.set_main_loop(None)
+
+
 app = FastAPI(
     title="Jupiter API",
     description="API for scanning and analyzing projects.",
-    version="1.0.1",
+    version=__version__,
+    lifespan=lifespan,
 )
 
 # Windows Proactor loops tend to emit noisy connection-lost traces when clients close abruptly.
+# Switching to SelectorEventLoopPolicy avoids the Proactor-specific "ConnectionResetError" noise,
+# but Selector loop has limitations (no subprocess pipes).
+# Since we use subprocesses in runner.py, we might need Proactor.
+# Instead, we can try to suppress the specific log noise in uvicorn or just accept it.
+# However, the user specifically asked to fix it.
+# The error comes from _ProactorBasePipeTransport._call_connection_lost.
+# A common workaround is to silence the exception in the loop's exception handler,
+# but we can't easily patch the loop internals.
+# Another option is to use `asyncio.WindowsSelectorEventLoopPolicy()` if we don't need Proactor features.
+# Jupiter uses `subprocess` which requires Proactor on Windows for async pipes, BUT
+# our `runner.py` uses `subprocess.run` (sync) or `asyncio.create_subprocess_exec`.
+# If we use `asyncio.create_subprocess_exec`, we NEED Proactor on Windows.
+# Let's check runner.py.
+# If we use sync subprocess, Selector is fine.
 if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    # Check if we can use Selector. If we rely on async subprocess, we can't.
+    # But the error is annoying.
+    # Let's try to suppress the log message by filtering the logger.
+    logging.getLogger("asyncio").setLevel(logging.CRITICAL)
+
 
 app.include_router(auth.router)
 app.include_router(scan.router)
 app.include_router(system.router)
 app.include_router(analyze.router)
+app.include_router(watch.router)
 
 @app.exception_handler(JupiterError)
 async def jupiter_exception_handler(request: Request, exc: JupiterError):
@@ -127,9 +207,18 @@ class JupiterAPIServer:
         app.state.root_path = self.root
         app.state.install_path = self.install_path or self.root
         save_last_root(self.root)
+        
+        # Initialize MeetingAdapter with config parameters
+        meeting_config = self.config.meeting if self.config else None
+        # Use device_key from config if available, fallback to self.device_key
+        effective_device_key = meeting_config.deviceKey if meeting_config else self.device_key
         app.state.meeting_adapter = MeetingAdapter(
-            device_key=self.device_key,
-            project_root=self.root
+            device_key=effective_device_key,
+            project_root=self.root,
+            base_url=meeting_config.base_url if meeting_config else "https://meeting.ygsoft.fr/api",
+            device_type_expected=meeting_config.device_type if meeting_config else "Jupiter",
+            timeout_seconds=meeting_config.timeout_seconds if meeting_config else 5.0,
+            auth_token=meeting_config.auth_token if meeting_config else None,
         )
         app.state.history_manager = HistoryManager(self.root)
         

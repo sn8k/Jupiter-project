@@ -45,11 +45,13 @@ class RemoteConnector(BaseConnector):
 
         return await self._request_json("GET", "analyze", params=params, timeout=60.0)
 
-    async def run_command(self, command: list[str], with_dynamic: bool = False) -> Dict[str, Any]:
+    async def run_command(self, command: list[str], with_dynamic: bool = False, cwd: Optional[str] = None) -> Dict[str, Any]:
         payload = {
             "command": command,
             "with_dynamic": with_dynamic
         }
+        if cwd:
+            payload["cwd"] = cwd
         data = await self._request_json("POST", "run", json=payload, timeout=300.0)  # 5 minutes for run
         # Map API response to what LocalConnector returns (which is basically the same structure)
         return {

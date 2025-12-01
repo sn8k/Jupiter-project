@@ -37,10 +37,23 @@ class GuiConfig:
 
 @dataclass
 class MeetingConfig:
-    """Configuration for the Meeting feature."""
+    """Configuration for the Meeting feature.
+    
+    Attributes:
+        deviceKey: The Jupiter device key for license verification.
+        base_url: The Meeting API base URL.
+        device_type: The expected device type (default: "Jupiter").
+        timeout_seconds: HTTP request timeout for Meeting API calls.
+        auth_token: Optional authentication token for Meeting API.
+        heartbeat_interval_seconds: Interval between heartbeat signals to Meeting (default: 60).
+    """
 
-    enabled: bool = False
     deviceKey: Optional[str] = None
+    base_url: str = "https://meeting.ygsoft.fr/api"
+    device_type: str = "Jupiter"
+    timeout_seconds: float = 5.0
+    auth_token: Optional[str] = None
+    heartbeat_interval_seconds: int = 60
 
 
 @dataclass
@@ -97,7 +110,7 @@ class SecurityConfig:
 class CiConfig:
     """Configuration for CI/CD quality gates."""
 
-    fail_on: dict[str, int] = field(default_factory=dict)
+    fail_on: dict[str, int | None] = field(default_factory=dict)
 
 
 @dataclass
@@ -198,6 +211,10 @@ class JupiterConfig:
         # Robustness: handle device_key vs deviceKey
         if "device_key" in meeting_data and "deviceKey" not in meeting_data:
             meeting_data["deviceKey"] = meeting_data.pop("device_key")
+        
+        # Filter only known MeetingConfig fields to avoid TypeError
+        meeting_known_fields = {"enabled", "deviceKey", "base_url", "device_type", "timeout_seconds", "auth_token"}
+        meeting_data = {k: v for k, v in meeting_data.items() if k in meeting_known_fields}
 
         ui_data = data.get("ui", {})
         plugins_data = data.get("plugins", {})
@@ -349,38 +366,27 @@ def load_merged_config(install_path: Path, project_path: Path) -> JupiterConfig:
              logger.info("Loading global config from LocalAppData: %s", app_data_path)
              global_config = load_install_config(app_data_path)
     
-    # If paths are same, just return it
-    if install_path.resolve() == project_path.resolve() and not (local_app_data and resolve_install_config_path(Path(local_app_data) / "Jupiter").exists()):
-        return global_config
-
-    # 2. Load project config
+    # 2. Always load project config (even if paths are same)
+    # Project-specific settings (API, backends, performance) should come from project config
     project_config = load_config(project_path)
 
-    # 3. Merge: Global settings override defaults, Project settings override Global (for some)
-    # Actually, for "Global" settings (Meeting, Server, UI), we want the Global config to prevail 
-    # if the project config doesn't explicitly define them (or maybe always?).
-    # But here, we want the "Effective Configuration".
-    
-    # Strategy: Start with Global, overlay Project specific parts.
-    # However, load_config returns a full object with defaults.
+    # 3. Merge: Global settings for system-level, Project settings for project-level
     
     # We want:
-    # - Meeting/Server/GUI/UI -> From Global (unless we want per-project overrides?)
-    #   Let's say Global prevails for these to ensure license/port consistency.
-    # - Performance/CI/Backends/API -> From Project (or Global if Project is empty/default)
-    
-    # Since we can't easily know if a field is "default" or "explicitly set to default value",
-    # we assume the Global config holds the "System" settings.
+    # - Meeting/Server/GUI/UI/Plugins -> From Global (to ensure license/port consistency)
+    # - Performance/CI/Backends/API/project_api -> From Project
     
     merged = project_config
     
-    # Force Global Settings
+    # Force Global Settings (system-level)
     merged.server = global_config.server
     merged.gui = global_config.gui
     merged.meeting = global_config.meeting
     merged.ui = global_config.ui
-    # Plugins? Maybe merge lists? For now, let's stick to Global for plugins to avoid security issues.
     merged.plugins = global_config.plugins
+    merged.users = global_config.users
+    merged.security = global_config.security
+    merged.logging = global_config.logging
     
     return merged
 
@@ -449,30 +455,50 @@ def _serialize_project_api(project_api: ProjectApiConfig | None) -> dict[str, An
 
 
 def save_global_settings(config: JupiterConfig, install_path: Path) -> None:
-    """Save only global settings (Server, GUI, Meeting, UI, Plugins) to the install path."""
+    """Save global settings (Server, GUI, Meeting, UI, Security, Plugins, Users, Logging) to the install path."""
+    meeting_data = {
+        "deviceKey": config.meeting.deviceKey,
+        "heartbeat_interval_seconds": config.meeting.heartbeat_interval_seconds,
+    }
+    # Only include auth_token if it has a value (avoid saving null/empty)
+    if config.meeting.auth_token:
+        meeting_data["auth_token"] = config.meeting.auth_token
+    
+    plugin_settings: dict[str, Any] = {}
+    if getattr(config.plugins, "settings", None):
+        plugin_settings = {k: v for k, v in config.plugins.settings.items()}
+
     updates = {
         "server": {"host": config.server.host, "port": config.server.port},
         "gui": {"host": config.gui.host, "port": config.gui.port},
-        "meeting": {"enabled": config.meeting.enabled, "deviceKey": config.meeting.deviceKey},
+        "meeting": meeting_data,
         "ui": {"theme": config.ui.theme, "language": config.ui.language},
+        "security": {
+            "allow_run": config.security.allow_run,
+            "allowed_commands": config.security.allowed_commands,
+            "token": config.security.token,
+        },
         "logging": {"level": config.logging.level, "path": config.logging.path},
-        "plugins": {"enabled": config.plugins.enabled, "disabled": config.plugins.disabled},
+        "plugins": {
+            "enabled": config.plugins.enabled,
+            "disabled": config.plugins.disabled,
+            **plugin_settings,
+        },
         "users": [{"name": u.name, "token": u.token, "role": u.role} for u in config.users],
     }
     _update_yaml_section(resolve_install_config_path(install_path), updates)
 
 
 def save_project_settings(config: JupiterConfig, project_path: Path) -> None:
-    """Save only project settings (Performance, CI, Backends, API) to the project path."""
+    """Save only project-specific settings (Performance, CI, Backends, API) to the project path.
+    
+    Global settings (server, gui, meeting, ui, users, plugins, security, logging)
+    should be saved via save_global_settings() to global_config.yaml instead.
+    """
     updates = {
         "performance": _serialize_performance(config.performance),
         "ci": {"fail_on": config.ci.fail_on},
         "backends": _serialize_backends(config.backends),
-        "security": { # Security is usually project specific (allowed commands)
-             "allow_run": config.security.allow_run,
-             "allowed_commands": config.security.allowed_commands
-        },
-        "logging": {"level": config.logging.level, "path": config.logging.path},
     }
     
     project_api_serialized = _serialize_project_api(config.project_api)
@@ -483,38 +509,16 @@ def save_project_settings(config: JupiterConfig, project_path: Path) -> None:
 
 
 def save_config(config: JupiterConfig, root_path: Path) -> None:
-    """Save configuration to a YAML file."""
+    """Save project-specific configuration to the project YAML file.
+    
+    This only saves project-specific settings (performance, ci, backends, api).
+    Global settings should be saved via save_global_settings() instead.
+    """
     config_file = get_project_config_path(root_path)
     
     data = {
-        "server": {
-            "host": config.server.host,
-            "port": config.server.port,
-        },
-        "gui": {
-            "host": config.gui.host,
-            "port": config.gui.port,
-        },
-        "meeting": {
-            "enabled": config.meeting.enabled,
-            "deviceKey": config.meeting.deviceKey,
-        },
-        "ui": {
-            "theme": config.ui.theme,
-            "language": config.ui.language,
-        },
-        "logging": {
-            "level": config.logging.level,
-            "path": config.logging.path,
-        },
-        "ci": {
-            "fail_on": config.ci.fail_on,
-        },
-        "plugins": {
-            "enabled": config.plugins.enabled,
-            "disabled": config.plugins.disabled,
-        },
         "performance": _serialize_performance(config.performance),
+        "ci": {"fail_on": config.ci.fail_on},
         "backends": _serialize_backends(config.backends),
     }
 
@@ -525,9 +529,9 @@ def save_config(config: JupiterConfig, root_path: Path) -> None:
     try:
         with config_file.open("w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False)
-        logger.info("Saved config to %s", config_file)
+        logger.info("Saved project config to %s", config_file)
     except Exception as e:
-        logger.error("Failed to save config file: %s", e)
+        logger.error("Failed to save project config file: %s", e)
         raise
 
 

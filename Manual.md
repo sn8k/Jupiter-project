@@ -42,6 +42,12 @@ Jupiter supporte désormais la gestion de plusieurs projets.
 - Lorsque vous activez un projet depuis l'interface Web, le registre global et `~/.jupiter/state.json` sont synchronisés automatiquement afin que le prochain démarrage (CLI ou GUI) rouvre le même projet sans paramètre supplémentaire.
 - Les registres hérités sont normalisés automatiquement : si un projet pointe encore vers `jupiter.yaml`, il est réécrit en `<projet>.jupiter.yaml` et le chemin est stocké en absolu pour éviter les erreurs d'activation/suppression après mise à jour.
 
+## Versionnage visible (Nouveau)
+- La barre supérieure affiche maintenant le numéro issu du fichier `VERSION` juste à côté du logo **Jupiter**.
+- Le panneau **Settings > Mise à jour** répète cette information pour vérifier rapidement la version avant de charger un paquet ZIP.
+- L'onglet **Plugins** liste la version propre à chaque module (code_quality, pylance, notifications, etc.) afin de distinguer les cycles de vie des extensions du cœur de Jupiter.
+- La vue **Pylance** indique explicitement lorsqu'un projet ne contient aucun fichier `.py`, ce qui évite de confondre l'absence de données avec un scan non exécuté.
+
 ## Commandes avancées (CLI)
 Les commandes suivantes sont disponibles pour un usage avancé ou scripté :
 
@@ -66,6 +72,14 @@ Les commandes suivantes sont disponibles pour un usage avancé ou scripté :
 - La valeur est stockée dans `logging.level` du fichier `<projet>.jupiter.yaml` (sauvegarde automatique via l'UI).
 - Le filtre de logs du tableau de bord utilise la même valeur pour rester cohérent avec la verbosité active.
 - Un champ **Chemin du fichier log** permet de définir la destination du fichier (laisser vide pour désactiver l'écriture fichier).
+- Tous les plugins embarqués respectent désormais ce niveau : en mode INFO ils résument les actions (scan, webhooks, suggestions) et en mode DEBUG ils journalisent les payloads complets pour faciliter l'investigation.
+
+## Paramètres plugins persistants (Nouveau)
+- La page **Settings** a été réorganisée en deux colonnes : la grille principale rassemble Réseau/UI/Meeting/Performance/Sécurité/Utilisateurs tandis que la colonne latérale conserve la carte **Mise à jour** et ses actions.
+- Les sections dynamiques injectées par les plugins (Notifications, Code Quality, etc.) apparaissent immédiatement sous le layout principal dans des cartes dédiées (`plugin-settings-card`).
+- Chaque panneau plugin tire désormais sa configuration depuis le registre global/projet (`~/.jupiter/global_config.yaml` + `<projet>.jupiter.yaml`) et réécrit automatiquement les valeurs lors des sauvegardes.
+- Les boutons **Save** exposent un indicateur d'état (en cours, succès, erreur) pour confirmer la prise en compte de la configuration sans quitter la page.
+- Lorsque vous changez de projet, les panneaux sont vidés, rechargés et resynchronisés avec les paramètres réellement stockés afin d'éviter les résidus d'UI.
 
 ## Configuration de la Sécurité
 
@@ -91,6 +105,110 @@ security:
 ### Rôles
 - **admin** : Accès complet (scan, run, config, update, gestion utilisateurs).
 - **viewer** : Accès en lecture seule (voir les rapports, graphiques, fichiers).
+
+## Licence Meeting / DeviceKey Jupiter
+
+Jupiter peut vérifier sa licence via l'API Meeting. Cette vérification est optionnelle mais recommandée pour un usage en production.
+
+### Règle Métier
+Une licence Jupiter est considérée **valide** si :
+- L'API Meeting retourne HTTP 200 pour `GET /api/devices/{device_key}`
+- Le champ `authorized` est `true`
+- Le champ `device_type` est `"Jupiter"`
+- Le champ `token_count` est supérieur à 0
+
+### Configuration (~/.jupiter/global_config.yaml)
+
+La configuration Meeting se fait dans le fichier de configuration globale :
+
+```yaml
+meeting:
+  enabled: true
+  deviceKey: "C86015A0C19686A1C7ECE6CC7C8F4874"  # Votre clé device Meeting
+  base_url: "https://meeting.ygsoft.fr/api"      # URL de l'API Meeting
+  device_type: "Jupiter"                          # Type de device attendu
+  timeout_seconds: 5.0                            # Timeout des requêtes HTTP
+  # auth_token: ""                                # Optionnel: token d'authentification
+```
+
+### Vérification via CLI
+
+Utilisez la commande suivante pour vérifier l'état de la licence :
+
+```bash
+python -m jupiter.cli.main meeting check-license [--json]
+```
+
+Cette commande retourne :
+- Code 0 : Licence valide
+- Code 1 : Licence invalide
+- Code 2 : Erreur de configuration (pas de deviceKey)
+- Code 3 : Erreur réseau
+
+Exemple de sortie :
+```
+✅ License Check: VALID
+   Message: License valid: authorized, correct device_type, tokens > 0.
+   Device Key: C86015A0C19686A1C7ECE6CC7C8F4874
+   Meeting API: https://meeting.ygsoft.fr/api
+   HTTP Status: 200
+   Authorized: True
+   Device Type: Jupiter (expected: Jupiter)
+   Token Count: 10
+   Checked At: 2025-06-01T12:00:00
+```
+
+### Endpoint API
+
+L'API Jupiter expose un endpoint pour consulter l'état de la licence :
+
+- `GET /license/status` : Retourne l'état détaillé de la vérification Meeting
+- `POST /license/refresh` : Force une re-vérification (requiert le rôle admin)
+
+Exemple de réponse JSON :
+```json
+{
+  "status": "valid",
+  "message": "License valid: authorized, correct device_type, tokens > 0.",
+  "device_key": "C86015A0C19686A1C7ECE6CC7C8F4874",
+  "http_status": 200,
+  "authorized": true,
+  "device_type": "Jupiter",
+  "token_count": 10,
+  "checked_at": "2025-06-01T12:00:00",
+  "meeting_base_url": "https://meeting.ygsoft.fr/api",
+  "device_type_expected": "Jupiter"
+}
+```
+
+### Mode Restreint
+
+Si la licence n'est pas valide ou si aucune `deviceKey` n'est configurée :
+- Jupiter démarre en **mode restreint** (trial)
+- Une période de grâce de 10 minutes est accordée
+- Après expiration, certaines fonctionnalités (run, watch, dynamic_scan) sont bloquées
+- Le message d'erreur indique clairement la raison de l'invalidité
+
+### Interface Web (Settings > Meeting License)
+
+La page Paramètres de l'interface web inclut une section dédiée à la gestion de la licence Meeting :
+
+- **Indicateur de statut** : Affiche visuellement l'état de la licence avec un code couleur :
+  - 🟢 Vert : Licence valide
+  - 🔴 Rouge : Licence invalide
+  - 🟠 Orange : Erreur réseau
+  - 🟣 Violet : Erreur de configuration
+
+- **Champs de configuration** :
+  - Activer/Désactiver Meeting
+  - Device Key (clé d'identification)
+  - Auth Token (optionnel, si requis par l'API)
+
+- **Actions** :
+  - **Vérifier la licence** : Force une nouvelle vérification auprès de l'API Meeting
+  - **Actualiser** : Rafraîchit l'affichage du statut actuel
+
+- **Dernière réponse** : Affiche les détails bruts de la dernière réponse de l'API Meeting (status, authorized, device_type, token_count, etc.)
 
 ### Démarrage du Serveur
 
@@ -172,7 +290,7 @@ Si un seuil est dépassé, la commande retourne un code d'erreur `1`, ce qui blo
 - `jupiter/server/` : serveur API (FastAPI) et Meeting adapter.
 - `jupiter/config/` : configuration (YAML).
 - `jupiter/web/` : interface graphique.
-- `jupiter/plugins/` : plugins (ex: code_quality_stub).
+- `jupiter/plugins/` : plugins (ex: code_quality, ai_helper, pylance_analyzer).
 
 - **Lancement** : `python -m jupiter.cli.main` (ou via CLI `gui`).
 - **Projets** : Tableau de bord dédié (vue "Projects") avec résumé du projet actif, racine servie, dernier scan et actions rapides (scanner, éditer la config .jupiter.yaml, basculer/supprimer).
@@ -186,7 +304,7 @@ Si un seuil est dépassé, la commande retourne un code d'erreur `1`, ce qui blo
 - **Historique** : Liste chronologique des snapshots avec vue diff (fichiers ajoutés/supprimés/modifiés, delta fonctions). Deux sélecteurs permettent de choisir les snapshots à comparer et un panneau détaille le diff.
 - **Mise à jour** : Interface pour déclencher une mise à jour depuis un ZIP ou Git.
 - **Plugins** : Liste et état des plugins. Configuration des plugins (ex: URL Webhook) directement depuis l'interface.
-- **Analyse & Qualité** : Vues détaillées des métriques et hotspots, avec le panneau Qualité mis à jour automatiquement après chaque Scan (y compris en mode Watch).
+- **Analyse & Code Quality** : Les métriques avancées restent accessibles depuis la vue Analyse tandis que l'ancienne page Qualité vit désormais dans l'onglet *Dashboard* du plugin Code Quality (mêmes tableaux complexité/duplication, export et alertes, alimentés automatiquement après chaque Scan/Watch).
 - **API** : Vue listant les endpoints de l'API du projet (si configurée).
 - **Live Map** : Visualisation graphique interactive des dépendances du projet (fichiers, imports, fonctions). Permet de naviguer visuellement dans la structure du code.
 - **Simulation** : Dans les vues "Fichiers" et "Fonctions", un bouton "Corbeille" permet de simuler la suppression d'un élément et d'afficher les impacts potentiels (liens brisés, code orphelin).
@@ -197,6 +315,32 @@ Si un seuil est dépassé, la commande retourne un code d'erreur `1`, ce qui blo
 Jupiter est extensible via des plugins.
 - **Notifications Webhook** : Envoie un payload JSON à une URL configurée à la fin de chaque scan. Configurable dans l'onglet "Plugins".
   - Si aucune URL n'est fournie, le plugin publie une notification locale (WebSocket + panneau "Live Events") au lieu de tenter une requête HTTP invalide.
+  - La section de configuration dispose maintenant d'un bouton **Enregistrer** explicite qui écrit la configuration via `/plugins/notifications_webhook/config` et recharge les valeurs au chargement de la page.
+  - Un nouveau type d'événement **API connectée** diffuse automatiquement l'état du connecteur API (en ligne / hors ligne) vers le webhook et les notifications locales.
+  - Toute notification (scan, API, qualité, etc.) apparaît également sous forme de popup (toast) dans l'interface, visible sur toutes les vues.
+- **Code Quality** : Mesure la complexité, la duplication et l'indice de maintenabilité et expose une vue dédiée dans la barre latérale.
+  - Le nouvel onglet **Dashboard** reprend l'ancienne page Qualité (top complexité + clusters de duplication, export JSON) pour garder toutes les métriques au même endroit que les onglets Issues/Files/Duplication/Recommendations.
+  - L'onglet **Duplication** permet désormais de **lier manuellement des clusters détectés** : cochez au moins deux clusters, cliquez sur **Link Selected**, attribuez un libellé facultatif et Jupiter regénère un bloc unique qui couvre l'ensemble des lignes (ex. lignes 71‑77 plutôt que 71‑76 / 72‑77 séparés).
+  - Les liaisons sont vérifiées à chaque `Analyze` et peuvent être relancées sans rescanner via **Re-check Linked Blocks** (ou l'endpoint `POST /plugins/code_quality/manual-links/recheck`). Un badge `Linked` + un badge de statut (verified / missing / diverged) indique si les occurrences sont toujours identiques.
+  - Les définitions sont persistées dans `.jupiter/manual_duplication_links.json`. Le fichier est créé automatiquement et peut être édité à la main ou approvisionné via la configuration (`plugins.code_quality.manual_duplication_links`). Exemple :
+
+    ```json
+    {
+      "links": [
+        {
+          "id": "cli-scan-options",
+          "label": "Options scan/analyze CLI",
+          "occurrences": [
+            {"path": "jupiter/cli/command_handlers.py", "start_line": 71, "end_line": 77, "label": "_build_scan_options"},
+            {"path": "jupiter/cli/command_handlers.py", "start_line": 154, "end_line": 160, "label": "_build_services_from_args"},
+            {"path": "jupiter/cli/command_handlers.py", "start_line": 228, "end_line": 234, "label": "handle_scan"},
+            {"path": "jupiter/cli/command_handlers.py", "start_line": 307, "end_line": 313, "label": "handle_analyze"}
+          ]
+        }
+      ]
+    }
+    ```
+  - Les occurrences configurées (ou créées via l'UI) sont réutilisées dans les rapports `/analyze`, exportées dans `duplication_clusters` et ne faussent pas le pourcentage de duplication.
 - **AI Helper** : Analyse le code pour suggérer des refactorings, des améliorations de documentation ou détecter des problèmes de sécurité. Les suggestions apparaissent dans l'onglet "Suggestions IA" du rapport.
   - Les alertes de duplication listent désormais précisément les fichiers et lignes concernés pour rendre le rapport actionnable (y compris dans l'export JSON des suggestions).
   - Chaque duplication inclut aussi le nom de la fonction la plus proche et un extrait du bloc concerné pour que vous sachiez immédiatement quoi refactorer.

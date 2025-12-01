@@ -13,7 +13,7 @@ class EndpointInfo:
     path: str
     method: str
     summary: Optional[str] = None
-    tags: List[str] = None
+    tags: Optional[List[str]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

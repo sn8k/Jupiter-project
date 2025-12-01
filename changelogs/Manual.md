@@ -15,3 +15,6 @@
 - Mentioned internal refactors (CLI/API/UI) that remove duplicated scan/historique/projet handling code.
 - Documented per-project ignore globs editable depuis la page Projets (appliqués automatiquement aux scans/analyses).
 - Ajouté que la configuration API (connector/app_var/chemin) se gère désormais dans la page Projets, par projet, via un formulaire dédié.
+- Nouvel encart "Versionnage visible" décrivant le badge de version global, le rappel dans Settings > Mise à jour, et l'affichage des versions propres aux plugins.
+- Mentionné que la vue Qualité vit maintenant dans l'onglet Dashboard du plugin Code Quality (avec export, complexité et duplication).
+- Ajouté une section "Paramètres plugins persistants" détaillant la grille deux colonnes des Settings, les cartes dédiées pour Notifications/Code Quality et la synchronisation automatique avec le registre global/projet.

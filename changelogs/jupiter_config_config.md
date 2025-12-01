@@ -9,3 +9,4 @@
 - Introduced explicit config naming helpers (`<project>.jupiter.yaml`, `global_config.yaml`) with legacy fallbacks, plus install/project path resolution helpers reused by save/load utilities.
 - Logging config now supports an optional `path` persisted across global/project saves for the Settings log destination field.
 - Global registry load now normalizes legacy entries (`jupiter.yaml` -> `<project>.jupiter.yaml` and absolute paths) and auto-saves the cleaned structure to keep project activation/deletion reliable across upgrades.
+- Fixed `load_merged_config` to always load project config (even when install_path == project_path). This ensures project-specific settings like `project_api` are loaded at server startup, not just after saving via UI.

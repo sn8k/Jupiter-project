@@ -15,3 +15,7 @@
 - Highlighted that AI duplication suggestions now include file:line evidence in the API and Web UI release notes.
 - Added release note 1.1.10 describing internal deduplication of CLI/server/UI workflows.
 - Noted per-project ignore globs can be managed from the Projects page and saved via the `/projects/{id}/ignore` endpoint.
+- Ajouté un point dans la section "Features" détaillant le badge de version global et l'affichage des versions propres aux plugins.
+- Ajouté une note de version 1.1.11 décrivant la migration de la vue Qualité vers l'onglet Dashboard du plugin Code Quality et son panneau de paramètres remanié.
+- Documenté la persistance des paramètres plugins et la nouvelle mise en page Settings (grille deux colonnes + carte Mise à jour dédiée) dans la section Features.
+- Ajouté la release note 1.1.12 retraçant la refonte des panneaux Settings/plugins et la sauvegarde unifiée des préférences.

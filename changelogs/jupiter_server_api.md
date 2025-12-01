@@ -1,5 +1,20 @@
 # Changelog – jupiter/server/api.py
 
+## 2025-12-01 – Version metadata alignment
+
+### Changed
+- Le constructeur FastAPI renseigne désormais `version=__version__` afin que la documentation OpenAPI expose la même version que la CLI/GUI.
+
+## 2025-12-01 – Code Quality manual linking endpoints
+
+### Added
+- `POST /plugins/code_quality/manual-links` to persist linked duplication clusters created from the UI.
+- `DELETE /plugins/code_quality/manual-links/{link_id}` to remove disk-backed links.
+- `POST /plugins/code_quality/manual-links/recheck` to re-verify one or all manual links without triggering a new scan.
+- Router helpers now cast the Code Quality plugin to access the new helper methods while keeping the plugin interface generic.
+
+---
+
 **Section 1 Implementation (API Stabilization & Schemas)**
 
 - Integrated Pydantic models from `server.models` module for all endpoints.

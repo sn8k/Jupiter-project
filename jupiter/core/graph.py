@@ -40,6 +40,21 @@ class GraphBuilder:
         self.max_nodes = max_nodes
         self.nodes: Dict[str, GraphNode] = {}
         self.links: List[GraphEdge] = []
+        
+        # Optimization: Build a lookup map for faster import resolution
+        # Map: "path/to/file.py" -> "full/path/to/file.py"
+        # We normalize to forward slashes and remove extensions for fuzzy matching if needed
+        self.file_map: Dict[str, str] = {}
+        self.filename_index: Dict[str, List[str]] = {} # filename -> list of full paths
+        
+        for f in self.files:
+            path = f["path"].replace("\\", "/")
+            self.file_map[path] = path
+            
+            filename = path.split("/")[-1]
+            if filename not in self.filename_index:
+                self.filename_index[filename] = []
+            self.filename_index[filename].append(path)
 
     def build(self) -> DependencyGraph:
         # Auto-simplify if too many files
@@ -51,9 +66,16 @@ class GraphBuilder:
         else:
             self._build_detailed()
         
+        # Filter links to only include those where both source and target exist in nodes
+        # This prevents D3.js "node not found" errors
+        valid_links = [
+            link for link in self.links
+            if link.source in self.nodes and link.target in self.nodes
+        ]
+        
         return DependencyGraph(
             nodes=list(self.nodes.values()),
-            links=self.links
+            links=valid_links
         )
 
     def _build_detailed(self):
@@ -68,7 +90,8 @@ class GraphBuilder:
         file_to_dir = {}
         
         for file in self.files:
-            path = file["path"]
+            # Normalize path to use forward slashes consistently
+            path = file["path"].replace("\\", "/")
             parent_dir = str(Path(path).parent).replace("\\", "/")
             if parent_dir == ".":
                 parent_dir = "root"
@@ -90,7 +113,8 @@ class GraphBuilder:
         edges = set() # (source_dir, target_dir)
 
         for file in self.files:
-            source_path = file["path"]
+            # Normalize path to use forward slashes consistently
+            source_path = file["path"].replace("\\", "/")
             source_dir = file_to_dir[source_path]
             
             lang_analysis = file.get("language_analysis") or {}
@@ -111,7 +135,8 @@ class GraphBuilder:
             ))
 
     def _process_file(self, file: Dict[str, Any]):
-        path = file["path"]
+        # Normalize path to use forward slashes consistently
+        path = file["path"].replace("\\", "/")
         file_id = path
         
         file_type = file.get("file_type", "")
@@ -137,8 +162,9 @@ class GraphBuilder:
         for imp in imports:
             # Heuristic: try to find if import matches another file in the project
             target_path = self._resolve_import_path(imp)
-            if target_path:
+            if target_path and target_path in self.file_map:
                 # In detailed mode, target is the file ID (path)
+                # We store the link with resolved target; validation happens in build()
                 self.links.append(GraphEdge(
                     source=file_id,
                     target=target_path,
@@ -163,12 +189,22 @@ class GraphBuilder:
             ))
 
     def _resolve_import_path(self, import_name: str) -> Optional[str]:
-        # Very basic resolution: check if any file path ends with the import name converted to path
+        # Optimized resolution using lookup map
         # e.g. "jupiter.core.scanner" -> "jupiter/core/scanner.py"
         
-        expected_suffix = import_name.replace(".", "/") + ".py"
+        path_suffix = import_name.replace(".", "/") + ".py"
         
-        for file in self.files:
-            if file["path"].endswith(expected_suffix):
-                return file["path"]
+        # 1. Exact match (relative to root)
+        if path_suffix in self.file_map:
+            return self.file_map[path_suffix]
+
+        # 2. Suffix match using filename index
+        # Extract the filename from the import suffix
+        target_filename = path_suffix.split("/")[-1]
+        
+        candidates = self.filename_index.get(target_filename, [])
+        for path in candidates:
+            if path.endswith(path_suffix):
+                return path
+                
         return None

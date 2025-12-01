@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import fnmatch
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Dict, Any
+from typing import Iterable, Iterator, Optional, Dict, Any, Callable
 import logging
 import time
 import concurrent.futures
@@ -56,6 +56,7 @@ class ProjectScanner:
         perf_mode: bool = False,
         max_workers: int | None = None,
         large_file_threshold: int = 10 * 1024 * 1024,
+        progress_callback: Callable[[str, Dict[str, Any]], None] | None = None,
     ) -> None:
         self.root = root
         self.ignore_hidden = ignore_hidden
@@ -65,6 +66,7 @@ class ProjectScanner:
         self.perf_mode = perf_mode
         self.max_workers = max_workers
         self.large_file_threshold = large_file_threshold
+        self.progress_callback = progress_callback
         self.cache_manager = CacheManager(root)
         self.cached_files: Dict[str, Dict[str, Any]] = {}
         
@@ -102,18 +104,60 @@ class ProjectScanner:
         
         # Collect all paths first to allow parallel processing
         paths = list(self._walk_files(self.root))
+        total_files = len(paths)
         
         walk_time = time.time() - start_time
         if self.perf_mode:
             logger.info(f"Walked {len(paths)} files in {walk_time:.4f}s")
 
+        # Emit initial progress
+        if self.progress_callback:
+            self.progress_callback("SCAN_PROGRESS", {
+                "phase": "scanning",
+                "total_files": total_files,
+                "processed": 0,
+                "percent": 0
+            })
+
+        processed_count = 0
+        
         # Use ThreadPoolExecutor for parallel processing
         # IO-bound tasks (reading files) benefit from threads
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            results = executor.map(self._process_single_file, paths)
-            for res in results:
-                if res:
-                    yield res
+            # Submit all tasks and keep track of futures
+            future_to_path = {executor.submit(self._process_single_file, path): path for path in paths}
+            
+            for future in concurrent.futures.as_completed(future_to_path):
+                path = future_to_path[future]
+                processed_count += 1
+                
+                try:
+                    result = future.result()
+                    
+                    # Emit progress for each file
+                    if self.progress_callback:
+                        percent = int((processed_count / total_files) * 100) if total_files > 0 else 100
+                        self.progress_callback("SCAN_FILE_COMPLETED", {
+                            "file": str(path.relative_to(self.root)),
+                            "processed": processed_count,
+                            "total": total_files,
+                            "percent": percent,
+                            "has_analysis": result is not None and result.language_analysis is not None
+                        })
+                    
+                    if result:
+                        yield result
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to process file {path}: {e}")
+                    if self.progress_callback:
+                        self.progress_callback("SCAN_FILE_COMPLETED", {
+                            "file": str(path.relative_to(self.root)),
+                            "processed": processed_count,
+                            "total": total_files,
+                            "percent": int((processed_count / total_files) * 100) if total_files > 0 else 100,
+                            "error": str(e)
+                        })
 
         if self.perf_mode:
             total_time = time.time() - start_time
@@ -123,6 +167,7 @@ class ProjectScanner:
         """Process a single file and return its metadata."""
         try:
             metadata = FileMetadata.from_path(path)
+            relative_path = str(path.relative_to(self.root))
             
             # Check cache if incremental
             cached = None
@@ -138,6 +183,22 @@ class ProjectScanner:
             ):
                 # Use cached analysis
                 metadata.language_analysis = cached.get("language_analysis")
+                # Emit event for functions found in cache
+                if self.progress_callback and metadata.language_analysis:
+                    # Python uses 'defined_functions', JS/TS uses 'functions'
+                    funcs = metadata.language_analysis.get("defined_functions", []) or metadata.language_analysis.get("functions", [])
+                    classes = metadata.language_analysis.get("classes", [])
+                    func_count = len(funcs) if isinstance(funcs, (list, set)) else 0
+                    class_count = len(classes) if isinstance(classes, (list, set)) else 0
+                    if func_count > 0 or class_count > 0:
+                        func_names = list(funcs)[:5] if isinstance(funcs, (list, set)) else []
+                        self.progress_callback("FUNCTION_ANALYZED", {
+                            "file": relative_path,
+                            "functions_count": func_count,
+                            "classes_count": class_count,
+                            "functions": func_names,
+                            "from_cache": True
+                        })
             elif metadata.file_type == "py":
                 if metadata.size_bytes > self.large_file_threshold:
                     metadata.language_analysis = {"error": "File too large to analyze"}
@@ -145,6 +206,20 @@ class ProjectScanner:
                     try:
                         source = path.read_text(encoding="utf-8")
                         metadata.language_analysis = analyze_python_source(source)
+                        # Emit event for analyzed functions
+                        if self.progress_callback and metadata.language_analysis:
+                            # Python analyzer returns 'defined_functions' as a set
+                            funcs = metadata.language_analysis.get("defined_functions", [])
+                            func_count = len(funcs) if isinstance(funcs, (list, set)) else 0
+                            if func_count > 0:
+                                func_names = list(funcs)[:5] if isinstance(funcs, (list, set)) else []
+                                self.progress_callback("FUNCTION_ANALYZED", {
+                                    "file": relative_path,
+                                    "functions_count": func_count,
+                                    "classes_count": 0,
+                                    "functions": func_names,
+                                    "from_cache": False
+                                })
                     except Exception as e:
                         metadata.language_analysis = {"error": f"Could not read or parse file: {e}"}
             elif metadata.file_type in ("js", "ts", "jsx", "tsx"):
@@ -154,6 +229,20 @@ class ProjectScanner:
                     try:
                         source = path.read_text(encoding="utf-8")
                         metadata.language_analysis = analyze_js_ts_source(source)
+                        # Emit event for analyzed functions
+                        if self.progress_callback and metadata.language_analysis:
+                            # JS/TS analyzer also returns 'defined_functions' as a list
+                            funcs = metadata.language_analysis.get("defined_functions", [])
+                            func_count = len(funcs) if isinstance(funcs, (list, set)) else 0
+                            if func_count > 0:
+                                func_names = list(funcs)[:5] if isinstance(funcs, (list, set)) else []
+                                self.progress_callback("FUNCTION_ANALYZED", {
+                                    "file": relative_path,
+                                    "functions_count": func_count,
+                                    "classes_count": 0,
+                                    "functions": func_names,
+                                    "from_cache": False
+                                })
                     except Exception as e:
                         metadata.language_analysis = {"error": f"Could not read or parse file: {e}"}
             

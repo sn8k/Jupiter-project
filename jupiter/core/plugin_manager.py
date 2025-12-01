@@ -7,9 +7,9 @@ import logging
 import pkgutil
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Type
+from typing import Any, Dict, List, Type, Optional
 
-from jupiter.plugins import Plugin
+from jupiter.plugins import Plugin, PluginUIType, PluginUIConfig
 from jupiter.config.config import PluginsConfig
 
 logger = logging.getLogger(__name__)
@@ -101,6 +101,13 @@ class PluginManager:
             self.plugin_status[plugin_name] = False
             logger.info("Plugin %s disabled", plugin_name)
 
+    def get_plugin(self, plugin_name: str) -> Optional[Plugin]:
+        """Return a plugin instance by name if it is registered."""
+        for plugin in self.plugins:
+            if plugin.name == plugin_name:
+                return plugin
+        return None
+
     def update_plugin_config(self, plugin_name: str, config: Dict[str, Any]) -> None:
         """Update configuration for a plugin."""
         for plugin in self.plugins:
@@ -113,33 +120,520 @@ class PluginManager:
                 return
         logger.warning("Plugin %s not found or not configurable", plugin_name)
 
-    def hook_on_scan(self, report: Dict[str, Any]) -> None:
+    def reload_all_plugins(self) -> Dict[str, Any]:
+        """Reload all plugins by clearing and re-discovering them.
+        
+        This is useful when plugin files have been modified on disk.
+        Returns a dict with reload status and list of plugins.
+        """
+        old_status = self.plugin_status.copy()
+        old_plugins = [p.name for p in self.plugins]
+        
+        # Clear current plugins
+        self.plugins.clear()
+        self.plugin_status.clear()
+        
+        # Force reimport of plugin modules
+        import jupiter.plugins
+        modules_to_reload = [
+            name for name in sys.modules.keys()
+            if name.startswith("jupiter.plugins.")
+        ]
+        for mod_name in modules_to_reload:
+            try:
+                module = sys.modules[mod_name]
+                importlib.reload(module)
+                logger.debug("Reloaded module: %s", mod_name)
+            except Exception as e:
+                logger.error("Failed to reload module %s: %s", mod_name, e)
+        
+        # Re-discover and load
+        self.discover_and_load()
+        
+        # Restore previous enabled/disabled status
+        for name, was_enabled in old_status.items():
+            if name in self.plugin_status:
+                self.plugin_status[name] = was_enabled
+        
+        new_plugins = [p.name for p in self.plugins]
+        added = set(new_plugins) - set(old_plugins)
+        removed = set(old_plugins) - set(new_plugins)
+        
+        logger.info("Plugins reloaded. Count: %d, Added: %s, Removed: %s", 
+                    len(self.plugins), list(added), list(removed))
+        
+        return {
+            "status": "ok",
+            "count": len(self.plugins),
+            "plugins": new_plugins,
+            "added": list(added),
+            "removed": list(removed),
+        }
+
+    def restart_plugin(self, plugin_name: str) -> Dict[str, Any]:
+        """Restart a specific plugin by reloading its module.
+        
+        This is useful after updating a plugin file.
+        Returns a dict with restart status.
+        """
+        # Find the plugin
+        plugin = None
+        for p in self.plugins:
+            if p.name == plugin_name:
+                plugin = p
+                break
+        
+        if not plugin:
+            return {"status": "error", "message": f"Plugin '{plugin_name}' not found"}
+        
+        # Get the module name for this plugin
+        plugin_module = type(plugin).__module__
+        was_enabled = self.plugin_status.get(plugin_name, False)
+        old_config = getattr(plugin, "config", {}).copy() if hasattr(plugin, "config") else {}
+        
+        # Remove from our list
+        self.plugins = [p for p in self.plugins if p.name != plugin_name]
+        if plugin_name in self.plugin_status:
+            del self.plugin_status[plugin_name]
+        
+        # Reload the module
+        try:
+            if plugin_module in sys.modules:
+                module = sys.modules[plugin_module]
+                importlib.reload(module)
+                logger.info("Reloaded module: %s", plugin_module)
+                
+                # Re-register plugins from this module
+                self._register_plugins_from_module(module)
+                
+                # Find the new instance and restore state
+                for p in self.plugins:
+                    if p.name == plugin_name:
+                        self.plugin_status[plugin_name] = was_enabled
+                        if old_config and hasattr(p, "configure"):
+                            p.configure(old_config)
+                        break
+                
+                return {
+                    "status": "ok",
+                    "message": f"Plugin '{plugin_name}' restarted successfully",
+                    "enabled": self.is_enabled(plugin_name),
+                }
+            else:
+                return {"status": "error", "message": f"Module '{plugin_module}' not found in sys.modules"}
+        except Exception as e:
+            logger.error("Failed to restart plugin %s: %s", plugin_name, e)
+            return {"status": "error", "message": str(e)}
+
+    def hook_on_scan(self, report: Dict[str, Any], project_root: Optional[Path] = None) -> None:
         """Dispatch on_scan hook."""
         for plugin in self.plugins:
             if self.is_enabled(plugin.name) and hasattr(plugin, "on_scan"):
                 try:
+                    # Set project root on plugin if it supports it
+                    if project_root and hasattr(plugin, "_project_root"):
+                        setattr(plugin, "_project_root", project_root)
                     plugin.on_scan(report)
                 except Exception as e:
                     logger.error("Plugin %s failed on_scan: %s", plugin.name, e)
 
-    def hook_on_analyze(self, summary: Dict[str, Any]) -> None:
+    def hook_on_analyze(self, summary: Dict[str, Any], project_root: Optional[Path] = None) -> None:
         """Dispatch on_analyze hook."""
         for plugin in self.plugins:
             if self.is_enabled(plugin.name) and hasattr(plugin, "on_analyze"):
                 try:
+                    # Set project root on plugin if it supports it
+                    if project_root and hasattr(plugin, "_project_root"):
+                        setattr(plugin, "_project_root", project_root)
                     plugin.on_analyze(summary)
                 except Exception as e:
                     logger.error("Plugin %s failed on_analyze: %s", plugin.name, e)
 
     def get_plugins_info(self) -> List[Dict[str, Any]]:
         """Return info about loaded plugins."""
-        return [
-            {
+        result = []
+        for p in self.plugins:
+            info: Dict[str, Any] = {
                 "name": p.name,
                 "version": p.version,
                 "description": getattr(p, "description", ""),
                 "enabled": self.is_enabled(p.name),
-                "config": getattr(p, "config", {})
+                "trust_level": getattr(p, "trust_level", "experimental"),
+                "config": getattr(p, "config", {}),
+                "is_core": p.name in self.CORE_PLUGINS,
             }
-            for p in self.plugins
-        ]
+            
+            # Add UI config if present
+            ui_config = getattr(p, "ui_config", None)
+            if ui_config and hasattr(ui_config, "to_dict"):
+                info["ui_config"] = ui_config.to_dict()
+            else:
+                info["ui_config"] = None
+            
+            # Check if plugin has UI methods
+            info["has_ui"] = hasattr(p, "get_ui_html") and callable(getattr(p, "get_ui_html"))
+            info["has_settings_ui"] = hasattr(p, "get_settings_html") and callable(getattr(p, "get_settings_html"))
+            
+            result.append(info)
+        
+        return result
+
+    def get_sidebar_plugins(self) -> List[Dict[str, Any]]:
+        """Return plugins that should appear in the sidebar menu."""
+        sidebar_plugins = []
+        for p in self.plugins:
+            if not self.is_enabled(p.name):
+                continue
+            
+            ui_config = getattr(p, "ui_config", None)
+            if not ui_config:
+                continue
+            
+            ui_type = getattr(ui_config, "ui_type", PluginUIType.NONE)
+            if ui_type in (PluginUIType.SIDEBAR, PluginUIType.BOTH):
+                sidebar_plugins.append({
+                    "name": p.name,
+                    "menu_icon": getattr(ui_config, "menu_icon", "🔌"),
+                    "menu_label_key": getattr(ui_config, "menu_label_key", p.name),
+                    "menu_order": getattr(ui_config, "menu_order", 100),
+                    "view_id": getattr(ui_config, "view_id", p.name),
+                })
+        
+        # Sort by menu_order
+        sidebar_plugins.sort(key=lambda x: x["menu_order"])
+        return sidebar_plugins
+
+    def get_settings_plugins(self) -> List[Dict[str, Any]]:
+        """Return plugins that should appear in the settings page."""
+        settings_plugins = []
+        for p in self.plugins:
+            if not self.is_enabled(p.name):
+                continue
+            
+            ui_config = getattr(p, "ui_config", None)
+            if not ui_config:
+                continue
+            
+            ui_type = getattr(ui_config, "ui_type", PluginUIType.NONE)
+            if ui_type in (PluginUIType.SETTINGS, PluginUIType.BOTH):
+                settings_plugins.append({
+                    "name": p.name,
+                    "settings_section": getattr(ui_config, "settings_section", p.name),
+                })
+        
+        return settings_plugins
+
+    def get_plugin_ui_html(self, plugin_name: str) -> Optional[str]:
+        """Get the UI HTML for a plugin."""
+        for p in self.plugins:
+            if p.name == plugin_name and self.is_enabled(p.name):
+                method = getattr(p, "get_ui_html", None)
+                if method is not None and callable(method):
+                    result = method()
+                    return str(result) if result is not None else None
+        return None
+
+    def get_plugin_ui_js(self, plugin_name: str) -> Optional[str]:
+        """Get the UI JavaScript for a plugin."""
+        for p in self.plugins:
+            if p.name == plugin_name and self.is_enabled(p.name):
+                method = getattr(p, "get_ui_js", None)
+                if method is not None and callable(method):
+                    result = method()
+                    return str(result) if result is not None else None
+        return None
+
+    def get_plugin_settings_html(self, plugin_name: str) -> Optional[str]:
+        """Get the settings HTML for a plugin."""
+        for p in self.plugins:
+            if p.name == plugin_name and self.is_enabled(p.name):
+                method = getattr(p, "get_settings_html", None)
+                if method is not None and callable(method):
+                    result = method()
+                    return str(result) if result is not None else None
+        return None
+
+    def get_plugin_settings_js(self, plugin_name: str) -> Optional[str]:
+        """Get the settings JavaScript for a plugin."""
+        for p in self.plugins:
+            if p.name == plugin_name and self.is_enabled(p.name):
+                method = getattr(p, "get_settings_js", None)
+                if method is not None and callable(method):
+                    result = method()
+                    return str(result) if result is not None else None
+        return None
+
+    # --- Plugin Installation / Uninstallation ---
+
+    # Core plugins that cannot be uninstalled
+    CORE_PLUGINS = frozenset({
+        "code_quality",
+        "ai_helper", 
+        "notifications_webhook",
+        "pylance_analyzer",
+        "settings_update",
+    })
+
+    def _get_plugins_directory(self) -> Path:
+        """Get the plugins directory path."""
+        import jupiter.plugins
+        return Path(jupiter.plugins.__path__[0])
+
+    def install_plugin_from_url(self, url: str) -> Dict[str, Any]:
+        """Install a plugin from a URL (ZIP file or Git repo).
+        
+        Args:
+            url: URL to ZIP file or Git repository (git+https://...)
+            
+        Returns:
+            Dict with status and plugin_name if successful
+        """
+        import tempfile
+        import shutil
+        import urllib.request
+        import zipfile
+        
+        plugins_dir = self._get_plugins_directory()
+        
+        try:
+            if url.startswith("git+"):
+                # Git repository - would need git installed
+                # For now, just return an error
+                return {
+                    "status": "error",
+                    "message": "Git repository installation not yet supported. Please download the ZIP and upload it.",
+                }
+            
+            # Download ZIP file
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmp_path = Path(tmpdir)
+                zip_path = tmp_path / "plugin.zip"
+                
+                # Download the file
+                logger.info("Downloading plugin from %s", url)
+                urllib.request.urlretrieve(url, zip_path)
+                
+                # Extract and install
+                return self._install_from_zip(zip_path, plugins_dir)
+                
+        except Exception as e:
+            logger.error("Failed to install plugin from URL %s: %s", url, e)
+            return {"status": "error", "message": str(e)}
+
+    def install_plugin_from_bytes(self, content: bytes, filename: str) -> Dict[str, Any]:
+        """Install a plugin from uploaded file bytes.
+        
+        Args:
+            content: File content as bytes
+            filename: Original filename
+            
+        Returns:
+            Dict with status and plugin_name if successful
+        """
+        import tempfile
+        import shutil
+        import zipfile
+        
+        plugins_dir = self._get_plugins_directory()
+        
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmp_path = Path(tmpdir)
+                
+                if filename.endswith(".zip"):
+                    zip_path = tmp_path / filename
+                    zip_path.write_bytes(content)
+                    return self._install_from_zip(zip_path, plugins_dir)
+                    
+                elif filename.endswith(".py"):
+                    # Single Python file - install directly
+                    plugin_name = filename[:-3]  # Remove .py extension
+                    
+                    # Check if plugin already exists
+                    target_path = plugins_dir / filename
+                    if target_path.exists():
+                        return {
+                            "status": "error",
+                            "message": f"Plugin file '{filename}' already exists. Delete it first or choose a different name.",
+                        }
+                    
+                    # Write the file
+                    target_path.write_bytes(content)
+                    logger.info("Installed plugin file: %s", filename)
+                    
+                    # Reload plugins to pick up the new one
+                    self.reload_all_plugins()
+                    
+                    return {
+                        "status": "ok",
+                        "plugin_name": plugin_name,
+                        "message": f"Plugin '{plugin_name}' installed successfully",
+                    }
+                else:
+                    return {"status": "error", "message": f"Unsupported file type: {filename}"}
+                    
+        except Exception as e:
+            logger.error("Failed to install plugin from file %s: %s", filename, e)
+            return {"status": "error", "message": str(e)}
+
+    def _install_from_zip(self, zip_path: Path, plugins_dir: Path) -> Dict[str, Any]:
+        """Install a plugin from a ZIP file.
+        
+        Args:
+            zip_path: Path to the ZIP file
+            plugins_dir: Target plugins directory
+            
+        Returns:
+            Dict with status and plugin_name if successful
+        """
+        import zipfile
+        import shutil
+        import tempfile
+        
+        try:
+            with tempfile.TemporaryDirectory() as extract_dir:
+                extract_path = Path(extract_dir)
+                
+                # Extract ZIP
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    zf.extractall(extract_path)
+                
+                # Find the plugin content
+                # Could be a single folder or files directly
+                contents = list(extract_path.iterdir())
+                
+                if len(contents) == 1 and contents[0].is_dir():
+                    # Single directory - use its contents
+                    source_dir = contents[0]
+                    plugin_name = source_dir.name
+                else:
+                    # Files directly in the ZIP
+                    source_dir = extract_path
+                    plugin_name = zip_path.stem
+                
+                # Check for Python files
+                py_files = list(source_dir.glob("*.py"))
+                if not py_files:
+                    return {"status": "error", "message": "No Python files found in the archive"}
+                
+                # If there's an __init__.py, this is a package
+                if (source_dir / "__init__.py").exists():
+                    # Copy as a package
+                    target_dir = plugins_dir / plugin_name
+                    if target_dir.exists():
+                        return {
+                            "status": "error",
+                            "message": f"Plugin directory '{plugin_name}' already exists",
+                        }
+                    shutil.copytree(source_dir, target_dir)
+                    logger.info("Installed plugin package: %s", plugin_name)
+                else:
+                    # Copy individual .py files
+                    for py_file in py_files:
+                        target_file = plugins_dir / py_file.name
+                        if target_file.exists():
+                            logger.warning("Skipping existing file: %s", py_file.name)
+                            continue
+                        shutil.copy2(py_file, target_file)
+                        logger.info("Installed plugin file: %s", py_file.name)
+                    
+                    # Use first .py file name as plugin name
+                    plugin_name = py_files[0].stem
+                
+                # Reload plugins
+                self.reload_all_plugins()
+                
+                return {
+                    "status": "ok",
+                    "plugin_name": plugin_name,
+                    "message": f"Plugin '{plugin_name}' installed successfully",
+                }
+                
+        except zipfile.BadZipFile:
+            return {"status": "error", "message": "Invalid ZIP file"}
+        except Exception as e:
+            logger.error("Failed to install plugin from ZIP: %s", e)
+            return {"status": "error", "message": str(e)}
+
+    def uninstall_plugin(self, plugin_name: str) -> Dict[str, Any]:
+        """Uninstall a plugin by name.
+        
+        Removes the plugin files from the plugins directory.
+        
+        Args:
+            plugin_name: Name of the plugin to uninstall
+            
+        Returns:
+            Dict with status
+            
+        Raises:
+            ValueError: If the plugin is a core plugin or doesn't exist
+        """
+        import shutil
+        
+        # Check if it's a core plugin
+        if plugin_name in self.CORE_PLUGINS:
+            raise ValueError(f"Cannot uninstall core plugin '{plugin_name}'")
+        
+        # Find the plugin
+        plugin = self.get_plugin(plugin_name)
+        if not plugin:
+            raise ValueError(f"Plugin '{plugin_name}' not found")
+        
+        plugins_dir = self._get_plugins_directory()
+        
+        # Find the plugin files/directory
+        plugin_module = type(plugin).__module__
+        
+        # Try to find the file/directory to delete
+        plugin_path = None
+        
+        # Check for single file plugin
+        single_file = plugins_dir / f"{plugin_name}.py"
+        if single_file.exists():
+            plugin_path = single_file
+        
+        # Check for package plugin
+        package_dir = plugins_dir / plugin_name
+        if package_dir.is_dir():
+            plugin_path = package_dir
+        
+        if not plugin_path:
+            return {
+                "status": "error",
+                "message": f"Cannot find plugin files for '{plugin_name}'",
+            }
+        
+        try:
+            # Disable the plugin first
+            self.disable_plugin(plugin_name)
+            
+            # Remove from our list
+            self.plugins = [p for p in self.plugins if p.name != plugin_name]
+            if plugin_name in self.plugin_status:
+                del self.plugin_status[plugin_name]
+            
+            # Remove from sys.modules
+            modules_to_remove = [
+                name for name in sys.modules.keys()
+                if name == plugin_module or name.startswith(f"{plugin_module}.")
+            ]
+            for mod_name in modules_to_remove:
+                del sys.modules[mod_name]
+            
+            # Delete the files
+            if plugin_path.is_dir():
+                shutil.rmtree(plugin_path)
+                logger.info("Removed plugin directory: %s", plugin_path)
+            else:
+                plugin_path.unlink()
+                logger.info("Removed plugin file: %s", plugin_path)
+            
+            return {
+                "status": "ok",
+                "message": f"Plugin '{plugin_name}' uninstalled successfully",
+            }
+            
+        except Exception as e:
+            logger.error("Failed to uninstall plugin %s: %s", plugin_name, e)
+            return {"status": "error", "message": str(e)}

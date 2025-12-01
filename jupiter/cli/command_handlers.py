@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from jupiter.config import load_config, PluginsConfig, PerformanceConfig, JupiterConfig
+from jupiter.config import load_config, load_merged_config, PluginsConfig, PerformanceConfig, JupiterConfig
 from jupiter.core import ProjectAnalyzer, ProjectScanner, ScanReport
 from jupiter.core.cache import CacheManager
 from jupiter.core.history import HistoryManager
@@ -107,7 +107,8 @@ def _collect_scan_payload(services: WorkflowServices) -> dict[str, Any]:
     report = ScanReport.from_files(root=services.options.root, files=services.scanner.iter_files())
     report_dict = report.to_dict()
     report_dict["plugins"] = services.plugin_manager.get_plugins_info()
-    services.plugin_manager.hook_on_scan(report_dict)
+    report_dict["project_path"] = str(services.options.root)
+    services.plugin_manager.hook_on_scan(report_dict, project_root=services.options.root)
     return report_dict
 
 
@@ -315,7 +316,7 @@ def handle_analyze(root: Path, as_json: bool, top: int, ignore_globs: list[str] 
     analyzer = _build_analyzer(scan_options)
     summary = analyzer.summarize(services.scanner.iter_files(), top_n=top)
     summary_dict = summary.to_dict()
-    services.plugin_manager.hook_on_analyze(summary_dict)
+    services.plugin_manager.hook_on_analyze(summary_dict, project_root=root)
     
     if as_json:
         print(json.dumps(summary_dict, indent=2))
@@ -349,10 +350,10 @@ def handle_ci(
     analyzer = _build_analyzer(scan_options)
     summary = analyzer.summarize(services.scanner.iter_files(), top_n=10)
     summary_dict = summary.to_dict()
-    services.plugin_manager.hook_on_analyze(summary_dict)
+    services.plugin_manager.hook_on_analyze(summary_dict, project_root=root)
     
     # 3. Check thresholds
-    thresholds = config.ci.fail_on.copy()
+    thresholds: dict[str, int | None] = config.ci.fail_on.copy()
     if fail_on_complexity is not None:
         thresholds["max_complexity"] = fail_on_complexity
     if fail_on_duplication is not None:
@@ -424,19 +425,19 @@ def handle_server(root: Path, host: str, port: int) -> None:
     # Strip quotes if present (workaround for Windows cmd passing quotes)
     root = Path(str(root).strip('"\''))
     
-    config = load_config(root)
+    install_path = Path(__file__).resolve().parent.parent.parent
+    # Use merged config to get global settings (Meeting, Server) combined with project settings
+    config = load_merged_config(install_path, root)
     
     # CLI args override config
     final_host = host or config.server.host
     final_port = port or config.server.port
-    
-    install_path = Path(__file__).resolve().parent.parent.parent
 
     server = JupiterAPIServer(
         root=root, 
         host=final_host, 
         port=final_port,
-        device_key=config.meeting.deviceKey if config.meeting.enabled else None,
+        device_key=config.meeting.deviceKey,
         plugins_config=config.plugins,
         config=config,
         install_path=install_path
@@ -516,14 +517,16 @@ def handle_app(root: Path) -> None:
     # Strip quotes if present
     root = Path(str(root).strip('"\''))
     
-    # Try to load config, but don't fail if it's missing (might be first run)
+    install_path = Path(__file__).resolve().parent.parent.parent
+    
+    # Try to load merged config to get global settings (Meeting, Server, GUI)
     try:
-        config = load_config(root)
+        config = load_merged_config(install_path, root)
         api_host = config.server.host
         api_port = config.server.port
         web_host = config.gui.host
         web_port = config.gui.port
-        device_key = config.meeting.deviceKey if config.meeting.enabled else None
+        device_key = config.meeting.deviceKey
         plugins_config = config.plugins
     except Exception:
         # Fallback defaults for setup mode
@@ -534,8 +537,6 @@ def handle_app(root: Path) -> None:
         device_key = None
         plugins_config = None
         config = None
-    
-    install_path = Path(__file__).resolve().parent.parent.parent
 
     # Start API Server in a thread
     logger.info("Starting API Server on %s:%s", api_host, api_port)
@@ -545,7 +546,8 @@ def handle_app(root: Path) -> None:
         host=api_host, 
         port=api_port,
         device_key=device_key,
-        plugins_config=config.plugins,
+        plugins_config=config.plugins if config else plugins_config,
+        config=config,
         install_path=install_path
     )
     
@@ -578,3 +580,94 @@ def handle_app(root: Path) -> None:
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Stopping Jupiter App...")
+
+
+def handle_meeting_check_license(root: Path, as_json: bool) -> int:
+    """Check the Jupiter Meeting license and display the result.
+    
+    Args:
+        root: The project root path.
+        as_json: Whether to output as JSON.
+    
+    Returns:
+        Exit code: 0 = valid, 1 = invalid, 2 = config_error, 3 = network_error.
+    """
+    from jupiter.server.meeting_adapter import MeetingAdapter, MeetingLicenseStatus
+    
+    config = load_config(root)
+    meeting_config = config.meeting
+    
+    # Check if device_key is configured
+    device_key = meeting_config.deviceKey
+    if not device_key:
+        result = {
+            "status": "config_error",
+            "message": "No device_key configured in Meeting settings.",
+            "device_key": None,
+            "meeting_base_url": meeting_config.base_url,
+            "device_type_expected": meeting_config.device_type,
+        }
+        if as_json:
+            print(json.dumps(result, indent=2))
+        else:
+            print("❌ License Check Failed: Configuration Error")
+            print(f"   Message: {result['message']}")
+            print(f"   Meeting API: {result['meeting_base_url']}")
+        return 2
+    
+    # Create adapter and check license
+    adapter = MeetingAdapter(
+        device_key=device_key,
+        project_root=root,
+        base_url=meeting_config.base_url,
+        device_type_expected=meeting_config.device_type,
+        timeout_seconds=meeting_config.timeout_seconds,
+        auth_token=meeting_config.auth_token,
+    )
+    
+    license_result = adapter.get_license_status()
+    result_dict = license_result.to_dict()
+    
+    if as_json:
+        print(json.dumps(result_dict, indent=2))
+    else:
+        status = license_result.status
+        if status == MeetingLicenseStatus.VALID:
+            print("✅ License Check: VALID")
+        elif status == MeetingLicenseStatus.INVALID:
+            print("❌ License Check: INVALID")
+        elif status == MeetingLicenseStatus.NETWORK_ERROR:
+            print("⚠️  License Check: NETWORK ERROR")
+        elif status == MeetingLicenseStatus.CONFIG_ERROR:
+            print("❌ License Check: CONFIGURATION ERROR")
+        else:
+            print(f"❓ License Check: {status.value.upper()}")
+        
+        print(f"   Message: {license_result.message}")
+        print(f"   Device Key: {license_result.device_key}")
+        print(f"   Meeting API: {license_result.meeting_base_url}")
+        
+        if license_result.http_status is not None:
+            print(f"   HTTP Status: {license_result.http_status}")
+        
+        if license_result.authorized is not None:
+            print(f"   Authorized: {license_result.authorized}")
+        
+        if license_result.device_type is not None:
+            print(f"   Device Type: {license_result.device_type} (expected: {license_result.device_type_expected})")
+        
+        if license_result.token_count is not None:
+            print(f"   Token Count: {license_result.token_count}")
+        
+        if license_result.checked_at:
+            print(f"   Checked At: {license_result.checked_at}")
+    
+    # Return appropriate exit code
+    if license_result.status == MeetingLicenseStatus.VALID:
+        return 0
+    elif license_result.status == MeetingLicenseStatus.INVALID:
+        return 1
+    elif license_result.status == MeetingLicenseStatus.CONFIG_ERROR:
+        return 2
+    else:  # NETWORK_ERROR
+        return 3

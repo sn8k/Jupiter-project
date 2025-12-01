@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from dataclasses import dataclass, asdict
 
+from jupiter import __version__
 from jupiter.web.app import JupiterWebUI, WebUISettings
 from jupiter.server.api import app
 from jupiter.server.manager import ProjectManager
@@ -74,6 +75,7 @@ def test_web_ui_handler_context(web_ui, tmp_path):
     
     assert response_data['root'] == str(tmp_path)
     assert response_data['api_base_url'] == "http://127.0.0.1:8000" # Default if env var not set in this scope
+    assert response_data['jupiter_version'] == __version__
 
 # --- WebUI API Integration Tests ---
 

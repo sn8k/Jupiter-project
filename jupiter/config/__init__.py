@@ -8,6 +8,7 @@ from .config import (
     CiConfig,
     UserConfig,
     load_config,
+    load_merged_config,
     save_config,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "CiConfig",
     "UserConfig",
     "load_config",
+    "load_merged_config",
     "save_config",
 ]

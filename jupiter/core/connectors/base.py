@@ -10,8 +10,14 @@ class BaseConnector(ABC):
         pass
 
     @abstractmethod
-    async def run_command(self, command: list[str], with_dynamic: bool = False) -> Dict[str, Any]:
-        """Run a command in the project context."""
+    async def run_command(self, command: list[str], with_dynamic: bool = False, cwd: Optional[str] = None) -> Dict[str, Any]:
+        """Run a command in the project context.
+        
+        Args:
+            command: The command to execute as a list of strings.
+            with_dynamic: Enable dynamic analysis (tracing) for this run.
+            cwd: Optional working directory. If None, uses project root.
+        """
         pass
 
     @abstractmethod

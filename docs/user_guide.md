@@ -55,19 +55,57 @@ performance:
   max_workers: null  # Auto-detect
   graph_simplification: false
   max_graph_nodes: 1000
+  large_file_threshold: 10485760 # 10MB
 
 meeting:
   enabled: true
   deviceKey: "YOUR_DEVICE_KEY"
 
-project_api:
+  project_api:
   type: "openapi"
   base_url: "http://localhost:8000"
   openapi_url: "/openapi.json"
+
+backends:
+  - name: "local"
+    type: "local_fs"
+    path: "."
+  - name: "remote-jupiter"
+    type: "remote_jupiter_api"
+    api_url: "http://remote-jupiter:8000"
+    api_key: "secret"
+  - name: "external-api"
+    type: "openapi"
+    api_url: "http://external-api.com"
+    path: "/openapi.json" # Used as openapi_url for this type
 ```
 
-## Web Interface
+## Remote Projects & API Inspection
 
+Jupiter can analyze projects that are not on your local machine.
+
+### Remote Jupiter Instance
+If you have another Jupiter instance running elsewhere, you can add it as a backend with `type: remote_jupiter_api`. Jupiter will delegate scan and analysis requests to that instance.
+
+### Generic API (OpenAPI)
+You can treat any API exposing an OpenAPI schema as a "project".
+1. Add a backend with `type: openapi`.
+2. Set `api_url` to the base URL of the API.
+3. Set `path` to the OpenAPI schema path (e.g., `/openapi.json`).
+
+When you select this backend (or create a project with this configuration), Jupiter will "scan" the API by listing its endpoints as files.
+
+## Performance Tuning
+
+For large projects (monorepos, legacy codebases), you can tune Jupiter's performance in `<project>.jupiter.yaml`:
+
+*   **`performance.parallel_scan`**: Enable multi-threaded scanning (default: true).
+*   **`performance.max_workers`**: Limit the number of threads (default: CPU count).
+*   **`performance.large_file_threshold`**: Files larger than this (in bytes) will be skipped by the language analyzer to avoid memory spikes (default: 10MB).
+*   **`performance.graph_simplification`**: If true, the Live Map will group nodes by directory to reduce visual clutter.
+*   **`performance.max_graph_nodes`**: Automatically enable simplification if the node count exceeds this limit (default: 1000).
+
+## Web Interface
 The Web Interface is the primary way to interact with Jupiter. It provides a visual dashboard and access to all features.
 
 ### Dashboard
@@ -75,6 +113,7 @@ The dashboard shows a panorama of your project:
 - **Status Badges**: Meeting license status, scan status.
 - **Stats Grid**: File count, total size, last update time.
 - **Live Watch**: Real-time file change events (when Watch mode is active).
+- **Version Badge**: Le cartouche "Jupiter" affiche désormais la version extraite du fichier `VERSION`, pratique pour vérifier rapidement la build en cours.
 
 ### Features
 
@@ -100,6 +139,7 @@ The **Settings** view allows you to configure your `<project>.jupiter.yaml` dire
 - **Meeting**: Enable/Disable and set Device Key.
 - **Theme & Language**: Customize the UI appearance.
 - **Update**: Trigger a self-update from a ZIP file or Git URL.
+  - Le panneau affiche également la version actuelle lue côté serveur, juste au-dessus du formulaire d'upload.
 
 #### History
 The **History** view lists every stored snapshot (newest first) with their labels, timestamps, file counts, and size deltas. Select any two snapshots to render a diff showing:
@@ -252,12 +292,13 @@ Jupiter supports plugins to extend functionality.
 - Configure plugins in `<project>.jupiter.yaml`:
   ```yaml
   plugins:
-    enabled: ["ai_helper", "code_quality_stub", "notifications_webhook"]
+    enabled: ["ai_helper", "code_quality", "notifications_webhook", "pylance_analyzer"]
     disabled: []
   ```
 - Plugins can hook into `scan`, `analyze`, and `run` events.
 
 The **Plugins** view in the Web UI lists all loaded plugins, shows whether they are enabled, and (for configurable plugins such as `notifications_webhook`) exposes a small form to adjust settings (e.g. webhook URL).
+Chaque carte affiche aussi la version propre au plugin afin de distinguer les cycles de mise à jour du cœur de Jupiter.
 
 ### Meeting Integration
 

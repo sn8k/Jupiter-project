@@ -57,7 +57,13 @@ class SystemState:
         adapter = getattr(self.app.state, "meeting_adapter", None)
         if adapter:
             adapter.project_root = target_root
+            # Update Meeting config and refresh license if device_key changed
+            old_device_key = adapter.device_key
             adapter.device_key = config.meeting.deviceKey
+            adapter.auth_token = config.meeting.auth_token
+            # Re-verify license if device_key was updated
+            if config.meeting.deviceKey and config.meeting.deviceKey != old_device_key:
+                adapter.refresh_license()
 
         project_manager = getattr(self.app.state, "project_manager", None)
         if project_manager:
@@ -76,10 +82,12 @@ class SystemState:
 
 
 def preserve_meeting_config(previous: JupiterConfig | None, target: JupiterConfig) -> None:
-    """Carry over Meeting device key when switching roots."""
+    """Carry over Meeting device key and auth token when switching roots."""
     if not previous:
         return
 
     if previous.meeting.deviceKey and not target.meeting.deviceKey:
         target.meeting.deviceKey = previous.meeting.deviceKey
-        target.meeting.enabled = previous.meeting.enabled
+    
+    if previous.meeting.auth_token and not target.meeting.auth_token:
+        target.meeting.auth_token = previous.meeting.auth_token

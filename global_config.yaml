@@ -2,18 +2,34 @@ gui:
   host: 127.0.0.1
   port: 8050
 logging:
-  level: DEBUG
-  path: ./testlogs.log
+  level: INFO
+  path: null
 meeting:
-  deviceKey: 7F334701F08E904D796A83C6C26ADAF3
-  enabled: true
+  auth_token: '477266'
+  deviceKey: C86015A0C19686A1C7ECE6CC7C8F4874
+  heartbeat_interval_seconds: 60
 plugins:
   disabled: []
   enabled: []
+  notifications_webhook:
+    enabled: true
+    events:
+    - scan_complete
+    - analysis_complete
+    - quality_alert
+    - api_connected
+    url: null
+security:
+  allow_run: true
+  allowed_commands: []
+  token: null
 server:
   host: 127.0.0.1
   port: 8000
 ui:
   language: en
   theme: dark
-users: []
+users:
+- name: sn8k
+  role: admin
+  token: Luka2013

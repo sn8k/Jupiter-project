@@ -7,3 +7,5 @@
 - Settings API now exposes `log_path` to allow configuring the destination log file path from the UI.
 - Added `/projects/{id}/ignore` to persist per-project ignore globs in the global registry and serve them to the UI/projects list.
 - Added `/projects/{id}/api_config` (GET/POST) to read/update API inspection settings per project without touching unrelated config fields.
+- Added `/project/root-entries` endpoint to list all files/folders at the project root for the interactive exclusion panel, returning entries with `is_dir`, `is_hidden` flags and current ignore patterns.
+

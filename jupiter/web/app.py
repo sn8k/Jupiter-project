@@ -12,6 +12,7 @@ from pathlib import Path
 from socketserver import ThreadingTCPServer
 from typing import Callable
 
+from jupiter import __version__
 from jupiter.config.config import get_project_config_path
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,8 @@ class JupiterWebUI:
             "project_name": project_name,
             "api_base_url": api_base_url,
             "meeting": {"deviceKey": self.settings.device_key},
-            "has_config_file": config_path.exists()
+            "has_config_file": config_path.exists(),
+            "jupiter_version": __version__,
         }
 
         class _Handler(SimpleHTTPRequestHandler):  # type: ignore[misc]

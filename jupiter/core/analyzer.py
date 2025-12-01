@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import dataclass, field, asdict
 from itertools import islice
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, cast
 
 from .scanner import FileMetadata
 from .cache import CacheManager
@@ -190,11 +190,11 @@ class ProjectAnalyzer:
         ]
 
         if python_files:
-            python_files.sort(key=lambda m: len(m.language_analysis.get("defined_functions", [])), reverse=True)
+            python_files.sort(key=lambda m: len((m.language_analysis or {}).get("defined_functions", [])), reverse=True)
             hotspots["most_functions"] = [
                 {
                     "path": str(m.path),
-                    "details": f"{len(m.language_analysis.get('defined_functions', []))} functions",
+                    "details": f"{len((m.language_analysis or {}).get('defined_functions', []))} functions",
                 }
                 for m in python_files[:top_n]
             ]
@@ -203,12 +203,13 @@ class ProjectAnalyzer:
         python_summary = None
         if python_files:
             py_file_count = len(python_files)
-            py_total_functions = sum(len(m.language_analysis.get("defined_functions", [])) for m in python_files)
+            py_total_functions = sum(len((m.language_analysis or {}).get("defined_functions", [])) for m in python_files)
             
             # Calculate unused functions considering dynamic analysis
             py_total_unused = 0
             for m in python_files:
-                unused_funcs = m.language_analysis.get("potentially_unused_functions", [])
+                la = m.language_analysis or {}
+                unused_funcs = la.get("potentially_unused_functions", [])
                 if not unused_funcs:
                     continue
                 
@@ -244,7 +245,7 @@ class ProjectAnalyzer:
         js_ts_summary = None
         if js_ts_files:
             js_file_count = len(js_ts_files)
-            js_total_functions = sum(len(m.language_analysis.get("defined_functions", [])) for m in js_ts_files)
+            js_total_functions = sum(len((m.language_analysis or {}).get("defined_functions", [])) for m in js_ts_files)
             
             js_ts_summary = JsTsProjectSummary(
                 total_files=js_file_count,
@@ -348,7 +349,8 @@ class ProjectAnalyzer:
                 # Deduplicate occurrences to avoid noisy reports
                 unique_locations = []
                 seen_locations = set()
-                for occ in cluster["occurrences"]:
+                occurrences = cast(List[Dict[str, Any]], cluster.get("occurrences", []))
+                for occ in occurrences:
                     key = (occ["path"], occ["line"])
                     if key in seen_locations:
                         continue
@@ -371,7 +373,7 @@ class ProjectAnalyzer:
                     base_details = f"Code duplicated across {len(paths)} files."
                     severity = "high"
                 else:
-                    base_details = f"Code duplicated {len(cluster['occurrences'])} times in this file."
+                    base_details = f"Code duplicated {len(occurrences)} times in this file."
                     severity = "medium"
 
                 details_suffix = ""

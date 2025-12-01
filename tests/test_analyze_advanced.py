@@ -88,6 +88,9 @@ def test_python_complexity_duplication(tmp_path):
     # Check duplication
     dups = summary.quality.get("duplication_clusters", [])
     assert len(dups) > 0
+    first_occ = dups[0]["occurrences"][0]
+    assert "end_line" in first_occ
+    assert first_occ["end_line"] >= first_occ["line"]
     # Should find duplication between dup1 and dup2
     dup_recs = [r for r in summary.refactoring if r["type"] == "duplication"]
     assert dup_recs, "Expected duplication refactoring recommendation"

@@ -1,5 +1,6 @@
 # Changelog – jupiter/web/app.js
 - Refactored event handling to use `data-action` delegation, fixing "frozen" UI issues with ES Modules.
+- Charge et affiche la version globale de Jupiter (badge header + panneau Mise à jour), et protège l'affichage des plugins lorsque `plugin.version` n'est pas fourni.
 - Removed inline `onclick` handlers from `showOnboarding` and `renderPluginList`.
 - Added `create-config`, `close-onboarding`, and `toggle-plugin` to `handleAction`.
 - Unified `startScan` implementation (options-aware) and removed duplicate declarations that prevented the module from executing.
@@ -12,6 +13,7 @@
 - Added `fetchMeetingStatus` to poll license status and update UI badges/settings.
 - Added `renderQuality` to display complexity and duplication metrics in the new Quality view.
 - Updated `renderReport` to include quality metrics rendering.
+- Supprimé `renderQuality` et son invocation car le tableau de bord Qualité est désormais géré directement par le plugin Code Quality.
 - Added backend management: `fetchBackends` and `renderBackendSelector`.
 - Updated `startScan` and `runCommand` to pass `backend_name` to the API.
 - Added `backends` and `currentBackend` to application state.
@@ -32,5 +34,13 @@
 - Added `performProjectMutation` helper to factor repeated project activation/deletion request handling.
 - Projects page now lets users edit per-project ignore globs (UI inputs + `/projects/{id}/ignore` API call).
 - Moved API connector settings to the Projects page with a dedicated form that saves via `/projects/{id}/api_config`.
+- Added interactive file/folder exclusion panel with checkboxes for root entries: `loadProjectRootEntries()`, `renderIgnoreEntries()`, `saveProjectIgnores()`, and `setupIgnoreEventListeners()`.
+- Exclusion entries support filtering, hidden file toggling, and custom glob patterns input.
+- Action handlers added for `refresh-root-entries` and `save-project-ignores`.
+- `loadPluginSettings()` vide désormais le conteneur actuel avant de demander aux plugins leurs cartes de configuration, ce qui évite les résidus d'UI quand on recharge la page ou qu'on active un autre projet.
+- Les cartes retournées par les plugins sont injectées dans un wrapper `.plugin-settings-card` afin d'aligner leur style avec la nouvelle grille Settings.
+- Le wiring du formulaire API projet et de l'upload ZIP passe par `setupProjectApiConnectorForm()` / `setupUpdateFileUpload()` appelés dans `init()`, supprimant le `DOMContentLoaded` isolé qui cassait la compilation TypeScript et l'exécution du thème.
+
+
 
 

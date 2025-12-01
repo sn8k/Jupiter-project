@@ -12,11 +12,17 @@ Jupiter is a modular tool designed to scan, analyze, and observe software projec
 *   **Snapshot History**: Automatically persist each scan, label important milestones, and diff snapshots via CLI/API/UI.
 *   **Live Map**: Interactive dependency graph combining static structure, hotspots, and dynamic usage.
 *   **Polyglot Support**: First-class support for Python and JS/TS projects.
+*   **Pylance Diagnostics**: Pyright-powered analysis in the Pylance view now explains when no Python files are present, avoiding misleading “no data” states on polyglot repos.
 *   **Simulation**: Impact analysis when virtually removing a file or function.
 *   **Project API Connectors**: OpenAPI connector to inspect your own project's HTTP API.
 *   **Web Interface**: Visual dashboard for exploring your project.
 *   **Plugins & Webhooks**: Extensible plugin architecture with webhook notifications.
+*   **Notification Center**: Global toast popups surface plugin alerts (including the API connectivity event) and webhook messages directly inside the Web UI.
+*   **Manual Duplicate Linking**: Merge overlapping duplication clusters directly from the Code Quality plugin UI; linked definitions live in `.jupiter/manual_duplication_links.json` and can be rechecked on demand.
 *   **Configurable Logging**: Set the global log level (Debug/Info/Warning/Error/Critical) from the Settings page and keep CLI/API/Uvicorn aligned.
+*   **Plugin-Aware Logging**: All bundled plugins emit structured INFO/DEBUG traces that honor the Settings log level so troubleshooting never requires patching code.
+*   **Plugin Settings Persistence**: Notification/Code Quality options now load from and save to the unified config, and their UI cards share the refreshed two-column Settings layout for faster edits.
+*   **Version Awareness**: Le bandeau principal et la carte "Mise à jour" affichent la version du cœur (fichier `VERSION`) tandis que la page Plugins expose désormais le numéro propre à chaque module.
 *   **Meeting Integration**: License management and session control.
 *   **Multi-Project Management**: Manage multiple projects with distinct configurations and switch between them easily.
 *   **Projects Control Center**: Dedicated Web UI dashboard to view the active project, key stats, and manage configured roots in one place.
@@ -98,8 +104,29 @@ Jupiter is primarily a local development tool. However, when exposing the API (e
 2.  **Restrict `run`**: Use `security.allow_run` and `security.allowed_commands` to disable or whitelist commands.
 3.  **Use a Reverse Proxy**: For SSL/TLS termination if needed.
 
+## Meeting License Integration
+
+Jupiter can optionally verify its license via the Meeting backend API. When configured with a `deviceKey` in `~/.jupiter/global_config.yaml`:
+
+- License is verified at startup against Meeting API
+- A valid license requires: `authorized == true`, `device_type == "Jupiter"`, and `token_count > 0`
+- Without a valid license, Jupiter runs in restricted mode (10-minute trial)
+
+**Check license via CLI:**
+```bash
+python -m jupiter.cli.main meeting check-license
+```
+
+**API endpoints:**
+- `GET /license/status` – Get detailed license verification status
+- `POST /license/refresh` – Force a license re-check (admin only)
+
+See [Manual.md](Manual.md) for detailed configuration.
+
 ## Release Notes
 
+- **1.1.12** – La page Settings adopte une grille deux colonnes avec carte "Mise à jour" dédiée, les panneaux plugins (Notifications & Code Quality) reçoivent une UI plus claire avec états de sauvegarde, et leurs paramètres sont maintenant persistés dans la configuration globale/projet.
+- **1.1.11** – La vue Qualité est désormais intégrée dans l'onglet *Dashboard* du plugin Code Quality (tableaux complexité/duplication + export), avec un panneau de paramètres revu et plus descriptif.
 - **1.1.10** – Internal deduplication: shared helpers now drive CLI scan/analyze setup, server snapshot handling, and project UI mutations to reduce drift.
 - **1.1.9** – AI duplication suggestions now include concrete file:line evidence in the API response and the Web UI Suggestions tab.
 - **1.1.4** – Projects Control Center fully wired to `/projects` (refresh, activate, delete) with dashboard stats and documented multi-project management.

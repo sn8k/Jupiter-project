@@ -104,7 +104,7 @@ async def get_analyze(
     # Run plugin hooks
     # We convert to dict to allow plugins to modify the response
     response_dict = response.dict()
-    app.state.plugin_manager.hook_on_analyze(response_dict)
+    app.state.plugin_manager.hook_on_analyze(response_dict, project_root=root)
     
     return AnalyzeResponse(**response_dict)
 

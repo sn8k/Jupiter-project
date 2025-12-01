@@ -63,6 +63,12 @@ class ScanReport(BaseModel):
     refactoring: Optional[List[Dict[str, Any]]] = Field(
         default=None, description="Refactoring recommendations derived from quality analysis."
     )
+    pylance: Optional[Dict[str, Any]] = Field(
+        default=None, description="Static type analysis results from Pyright/Pylance."
+    )
+    code_quality: Optional[Dict[str, Any]] = Field(
+        default=None, description="Code quality plugin analysis results."
+    )
 
 
 class RunRequest(BaseModel):
@@ -76,6 +82,9 @@ class RunRequest(BaseModel):
     )
     backend_name: Optional[str] = Field(
         default=None, description="Name of the backend to use (optional)."
+    )
+    cwd: Optional[str] = Field(
+        default=None, description="Working directory for command execution (optional, defaults to project root)."
     )
 
 
@@ -144,6 +153,11 @@ class AnalyzeResponse(BaseModel):
     plugins: Optional[List[Dict[str, Any]]] = None
     refactoring: List[RefactoringRecommendation] = Field(default_factory=list)
     api: Optional[Dict[str, Any]] = None
+    # Plugin data fields
+    code_quality: Optional[Dict[str, Any]] = None
+    pylance: Optional[Dict[str, Any]] = None
+    # Generic field for any other plugin data
+    plugin_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class MeetingStatus(BaseModel):
@@ -165,6 +179,41 @@ class MeetingStatus(BaseModel):
         description="Overall status: 'active', 'limited', 'expired', or 'unlicensed'."
     )
     message: Optional[str] = Field(None, description="Status message or error.")
+
+
+class LicenseStatus(BaseModel):
+    """Response model for GET /license/status endpoint with detailed Meeting verification."""
+
+    status: str = Field(
+        description="License status: 'valid', 'invalid', 'network_error', or 'config_error'."
+    )
+    message: str = Field(
+        description="Human-readable message explaining the license status."
+    )
+    device_key: Optional[str] = Field(
+        None, description="The device key that was checked."
+    )
+    http_status: Optional[int] = Field(
+        None, description="HTTP status code from Meeting API (if applicable)."
+    )
+    authorized: Optional[bool] = Field(
+        None, description="Whether the device is authorized in Meeting."
+    )
+    device_type: Optional[str] = Field(
+        None, description="The device type reported by Meeting."
+    )
+    token_count: Optional[int] = Field(
+        None, description="The number of tokens remaining for this device."
+    )
+    checked_at: Optional[str] = Field(
+        None, description="ISO timestamp when the license was last checked."
+    )
+    meeting_base_url: Optional[str] = Field(
+        None, description="The Meeting API base URL that was used."
+    )
+    device_type_expected: Optional[str] = Field(
+        None, description="The expected device type for Jupiter."
+    )
 
 
 class HealthStatus(BaseModel):
@@ -220,8 +269,9 @@ class ConfigModel(BaseModel):
     server_port: int
     gui_host: str
     gui_port: int
-    meeting_enabled: bool
     meeting_device_key: Optional[str]
+    meeting_auth_token: Optional[str] = None
+    meeting_heartbeat_interval: int = 60
     ui_theme: str
     ui_language: str
     log_level: str = "INFO"
@@ -254,7 +304,11 @@ class UpdateRequest(BaseModel):
 
 
 class SnapshotMetadataModel(BaseModel):
-    """Metadata describing a stored snapshot."""
+    """Metadata describing a stored snapshot.
+    
+    Note: This Pydantic model mirrors SnapshotMetadata dataclass in jupiter.core.history
+    to avoid circular imports. Keep both in sync when modifying fields.
+    """
 
     id: str
     timestamp: float

@@ -13,7 +13,7 @@
         <div class="brand">
           <span class="logo" aria-hidden="true">🪐</span>
           <div>
-            <p class="eyebrow">Jupiter</p>
+            <p class="eyebrow">Jupiter <span id="global-version-badge" class="version-pill">v—</span></p>
             <h1 data-i18n="main_title">Cartographie &amp; Observabilité</h1>
             <p class="muted" data-i18n="main_subtitle">Interface sombre, minimaliste et extensible</p>
           </div>
@@ -28,7 +28,6 @@
           </div>
           <div class="actions">
             <button class="ghost" id="user-profile-btn" onclick="openLoginModal()" title="Non connecté">👤</button>
-            <button class="ghost" data-action="load-sample" data-i18n="sample_button">Exemple</button>
             <button class="primary" data-action="open-scan-modal" data-i18n="scan_button">Scan</button>
             <button class="primary" data-action="open-run-modal" data-i18n="run_button">Run</button>
             <button class="primary" data-action="start-watch" data-i18n="watch_button">Watch</button>
@@ -38,19 +37,20 @@
 
       <div class="app-body">
         <nav class="app-nav" aria-label="Navigation principale">
-          <button class="nav-btn active" data-view="dashboard" data-i18n="dashboard_view">Dashboard</button>
-          <button class="nav-btn" data-view="analysis" data-i18n="analysis_view">Analyse</button>
-          <button class="nav-btn" data-view="quality" data-i18n="quality_view">Qualité</button>
-          <button class="nav-btn" data-view="diagnostics" data-i18n="diagnostic_view">Diagnostic</button>
-          <button class="nav-btn" data-view="files" data-i18n="files_view">Fichiers</button>
-          <button class="nav-btn" data-view="functions" data-i18n="functions_view">Fonctions</button>
-          <button class="nav-btn" data-view="graph" data-i18n="graph_view">Live Map</button>
-          <button class="nav-btn" data-view="api" data-i18n="api_view">API</button>
-          <button class="nav-btn" data-view="history" data-i18n="history_view">Historique</button>
-          <button class="nav-btn" data-view="projects" data-i18n="projects_view">Projets</button>
-          <button class="nav-btn" data-view="settings" data-i18n="settings_view">Paramètres</button>
-          <button class="nav-btn" data-view="plugins" data-i18n="plugins_view">Plugins</button>
-          <button class="nav-btn" data-view="suggestions" data-i18n="suggestions_view">Suggestions IA</button>
+          <button class="nav-btn active" data-view="dashboard" data-i18n="dashboard_view">📊 Dashboard</button>
+          <button class="nav-btn" data-view="analysis" data-i18n="analysis_view">🔍 Analyse</button>
+          <button class="nav-btn" data-view="diagnostics" data-i18n="diagnostic_view">🩺 Diagnostic</button>
+          <button class="nav-btn" data-view="files" data-i18n="files_view">📁 Fichiers</button>
+          <button class="nav-btn" data-view="functions" data-i18n="functions_view">⚙️ Fonctions</button>
+          <button class="nav-btn" data-view="graph" data-i18n="graph_view">🗺️ Live Map</button>
+          <button class="nav-btn" data-view="api" data-i18n="api_view">🔌 API</button>
+          <button class="nav-btn" data-view="history" data-i18n="history_view">📜 Historique</button>
+          <button class="nav-btn" data-view="projects" data-i18n="projects_view">📂 Projets</button>
+          <!-- Dynamic plugin menu items will be inserted before this marker -->
+          <span id="plugin-menu-marker" style="display:none;"></span>
+          <button class="nav-btn" data-view="settings" data-i18n="settings_view">⚙️ Paramètres</button>
+          <button class="nav-btn" data-view="plugins" data-i18n="plugins_view">🧩 Plugins</button>
+          <button class="nav-btn" data-view="suggestions" data-i18n="suggestions_view">🤖 Suggestions IA</button>
         </nav>
 
         <main class="content">
@@ -68,17 +68,72 @@
                 <div class="stats-grid" id="stats-grid"></div>
               </section>
 
-              <section class="panel hidden" id="watch-panel">
+              <section class="panel" id="watch-panel">
                 <header>
                   <div>
-                    <p class="eyebrow">Temps réel</p>
-                    <h2>Surveillance de fichiers</h2>
+                    <p class="eyebrow" data-i18n="watch_eyebrow">Temps réel</p>
+                    <h2 data-i18n="watch_title">Surveillance en direct</h2>
+                    <p class="muted" data-i18n="watch_subtitle">Suivi des scans, analyses et événements en temps réel.</p>
                   </div>
                   <div class="badges">
-                      <span class="badge active">Watching</span>
+                    <span class="badge" id="watch-status-badge">Stopped</span>
                   </div>
                 </header>
-                <ul id="watch-events" class="event-list" style="max-height: 200px; overflow-y: auto; list-style: none; padding: 0;"></ul>
+
+                <!-- Quick Actions -->
+                <div class="watch-actions" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                  <button class="primary small" data-action="open-scan-modal" data-i18n="scan_button">🔍 Scan</button>
+                  <button class="secondary small" data-action="start-watch" id="watch-toggle-btn">👁️ Watch</button>
+                </div>
+
+                <!-- Progress Bar (shown during scan) -->
+                <div id="watch-progress" class="watch-progress hidden" style="margin-bottom: 1rem;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span class="small" id="watch-progress-label" data-i18n="scan_in_progress">Scan en cours...</span>
+                    <span class="small" id="watch-progress-percent">0%</span>
+                  </div>
+                  <div class="progress-bar-container" style="height: 8px; background: var(--bg-subtle); border-radius: 4px; overflow: hidden;">
+                    <div id="watch-progress-bar" class="progress-bar" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.3s ease;"></div>
+                  </div>
+                  <p class="small muted" id="watch-progress-detail" style="margin-top: 0.25rem;"></p>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid watch-stats" style="grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
+                  <div class="stat-card mini">
+                    <p class="label" data-i18n="watch_files_scanned">Fichiers</p>
+                    <p class="value" id="watch-files-count">0</p>
+                  </div>
+                  <div class="stat-card mini">
+                    <p class="label" data-i18n="watch_functions_found">Fonctions</p>
+                    <p class="value" id="watch-functions-count">0</p>
+                  </div>
+                  <div class="stat-card mini">
+                    <p class="label" data-i18n="watch_total_events">Événements</p>
+                    <p class="value" id="watch-events-count">0</p>
+                  </div>
+                  <div class="stat-card mini">
+                    <p class="label" data-i18n="watch_call_count">Appels</p>
+                    <p class="value" id="watch-total-calls">0</p>
+                  </div>
+                </div>
+
+                <!-- Watch Status -->
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                  <span class="label">Status:</span>
+                  <span id="watch-status" class="value text-muted" data-i18n="watch_inactive">Inactif</span>
+                </div>
+
+                <!-- Events List -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <p class="label" data-i18n="watch_events_title">Événements récents</p>
+                  <button class="ghost small" id="watch-clear-events" title="Clear">🗑️</button>
+                </div>
+                <ul id="watch-events" class="event-list" style="max-height: 150px; overflow-y: auto; list-style: none; padding: 0; margin: 0;"></ul>
+                
+                <p class="small muted" style="margin-top: 0.75rem;" data-i18n="watch_tip">
+                  Lancez un Scan ou utilisez Run avec l'analyse dynamique pour voir les événements en temps réel.
+                </p>
               </section>
 
               <section class="panel" id="upload-panel">
@@ -150,68 +205,6 @@
             </section>
           </section>
 
-          <section class="view hidden" data-view="quality" aria-label="Vue qualité">
-            <header class="view-header">
-              <div>
-                <h2 data-i18n="quality_view">Qualité</h2>
-                <p class="muted" data-i18n="quality_subtitle">Métriques de qualité du code.</p>
-              </div>
-              <div class="actions">
-                 <button class="secondary" data-action="export-quality" data-i18n="export_report">Exporter Rapport</button>
-              </div>
-            </header>
-            <div class="grid two-cols">
-              <section class="panel">
-                <header>
-                  <div>
-                    <p class="eyebrow" data-i18n="q_complexity_eyebrow">Complexité</p>
-                    <h2 data-i18n="q_complexity_title">Complexité Cyclomatique</h2>
-                    <p class="muted" data-i18n="q_complexity_subtitle">Estimation naïve basée sur les structures de contrôle.</p>
-                  </div>
-                </header>
-                <div class="table-container">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th data-i18n="th_file">Fichier</th>
-                        <th class="numeric" data-i18n="th_score">Score</th>
-                      </tr>
-                    </thead>
-                    <tbody id="quality-complexity-body"></tbody>
-                  </table>
-                  <div id="quality-complexity-empty" class="empty-state" style="display: none;">
-                    <p data-i18n="quality_empty">Aucune donnée de complexité.</p>
-                  </div>
-                </div>
-              </section>
-
-              <section class="panel">
-                <header>
-                  <div>
-                    <p class="eyebrow" data-i18n="q_duplication_eyebrow">Duplication</p>
-                    <h2 data-i18n="q_duplication_title">Code Dupliqué</h2>
-                    <p class="muted" data-i18n="q_duplication_subtitle">Clusters de code identique détectés.</p>
-                  </div>
-                </header>
-                <div class="table-container">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th data-i18n="th_hash">Hash</th>
-                        <th class="numeric" data-i18n="th_occurrences">Occurrences</th>
-                        <th data-i18n="th_details">Détails</th>
-                      </tr>
-                    </thead>
-                    <tbody id="quality-duplication-body"></tbody>
-                  </table>
-                  <div id="quality-duplication-empty" class="empty-state" style="display: none;">
-                    <p data-i18n="quality_empty">Aucune duplication détectée.</p>
-                  </div>
-                </div>
-              </section>
-            </div>
-          </section>
-
           <section class="view hidden" data-view="diagnostics" aria-label="Vue diagnostic">
             <div class="grid two-cols">
               <section class="panel">
@@ -258,13 +251,12 @@
                   <p class="muted" data-i18n="logs_subtitle">Suivi des actions utilisateur et chargements.</p>
                 </div>
                 <div class="actions">
-                  <select id="log-level-filter" class="small" style="padding: 2px 6px; font-size: 12px;">
-                    <option value="DEBUG">Debug</option>
-                    <option value="INFO">Info</option>
-                    <option value="WARNING">Warning</option>
-                    <option value="ERROR">Error</option>
-                    <option value="CRITICAL">Critic</option>
-                  </select>
+                    <select id="log-level-filter" class="small" style="padding: 2px 6px; font-size: 12px;">
+                        <option value="ALL">All</option>
+                        <option value="INFO">Info</option>
+                        <option value="WARN">Warn</option>
+                        <option value="ERROR">Error</option>
+                    </select>
                 </div>
               </header>
               <div class="log-stream" id="log-stream"></div>
@@ -272,68 +264,223 @@
           </section>
 
           <section class="view hidden" data-view="files" aria-label="Vue fichiers">
-            <section class="panel">
-              <header>
-                <div>
-                  <p class="eyebrow" data-i18n="files_eyebrow">Fichiers</p>
-                  <h2 data-i18n="files_title">Arborescence scannée</h2>
-                  <p class="muted" data-i18n="files_subtitle">Tri par taille décroissante (top 200).</p>
-                </div>
-              </header>
-              <div class="table-wrapper">
-                <table aria-label="Liste des fichiers">
-                  <thead>
-                    <tr>
-                      <th data-i18n="files_path" onclick="handleSort('files', 'path')" style="cursor: pointer">Chemin</th>
-                      <th class="numeric" data-i18n="files_size" onclick="handleSort('files', 'size_bytes')" style="cursor: pointer">Taille</th>
-                      <th class="numeric" data-i18n="files_modified" onclick="handleSort('files', 'modified_timestamp')" style="cursor: pointer">Modifié</th>
-                      <th class="numeric" data-i18n="files_funcs" onclick="handleSort('files', 'func_count')" style="cursor: pointer">Fonctions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="files-body"></tbody>
-                </table>
-                <p class="empty" id="files-empty"></p>
+            <div class="files-layout">
+              <!-- Main Content (Left) -->
+              <div class="files-main">
+                <section class="panel">
+                  <header class="files-header">
+                    <div>
+                      <p class="eyebrow" data-i18n="files_eyebrow">Files</p>
+                      <h2 data-i18n="files_title">Scanned tree</h2>
+                      <p class="muted" data-i18n="files_subtitle">Sorted by size (top 200).</p>
+                    </div>
+                    <div class="files-toolbar">
+                      <div class="search-box">
+                        <input type="text" id="files-search" placeholder="🔍 Search..." data-i18n-placeholder="files_search_placeholder" />
+                      </div>
+                      <div class="files-filters">
+                        <select id="files-type-filter">
+                          <option value="" data-i18n="files_filter_all">All types</option>
+                          <option value="py">.py</option>
+                          <option value="js">.js</option>
+                          <option value="ts">.ts</option>
+                          <option value="html">.html</option>
+                          <option value="css">.css</option>
+                          <option value="json">.json</option>
+                          <option value="md">.md</option>
+                        </select>
+                      </div>
+                      <div class="files-stats" id="files-stats">
+                        <span class="badge" id="files-count-badge">0 files</span>
+                        <span class="badge" id="files-size-badge">0 KB</span>
+                      </div>
+                    </div>
+                  </header>
+                  <div class="table-wrapper">
+                    <table aria-label="Files list" class="files-table">
+                      <thead>
+                        <tr>
+                          <th data-i18n="files_path" data-sort="path" class="sortable">Path</th>
+                          <th class="numeric" data-i18n="files_type" data-sort="type" class="sortable">Type</th>
+                          <th class="numeric" data-i18n="files_size" data-sort="size_bytes" class="sortable">Size</th>
+                          <th class="numeric" data-i18n="files_modified" data-sort="modified_timestamp" class="sortable">Modified</th>
+                          <th class="numeric" data-i18n="files_funcs" data-sort="func_count" class="sortable">Functions</th>
+                          <th class="actions" data-i18n="files_actions">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody id="files-body"></tbody>
+                    </table>
+                    <p class="empty" id="files-empty"></p>
+                  </div>
+                </section>
               </div>
-            </section>
+
+              <!-- Help Panel (Right Side) -->
+              <aside class="files-help-panel">
+                <div class="card sticky">
+                  <h3 data-i18n="files_help_title">📖 Files Guide</h3>
+                  <p class="muted small" data-i18n="files_help_intro">
+                    This view displays all files analyzed by Jupiter during the last scan.
+                  </p>
+                  
+                  <div class="help-section">
+                    <h4 data-i18n="files_help_columns_title">📊 Table columns</h4>
+                    <ul class="muted small">
+                      <li data-i18n="files_help_columns_path"><strong>Path</strong>: Relative path in project</li>
+                      <li data-i18n="files_help_columns_type"><strong>Type</strong>: File extension</li>
+                      <li data-i18n="files_help_columns_size"><strong>Size</strong>: File size in KB</li>
+                      <li data-i18n="files_help_columns_modified"><strong>Modified</strong>: Last modification date</li>
+                      <li data-i18n="files_help_columns_funcs"><strong>Functions</strong>: Number of functions/methods detected</li>
+                    </ul>
+                  </div>
+
+                  <div class="help-section">
+                    <h4 data-i18n="files_help_actions_title">🎯 Available actions</h4>
+                    <ul class="muted small">
+                      <li data-i18n="files_help_actions_simulate">🔬 Simulate: Analyze the impact of removing this file</li>
+                    </ul>
+                  </div>
+
+                  <div class="help-section">
+                    <h4 data-i18n="files_help_simulator_title">🔬 About the Simulator</h4>
+                    <p class="muted small" data-i18n="files_help_simulator_desc">
+                      The simulator shows which other files and functions would be affected if this file were removed. Useful for refactoring safely.
+                    </p>
+                  </div>
+
+                  <div class="help-section">
+                    <h4 data-i18n="files_help_tips_title">💡 Tips</h4>
+                    <ul class="muted small">
+                      <li data-i18n="files_help_tips_search">Use the search to quickly find a file</li>
+                      <li data-i18n="files_help_tips_filter">Filter by file type to focus on specific languages</li>
+                      <li data-i18n="files_help_tips_sort">Click column headers to sort (coming soon)</li>
+                    </ul>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </section>
 
           <section class="view hidden" data-view="functions" aria-label="Vue fonctions">
-            <section class="panel">
-              <header>
-                <div>
-                  <p class="eyebrow" data-i18n="functions_eyebrow">Fonctions</p>
-                  <h2 data-i18n="functions_title">Détail des fonctions</h2>
-                  <p class="muted" data-i18n="functions_subtitle">Analyse statique et dynamique.</p>
-                </div>
-              </header>
-              <div class="table-wrapper">
-                <table aria-label="Liste des fonctions">
-                  <thead>
-                    <tr>
-                      <th data-i18n="func_name" onclick="handleSort('functions', 'name')" style="cursor: pointer">Nom</th>
-                      <th data-i18n="func_file" onclick="handleSort('functions', 'file')" style="cursor: pointer">Fichier</th>
-                      <th class="numeric" data-i18n="func_calls" onclick="handleSort('functions', 'calls')" style="cursor: pointer">Appels (Dyn)</th>
-                      <th data-i18n="func_status" onclick="handleSort('functions', 'status')" style="cursor: pointer">Statut</th>
-                    </tr>
-                  </thead>
-                  <tbody id="functions-body"></tbody>
-                </table>
-                <p class="empty" id="functions-empty"></p>
-              </div>
-            </section>
+            <div class="functions-layout">
+              <!-- Main Content (Left) -->
+              <div class="functions-main">
+                <section class="panel">
+                  <header class="functions-header">
+                    <div>
+                      <p class="eyebrow" data-i18n="functions_eyebrow">Functions</p>
+                      <h2 data-i18n="functions_title">Function Details</h2>
+                      <p class="muted" data-i18n="functions_subtitle">Static and dynamic analysis.</p>
+                    </div>
+                    <div class="functions-toolbar">
+                      <div class="search-box">
+                        <input type="text" id="functions-search" placeholder="🔍 Search..." data-i18n-placeholder="functions_search_placeholder" />
+                      </div>
+                      <div class="functions-filters">
+                        <select id="functions-status-filter">
+                          <option value="" data-i18n="functions_filter_all">All statuses</option>
+                          <option value="used" data-i18n="functions_filter_used">Used</option>
+                          <option value="unused" data-i18n="functions_filter_unused">Unused</option>
+                          <option value="dynamic" data-i18n="functions_filter_dynamic">Called (dynamic)</option>
+                        </select>
+                      </div>
+                      <button class="btn btn-export" id="functions-export-unused-btn" onclick="showUnusedFunctionsExportModal()" title="Export unused functions for AI agent">
+                        🤖 <span data-i18n="functions_export_ai">Export for AI</span>
+                      </button>
+                      <div class="functions-stats" id="functions-stats">
+                        <span class="badge" id="functions-count-badge">0 functions</span>
+                        <span class="badge badge-success" id="functions-used-badge">0 used</span>
+                        <span class="badge badge-warning" id="functions-unused-badge">0 unused</span>
+                      </div>
+                    </div>
+                  </header>
+                  <div class="table-wrapper">
+                    <table aria-label="Functions list" class="functions-table">
+                      <thead>
+                        <tr>
+                          <th data-i18n="func_name" data-sort="name" class="sortable" onclick="handleSort('functions', 'name')">Name</th>
+                          <th data-i18n="func_file" data-sort="file" class="sortable" onclick="handleSort('functions', 'file')">File</th>
+                          <th class="numeric" data-i18n="func_lines" data-sort="lines" class="sortable" onclick="handleSort('functions', 'lines')">Lines</th>
+                          <th class="numeric" data-i18n="func_calls" data-sort="calls" class="sortable" onclick="handleSort('functions', 'calls')">Calls (Dyn)</th>
+                          <th data-i18n="func_status" data-sort="status" class="sortable" onclick="handleSort('functions', 'status')">Status</th>
+                          <th class="actions" data-i18n="func_actions">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody id="functions-body"></tbody>
+                    </table>
+                    <p class="empty" id="functions-empty"></p>
+                  </div>
+                </section>
 
-            <section class="panel" style="margin-top: 1rem;">
-              <header>
-                <div>
-                  <p class="eyebrow" data-i18n="graph_eyebrow">Visualisation</p>
-                  <h2 data-i18n="graph_title">Graphe d'appels dynamique</h2>
-                  <p class="muted" data-i18n="graph_subtitle">Interactions entre fonctions lors de l'exécution.</p>
-                </div>
-              </header>
-              <div class="graph-container" style="position: relative; height: 400px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
-                 <canvas id="dynamic-graph-canvas"></canvas>
+                <!-- Dynamic Call Graph -->
+                <section class="panel" style="margin-top: 1rem;">
+                  <header>
+                    <div>
+                      <p class="eyebrow" data-i18n="graph_eyebrow">Visualization</p>
+                      <h2 data-i18n="graph_title">Dynamic Call Graph</h2>
+                      <p class="muted" data-i18n="graph_subtitle">Function interactions during execution.</p>
+                    </div>
+                  </header>
+                  <div class="graph-container" style="position: relative; height: 400px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+                    <canvas id="dynamic-graph-canvas"></canvas>
+                  </div>
+                </section>
               </div>
-            </section>
+
+              <!-- Help Panel (Right Side) -->
+              <aside class="functions-help-panel">
+                <div class="card sticky">
+                  <h3 data-i18n="functions_help_title">📖 Functions Guide</h3>
+                  <p class="muted small" data-i18n="functions_help_intro">
+                    This view lists all functions detected in your project with usage analysis.
+                  </p>
+                  
+                  <div class="help-section">
+                    <h4 data-i18n="functions_help_columns_title">📊 Table columns</h4>
+                    <ul class="muted small">
+                      <li data-i18n="functions_help_columns_name"><strong>Name</strong>: Function or method name</li>
+                      <li data-i18n="functions_help_columns_file"><strong>File</strong>: Source file path</li>
+                      <li data-i18n="functions_help_columns_lines"><strong>Lines</strong>: Number of lines of code</li>
+                      <li data-i18n="functions_help_columns_calls"><strong>Calls</strong>: Dynamic call count (from Watch mode)</li>
+                      <li data-i18n="functions_help_columns_status"><strong>Status</strong>: Used, Unused, or Called dynamically</li>
+                    </ul>
+                  </div>
+
+                  <div class="help-section">
+                    <h4 data-i18n="functions_help_status_title">🚦 Status meanings</h4>
+                    <ul class="muted small">
+                      <li data-i18n="functions_help_status_used"><span class="status-dot used"></span> <strong>Used</strong>: Called in static analysis</li>
+                      <li data-i18n="functions_help_status_unused"><span class="status-dot unused"></span> <strong>Unused</strong>: Never called (potential dead code)</li>
+                      <li data-i18n="functions_help_status_dynamic"><span class="status-dot dynamic"></span> <strong>Dynamic</strong>: Called at runtime (Watch mode)</li>
+                    </ul>
+                  </div>
+
+                  <div class="help-section">
+                    <h4 data-i18n="functions_help_actions_title">🎯 Available actions</h4>
+                    <ul class="muted small">
+                      <li data-i18n="functions_help_actions_simulate">🔬 Simulate: Analyze impact of removing this function</li>
+                      <li data-i18n="functions_help_actions_goto">📄 Go to file: Open the source file</li>
+                    </ul>
+                  </div>
+
+                  <div class="help-section">
+                    <h4 data-i18n="functions_help_graph_title">📈 Call Graph</h4>
+                    <p class="muted small" data-i18n="functions_help_graph_desc">
+                      The graph below the table shows function call relationships detected during Watch mode execution.
+                    </p>
+                  </div>
+
+                  <div class="help-section">
+                    <h4 data-i18n="functions_help_tips_title">💡 Tips</h4>
+                    <ul class="muted small">
+                      <li data-i18n="functions_help_tips_unused">Unused functions may be dead code – consider removing them</li>
+                      <li data-i18n="functions_help_tips_watch">Use Watch mode to track real function calls</li>
+                      <li data-i18n="functions_help_tips_simulate">Simulate removal before deleting to check dependencies</li>
+                    </ul>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </section>
 
           <section class="view hidden" data-view="api" aria-label="Vue API">
@@ -350,7 +497,7 @@
               <div class="api-docs-intro" style="margin-bottom: 1rem; padding: 1rem; background: var(--panel-contrast); border-radius: 8px; border: 1px solid var(--border);">
                   <h4 data-i18n="api_docs_title">Documentation & Configuration</h4>
                   <p data-i18n="api_docs_intro">Jupiter analyse automatiquement les endpoints API de votre projet (FastAPI, Flask, Django, etc.).</p>
-                  <p data-i18n="api_docs_config">Pour configurer la détection, assurez-vous que votre fichier <code>&lt;projet&gt;.jupiter.yaml</code> contient la section <code>api</code> correcte.</p>
+                  <p data-i18n="api_docs_config">Pour configurer la détection, assurez-vous que votre fichier <code>jupiter.yaml</code> contient la section <code>api</code> correcte.</p>
                   <pre style="background: var(--bg); padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; overflow-x: auto;">
 api:
   connector: "fastapi"  # ou "flask", "django"
@@ -455,19 +602,68 @@ api:
 
           <section class="view hidden" data-view="plugins" aria-label="Vue plugins">
             <section class="panel">
-              <header>
+              <header class="view-header">
                 <div>
                   <p class="eyebrow" data-i18n="plugins_eyebrow">Extensions</p>
                   <h2 data-i18n="plugins_title">Plugins Jupiter</h2>
-                  <p class="muted" data-i18n="plugins_subtitle">État du socle Meeting, qualité et notifications.</p>
+                  <p class="muted" data-i18n="plugins_subtitle">
+                    Activez, configurez et surveillez les extensions de Jupiter.
+                  </p>
+                </div>
+                <div class="actions">
+                  <button class="ghost" data-action="open-marketplace" title="Marketplace" data-i18n="plugins_marketplace_btn">🛒 Marketplace</button>
+                  <button class="primary" data-action="open-install-plugin-modal" data-i18n="plugins_install_btn">➕ Installer</button>
+                  <button class="secondary" data-action="open-uninstall-plugin-modal" data-i18n="plugins_uninstall_btn">🗑️ Désinstaller</button>
+                  <button class="secondary" data-action="reload-plugins" data-i18n="plugins_reload_btn">🔄 Recharger</button>
                 </div>
               </header>
-              <div class="plugin-list" id="plugin-list"></div>
+
+              <div class="panel-body">
+                <div class="plugins-layout">
+                  <div class="plugins-main">
+                    <div class="plugins-help card">
+                      <h3 data-i18n="plugins_help_title">Qu'est-ce qu'un plugin&nbsp;?</h3>
+                      <p class="muted" data-i18n="plugins_help_intro">
+                        Les plugins ajoutent des fonctionnalités à Jupiter (qualité de code, notifications, intégrations a0API, etc.).
+                      </p>
+                      <ul class="muted">
+                        <li data-i18n="plugins_help_point_1">Chaque plugin peut être activé ou désactivé.</li>
+                        <li data-i18n="plugins_help_point_2">Certains plugins ajoutent des vues dans le menu de gauche.</li>
+                        <li data-i18n="plugins_help_point_3">D'autres ajoutent une section dans les Paramètres &gt; Plugins.</li>
+                      </ul>
+                      <p class="muted small" data-i18n="plugins_help_note">
+                        Astuce a0: si quelque chose "disparaît" dans l'interface, vérifiez ici si le plugin correspondant est activé.
+                      </p>
+                    </div>
+
+                    <div class="plugin-list" id="plugin-list"></div>
+                  </div>
+
+                  <aside class="plugins-aside">
+                    <div class="card">
+                      <h3 data-i18n="plugins_status_title">Résumé</h3>
+                      <ul class="plugins-summary" id="plugins-summary"></ul>
+                    </div>
+                    <div class="card">
+                      <h3 data-i18n="plugins_how_to_title">Comment utiliser les plugins&nbsp;?</h3>
+                      <ol class="muted small">
+                        <li data-i18n="plugins_how_to_step_1">Ouvrez cette page pour voir la liste des plugins disponibles.</li>
+                        <li data-i18n="plugins_how_to_step_2">Activez les plugins qui vous intéressent (par exemple a0: Notifications).</li>
+                        <li data-i18n="plugins_how_to_step_3">Allez dans l'onglet Paramètres pour ajuster leur configuration si besoin.</li>
+                      </ol>
+                    </div>
+                  </aside>
+                </div>
+              </div>
             </section>
           </section>
 
           <section class="view hidden" data-view="settings" aria-label="Vue paramètres">
             <div class="settings-layout">
+                <!-- Save Button at Top -->
+                <div class="settings-header" style="grid-column: 1 / -1; margin-bottom: 1rem; display: flex; justify-content: flex-end;">
+                    <button type="submit" form="settings-form" class="primary" data-i18n="save_settings">Enregistrer</button>
+                </div>
                 <form id="settings-form" class="settings-form-grid">
                     <!-- Network Section -->
                     <section class="panel settings-section">
@@ -492,10 +688,10 @@ api:
                         </div>
                     </section>
 
-                    <!-- UI & Meeting Section -->
+                    <!-- UI Section -->
                     <section class="panel settings-section">
                         <header>
-                            <h3 data-i18n="settings_ui_title">Interface & Meeting</h3>
+                            <h3 data-i18n="settings_ui_title">Interface</h3>
                         </header>
                         <div class="form-group">
                             <label for="conf-ui-theme">Theme</label>
@@ -511,29 +707,35 @@ api:
                                 <option value="en">English</option>
                             </select>
                         </div>
+                    </section>
+
+                    <!-- Meeting License Section -->
+                    <section class="panel settings-section">
+                        <header>
+                            <h3 data-i18n="settings_meeting_title">🔐 Licence Meeting</h3>
+                        </header>
                         <div class="form-group">
-                            <label for="conf-log-level" data-i18n="settings_log_level_label">Log Level</label>
-                            <select id="conf-log-level" name="log_level">
-                                <option value="DEBUG">Debug</option>
-                                <option value="INFO">Info</option>
-                                <option value="WARNING">Warning</option>
-                                <option value="ERROR">Error</option>
-                                <option value="CRITICAL">Critic</option>
-                            </select>
-                            <p class="muted small" data-i18n="settings_log_level_hint">Ajuste la verbosité globale du serveur Jupiter.</p>
+                            <label for="conf-meeting-key" data-i18n="meeting_device_key_label">Device Key</label>
+                            <input type="text" id="conf-meeting-key" name="meeting_device_key" placeholder="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" />
+                            <p class="muted small" data-i18n="meeting_device_key_hint">Clé unique d'identification auprès du service Meeting.</p>
                         </div>
                         <div class="form-group">
-                            <label for="conf-log-path" data-i18n="settings_log_path_label">Chemin du fichier de log</label>
-                            <input type="text" id="conf-log-path" name="log_path" placeholder="logs/jupiter.log" />
-                            <p class="muted small" data-i18n="settings_log_path_hint">Emplacement du fichier log (laisser vide pour désactiver l'écriture fichier).</p>
-                        </div>
-                        <div class="form-group checkbox-group">
-                            <label for="conf-meeting-enabled">Meeting Enabled</label>
-                            <input type="checkbox" id="conf-meeting-enabled" name="meeting_enabled" />
+                            <label for="conf-meeting-token" data-i18n="meeting_auth_token_label">Auth Token</label>
+                            <input type="text" id="conf-meeting-token" name="meeting_auth_token" placeholder="Token d'authentification" />
+                            <p class="muted small" data-i18n="meeting_auth_token_hint">Token d'authentification requis par l'API Meeting.</p>
                         </div>
                         <div class="form-group">
-                            <label for="conf-meeting-key">Device Key</label>
-                            <input type="text" id="conf-meeting-key" name="meeting_device_key" />
+                            <label for="conf-meeting-heartbeat" data-i18n="meeting_heartbeat_label">Heartbeat Interval (sec)</label>
+                            <input type="number" id="conf-meeting-heartbeat" name="meeting_heartbeat_interval" min="10" max="600" value="60" />
+                            <p class="muted small" data-i18n="meeting_heartbeat_hint">Fréquence d'envoi des signaux de présence à Meeting.</p>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <button type="button" class="secondary" data-action="check-meeting-license" data-i18n="meeting_check_btn">🔄 Vérifier la licence</button>
+                        </div>
+                        <div class="meeting-status-box" style="margin-top: 1rem; padding: 1rem; background: var(--bg-subtle); border-radius: var(--radius); border: 1px solid var(--border);">
+                            <h4 class="small" data-i18n="meeting_last_response_title">Dernière réponse Meeting</h4>
+                            <p class="small muted" id="meeting-last-check"></p>
+                            <pre id="meeting-last-response" class="code-block" style="max-height: 150px; overflow: auto; font-size: 0.75rem; margin-top: 0.5rem;"></pre>
                         </div>
                     </section>
 
@@ -575,7 +777,7 @@ api:
                         </div>
                     </section>
                     
-                    <!-- User Management Section (New) -->
+                    <!-- User Management Section -->
                     <section class="panel settings-section">
                         <header>
                             <h3 data-i18n="settings_users_title">Utilisateurs</h3>
@@ -584,16 +786,16 @@ api:
                             <table aria-label="Utilisateurs">
                                 <thead>
                                     <tr>
-                                        <th>Nom</th>
-                                        <th>Rôle</th>
-                                        <th>Actions</th>
+                                        <th data-i18n="settings_users_name">Nom</th>
+                                        <th data-i18n="settings_users_role">Rôle</th>
+                                        <th data-i18n="settings_users_actions">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="users-table-body"></tbody>
                             </table>
                         </div>
                         <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
-                            <h4 class="small muted">Ajouter un utilisateur</h4>
+                            <h4 class="small muted" data-i18n="settings_users_add">Ajouter un utilisateur</h4>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 <input type="text" id="new-user-name" placeholder="Nom" style="flex: 1;" />
                                 <input type="text" id="new-user-token" placeholder="Token" style="flex: 1;" />
@@ -602,41 +804,20 @@ api:
                                     <option value="editor">Editor</option>
                                     <option value="admin">Admin</option>
                                 </select>
-                                <button type="button" class="primary small" data-action="add-user">Ajouter</button>
+                                <button type="button" class="primary small" data-action="add-user">+</button>
                             </div>
                         </div>
                     </section>
-                    
-                    <!-- Actions -->
-                    <div class="settings-actions" style="grid-column: 1 / -1; margin-top: 1rem; display: flex; gap: 1rem; align-items: center;">
-                        <button type="submit" class="primary" data-i18n="save_settings">Enregistrer</button>
-                        <button type="button" class="secondary" data-action="open-raw-config" data-i18n="edit_raw_config">Éditer YAML</button>
-                    </div>
                 </form>
 
-                <!-- Update Section (Separate) -->
-                <section class="panel settings-section" style="margin-top: 2rem;">
-                    <header>
-                        <h3 data-i18n="update_title">Mise à jour</h3>
-                    </header>
-                    <div class="update-box">
-                        <div class="form-group">
-                            <label for="update-source">Source (ZIP ou Git URL)</label>
-                            <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="update-source" placeholder="path/to/update.zip" style="flex: 1;" />
-                                <input type="file" id="update-file-input" accept=".zip" style="display: none;" />
-                                <button type="button" class="secondary" onclick="document.getElementById('update-file-input').click()">Parcourir...</button>
-                            </div>
-                        </div>
-                        <div class="form-group checkbox-group">
-                            <label for="update-force">Force</label>
-                            <input type="checkbox" id="update-force" />
-                        </div>
-                        <button class="primary" data-action="trigger-update" data-i18n="update_btn">Mettre à jour</button>
-                    </div>
-                </section>
+                <!-- Dynamic Plugin Settings - populated by plugins with settings UI -->
+                <div id="plugin-settings-container" class="plugin-settings-container"></div>
             </div>
           </section>
+
+          <!-- Dynamic plugin view container - populated by plugins with sidebar UI -->
+          <div id="plugin-views-container"></div>
+
           <section class="view hidden" data-view="suggestions" aria-label="Vue Suggestions IA">
             <header class="view-header">
               <div>
@@ -656,147 +837,162 @@ api:
           </section>
 
           <section class="view hidden" data-view="projects" aria-label="Vue Projets">
-            <header class="view-header">
-              <div>
-                <p class="eyebrow" data-i18n="projects_eyebrow">Pilotage</p>
-                <h2 data-i18n="projects_title">Tableau de bord Projets</h2>
-                <p class="muted" data-i18n="projects_subtitle">Vue unifiée sur vos projets configurés, l'état actif et les actions rapides.</p>
-              </div>
-              <div class="actions">
-                 <button class="secondary" data-action="refresh-projects" data-i18n="projects_refresh">Actualiser</button>
-                 <button class="primary" data-action="open-project-wizard" data-i18n="add_project">Ajouter un projet</button>
-              </div>
-            </header>
-            <div class="grid projects-hero">
-              <div class="panel current-project-card">
-                <header>
-                  <div>
-                    <p class="eyebrow" data-i18n="project_focus">Projet actif</p>
-                    <h3 id="project-current-name">—</h3>
-                    <p class="muted mono" id="project-current-path">—</p>
-                  </div>
-                  <span class="pill pill-active" id="project-current-status" data-i18n="project_status_active">Actif</span>
-                </header>
-                <div class="project-meta-grid">
-                  <div>
-                    <p class="label" data-i18n="project_last_scan">Dernier scan</p>
-                    <p class="value" id="project-last-scan">—</p>
-                  </div>
-                  <div>
-                    <p class="label" data-i18n="project_root_label">Racine servie</p>
-                    <p class="value" id="project-root-quick">—</p>
-                  </div>
-                  <div>
-                    <p class="label" data-i18n="project_count_label">Projets configurés</p>
-                    <p class="value" id="project-count">0</p>
-                  </div>
-                </div>
-              </div>
-              <div class="panel project-actions-panel">
-                <header>
-                  <div>
-                    <p class="eyebrow" data-i18n="project_shortcuts">Actions rapides</p>
-                    <h3 data-i18n="project_shortcuts_title">Gérer et diagnostiquer</h3>
-                  </div>
-                </header>
-                <div class="project-actions-grid">
-                  <button class="ghost" data-action="start-scan" data-i18n="project_action_scan">Scanner le projet actif</button>
-                  <button class="ghost" data-action="open-raw-config" data-i18n="project_action_edit_config">Éditer la config (.jupiter.yaml)</button>
-                  <button class="ghost" data-action="open-project-wizard" data-i18n="project_action_add">Ajouter un projet</button>
-                  <button class="ghost" data-action="refresh-projects" data-i18n="project_action_refresh">Rafraîchir la liste</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="grid two-cols project-overview">
-              <div class="panel">
-                <header>
-                  <div>
-                    <p class="eyebrow" data-i18n="project_health_eyebrow">Santé</p>
-                    <h3 data-i18n="project_health_title">Résumé rapide</h3>
-                    <p class="muted small" data-i18n="project_health_subtitle">Synchronisé avec l'API Jupiter.</p>
-                  </div>
-                </header>
-                <div class="stats-grid compact" id="project-health-stats">
-                  <div class="stat-card">
-                    <p class="label" data-i18n="project_metric_active">Projet actif</p>
-                    <p class="value" id="project-health-active">—</p>
-                  </div>
-                  <div class="stat-card">
-                    <p class="label" data-i18n="project_metric_last_scan">Dernier scan</p>
-                    <p class="value" id="project-health-scan">—</p>
-                  </div>
-                  <div class="stat-card">
-                    <p class="label" data-i18n="project_metric_paths">Chemins suivis</p>
-                    <p class="value" id="project-health-paths">—</p>
-                  </div>
-                  <div class="stat-card">
-                    <p class="label" data-i18n="project_metric_status">Statut API</p>
-                    <p class="value" id="project-health-status">—</p>
-                  </div>
-                </div>
-              </div>
-              <div class="panel">
-                <header>
-                  <div>
-                    <p class="eyebrow" data-i18n="project_notes_eyebrow">Notes</p>
-                    <h3 data-i18n="project_notes_title">Conseils d'usage</h3>
-                  </div>
-                </header>
-                <ul class="project-notes muted small">
-                  <li data-i18n="project_note_switch">Basculez d'un projet à l'autre sans redémarrer Jupiter.</li>
-                  <li data-i18n="project_note_scan">Chaque projet garde ses caches, snapshots et licence Meeting.</li>
-                  <li data-i18n="project_note_security">La suppression retire seulement la configuration, pas vos fichiers.</li>
-                  <li data-i18n="project_note_refresh">Utilisez "Rafraîchir" après un changement manuel du fichier .jupiter.yaml.</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="panel">
+            <!-- Active Project Section (with API Config) -->
+            <section class="panel" style="margin-bottom: 1.5rem;">
               <header>
                 <div>
-                  <p class="eyebrow" data-i18n="project_api_title">Inspection API</p>
-                  <h3 data-i18n="project_api_subtitle">Configurer le connecteur API du projet actif</h3>
+                  <p class="eyebrow" data-i18n="active_project_section">🎯 Projet Actif</p>
+                  <h2 id="project-current-name">—</h2>
+                  <p class="muted mono small" id="project-current-path">—</p>
                 </div>
-                <div class="actions">
-                  <button class="primary" data-action="save-project-api" data-i18n="project_api_save">Enregistrer</button>
+                <div class="actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                  <div id="project-runtime-status" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="status-indicator stopped"></span>
+                    <span class="status-text small muted" data-i18n="project_runtime_stopped">Arrêté</span>
+                  </div>
+                  <span id="project-current-status" class="pill pill-muted">—</span>
                 </div>
               </header>
-              <div class="grid three-cols">
-                <div class="form-group" title="Framework utilisé (fastapi, flask, django)">
-                  <label for="project-api-connector">Connector</label>
-                  <select id="project-api-connector" name="api_connector">
+              
+              <!-- Health Metrics Grid -->
+              <div class="metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                <div class="metric-card">
+                  <p class="label" data-i18n="project_metric_active">Projet actif</p>
+                  <p class="value" id="project-health-active">—</p>
+                </div>
+                <div class="metric-card">
+                  <p class="label" data-i18n="project_metric_last_scan">Dernier scan</p>
+                  <p class="value" id="project-health-scan">—</p>
+                </div>
+                <div class="metric-card">
+                  <p class="label" data-i18n="project_metric_paths">Racine active</p>
+                  <p class="value mono small" id="project-health-paths">—</p>
+                </div>
+                <div class="metric-card">
+                  <p class="label" data-i18n="project_metric_status">API</p>
+                  <p class="value mono small" id="project-health-status">—</p>
+                </div>
+              </div>
+
+              <!-- Quick Actions -->
+              <div class="quick-actions" style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                <button class="secondary small" data-action="open-scan-modal" data-i18n="project_action_scan">Scanner le projet</button>
+                <button class="secondary small" data-action="open-run-modal" data-i18n="project_action_run">Exécuter une commande</button>
+                <button class="ghost small" data-action="refresh-projects" data-i18n="project_action_refresh">Actualiser</button>
+              </div>
+
+              <!-- Project API Configuration (inside active project section) -->
+              <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                <h4 class="small" style="margin-bottom: 0.75rem;" data-i18n="project_api_title">Configuration API du Projet</h4>
+                <p class="muted small" style="margin-bottom: 1rem;" data-i18n="project_api_hint">Configurez le connecteur pour ce projet uniquement.</p>
+                <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+                  <div class="form-group">
+                    <label for="project-api-connector">Connector</label>
+                    <select id="project-api-connector">
                       <option value="">(Aucun)</option>
                       <option value="local">Local (Jupiter)</option>
                       <option value="fastapi">FastAPI</option>
                       <option value="flask">Flask</option>
                       <option value="django">Django</option>
-                  </select>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="project-api-app-var">App Variable</label>
+                    <input type="text" id="project-api-app-var" placeholder="app" />
+                  </div>
+                  <div class="form-group">
+                    <label for="project-api-path">Main File Path</label>
+                    <input type="text" id="project-api-path" placeholder="src/main.py" />
+                  </div>
                 </div>
-                <div class="form-group" title="Nom de la variable d'application (ex: app)">
-                  <label for="project-api-app-var">App Variable</label>
-                  <input type="text" id="project-api-app-var" name="api_app_var" placeholder="app" />
-                </div>
-                <div class="form-group" title="Chemin vers le fichier principal (ex: src/main.py)">
-                  <label for="project-api-path">Main File Path</label>
-                  <input type="text" id="project-api-path" name="api_path" placeholder="src/main.py" />
+                <div class="form-actions" style="margin-top: 0.75rem;">
+                  <button class="primary small" data-action="save-project-api" data-i18n="project_api_save">Enregistrer</button>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div class="panel">
+            <!-- Ignore/Exclusion Section -->
+            <section class="panel" id="project-ignore-panel" style="margin-bottom: 1.5rem;">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="project_ignore_eyebrow">Exclusions</p>
+                  <h3 data-i18n="project_ignore_title">Fichiers & dossiers à exclure</h3>
+                  <p class="muted small" data-i18n="project_ignore_hint">Les éléments cochés seront ignorés lors des scans.</p>
+                </div>
+                <div class="actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button class="ghost small" data-action="ignore-select-all" data-i18n="project_ignore_select_all">Tout</button>
+                  <button class="ghost small" data-action="ignore-select-none" data-i18n="project_ignore_select_none">Aucun</button>
+                  <button class="ghost small" data-action="refresh-root-entries" data-i18n="project_ignore_refresh">↻</button>
+                </div>
+              </header>
+              
+              <!-- Controls -->
+              <div class="ignore-controls" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-top: 1rem;">
+                <div class="form-group" style="flex: 1; min-width: 200px; margin: 0;">
+                  <input type="text" id="ignore-filter-input" placeholder="Filtrer..." style="width: 100%;" />
+                </div>
+                <label class="checkbox-inline" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                  <input type="checkbox" id="ignore-toggle-hidden" />
+                  <span data-i18n="project_ignore_show_hidden">Afficher fichiers cachés</span>
+                </label>
+              </div>
+              
+              <!-- Entries Grid -->
+              <div id="ignore-entries-grid" class="ignore-entries-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem; margin-top: 1rem; max-height: 300px; overflow-y: auto; padding: 0.5rem; background: var(--bg-subtle); border-radius: var(--radius);">
+                <p class="muted small" data-i18n="project_ignore_loading">Chargement...</p>
+              </div>
+              
+              <!-- Custom Patterns -->
+              <div class="form-group" style="margin-top: 1rem;">
+                <label for="ignore-custom-input" data-i18n="project_ignore_custom_label">Patterns personnalisés (glob, séparés par virgule)</label>
+                <input type="text" id="ignore-custom-input" placeholder="ex: *.log, temp/*, __pycache__/**" style="width: 100%;" />
+              </div>
+              
+              <!-- Save Button -->
+              <div class="form-actions" style="margin-top: 1rem;">
+                <button class="primary small" data-action="save-ignore-config" data-i18n="project_ignore_save">Enregistrer les exclusions</button>
+              </div>
+            </section>
+
+            <!-- Projects List Section -->
+            <section class="panel">
               <header>
                 <div>
                   <p class="eyebrow" data-i18n="project_list_eyebrow">Liste</p>
-                  <h3 data-i18n="project_list_title">Projets configurés</h3>
-                  <p class="muted small" data-i18n="project_list_subtitle">Activez, rafraîchissez ou supprimez une entrée.</p>
+                  <h3 data-i18n="project_list_title">Tous vos projets</h3>
+                  <p class="muted" data-i18n="project_list_subtitle">Activez, actualisez ou supprimez une entrée.</p>
+                </div>
+                <div class="actions">
+                  <span class="badge" id="project-count-badge">0</span>
+                  <button class="primary small" data-action="open-project-wizard" data-i18n="add_project">Ajouter un projet</button>
                 </div>
               </header>
-              <div id="projects-empty" class="empty" style="display: none;" data-i18n="projects_empty">Aucun projet pour le moment. Ajoutez-en un.</div>
-              <div class="project-list" id="projects-list">
-                <!-- Projects cards injected here -->
+              
+              <!-- Projects Grid/List -->
+              <div id="projects-list" class="projects-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; margin-top: 1rem;"></div>
+              
+              <!-- Empty State -->
+              <div id="projects-empty" class="empty-state" style="display: none; text-align: center; padding: 3rem;">
+                <p class="muted" data-i18n="projects_empty">Aucun projet configuré.</p>
+                <button class="primary" data-action="open-project-wizard" data-i18n="add_project" style="margin-top: 1rem;">Ajouter un projet</button>
               </div>
-            </div>
+            </section>
+
+            <!-- Usage Notes -->
+            <section class="panel" style="margin-top: 1.5rem;">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="project_notes_eyebrow">Notes</p>
+                  <h4 data-i18n="project_notes_title">Conseils d'utilisation</h4>
+                </div>
+              </header>
+              <ul class="notes-list" style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                <li class="small muted" data-i18n="project_note_switch">Basculez entre projets sans redémarrer Jupiter.</li>
+                <li class="small muted" data-i18n="project_note_scan">Chaque projet conserve son cache, snapshots et licence Meeting.</li>
+                <li class="small muted" data-i18n="project_note_security">Supprimer retire uniquement l'entrée config, jamais vos fichiers.</li>
+                <li class="small muted" data-i18n="project_note_refresh">Cliquez Actualiser après avoir modifié manuellement le fichier .jupiter.yaml.</li>
+              </ul>
+            </section>
           </section>
         </main>
       </div>
@@ -861,7 +1057,7 @@ api:
     <div id="raw-config-modal" class="modal-overlay hidden">
         <div class="modal" style="width: 800px; max-width: 90vw;">
             <header>
-                <h3 data-i18n="raw_config_title">Éditeur YAML (.jupiter.yaml)</h3>
+                <h3 data-i18n="raw_config_title">Éditeur YAML (jupiter.yaml)</h3>
                 <button class="ghost small" data-action="close-raw-config">✕</button>
             </header>
             <div class="modal-body">
@@ -960,12 +1156,116 @@ api:
               <input type="text" id="project-name" placeholder="Mon Projet" required />
             </div>
             <div id="project-wizard-error" class="error hidden" style="margin-top: 1rem; color: var(--text-error);"></div>
-            <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: flex-end;">
-              <button type="button" class="ghost" data-action="close-project-wizard" style="min-width: 120px;" data-i18n="cancel">Annuler</button>
+            <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
               <button type="submit" class="primary" style="width: 100%;">Créer le projet</button>
             </div>
           </form>
         </div>
+      </div>
+    </dialog>
+
+    <!-- Install Plugin Modal -->
+    <dialog id="install-plugin-modal" class="modal" style="min-width: 450px;">
+      <div class="modal-content">
+        <header>
+          <h3 data-i18n="plugins_install_title">Installer un plugin</h3>
+          <button class="ghost small" data-action="close-install-plugin-modal">✕</button>
+        </header>
+        <div class="modal-body">
+          <p class="muted small" style="margin-bottom: 1rem;" data-i18n="plugins_install_intro">
+            Installez un plugin depuis une URL ou un fichier local.
+          </p>
+          
+          <div class="form-group">
+            <label data-i18n="plugins_install_method">Méthode d'installation</label>
+            <div class="install-method-tabs" style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+              <button type="button" class="secondary small install-tab active" data-tab="url" data-i18n="plugins_install_tab_url">📎 URL</button>
+              <button type="button" class="secondary small install-tab" data-tab="file" data-i18n="plugins_install_tab_file">📁 Fichier</button>
+            </div>
+          </div>
+
+          <div id="install-url-section" class="form-group">
+            <label for="install-plugin-url" data-i18n="plugins_install_url_label">URL du plugin</label>
+            <input type="text" id="install-plugin-url" placeholder="https://example.com/plugin.zip" />
+            <p class="small muted" data-i18n="plugins_install_url_hint">URL directe vers un fichier ZIP ou un dépôt Git.</p>
+          </div>
+
+          <div id="install-file-section" class="form-group hidden">
+            <label for="install-plugin-file" data-i18n="plugins_install_file_label">Fichier du plugin</label>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <input type="file" id="install-plugin-file" accept=".zip,.py" style="flex: 1;" />
+            </div>
+            <p class="small muted" data-i18n="plugins_install_file_hint">Sélectionnez un fichier ZIP ou .py.</p>
+          </div>
+
+          <div id="install-plugin-error" class="error hidden" style="margin-top: 1rem; color: var(--text-error);"></div>
+          <div id="install-plugin-success" class="success hidden" style="margin-top: 1rem; color: var(--text-success);"></div>
+        </div>
+        <footer>
+          <button class="secondary" data-action="close-install-plugin-modal" data-i18n="cancel">Annuler</button>
+          <button class="primary" data-action="confirm-install-plugin" data-i18n="plugins_install_confirm">Installer</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <!-- Uninstall Plugin Modal -->
+    <dialog id="uninstall-plugin-modal" class="modal" style="min-width: 400px;">
+      <div class="modal-content">
+        <header>
+          <h3 data-i18n="plugins_uninstall_title">Désinstaller un plugin</h3>
+          <button class="ghost small" data-action="close-uninstall-plugin-modal">✕</button>
+        </header>
+        <div class="modal-body">
+          <p class="muted small" style="margin-bottom: 1rem;" data-i18n="plugins_uninstall_intro">
+            Sélectionnez le plugin à supprimer de votre installation Jupiter.
+          </p>
+          
+          <div class="form-group">
+            <label for="uninstall-plugin-select" data-i18n="plugins_uninstall_select_label">Plugin à désinstaller</label>
+            <select id="uninstall-plugin-select" style="width: 100%; padding: 0.5rem; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main);">
+              <option value="" data-i18n="plugins_uninstall_select_placeholder">-- Sélectionnez un plugin --</option>
+            </select>
+          </div>
+
+          <div id="uninstall-confirm-section" class="hidden" style="margin-top: 1rem; padding: 1rem; background: rgba(255, 100, 100, 0.1); border-radius: 8px; border: 1px solid rgba(255, 100, 100, 0.3);">
+            <p style="color: var(--text-error); font-weight: 600;" data-i18n="plugins_uninstall_confirm_title">⚠️ Êtes-vous vraiment sûr ?</p>
+            <p class="muted small" style="margin-top: 0.5rem;" data-i18n="plugins_uninstall_confirm_msg">
+              Cette action supprimera définitivement le plugin et ses fichiers. Cette opération est irréversible.
+            </p>
+          </div>
+
+          <div id="uninstall-plugin-error" class="error hidden" style="margin-top: 1rem; color: var(--text-error);"></div>
+          <div id="uninstall-plugin-success" class="success hidden" style="margin-top: 1rem; color: var(--text-success);"></div>
+        </div>
+        <footer>
+          <button class="secondary" data-action="close-uninstall-plugin-modal" data-i18n="cancel">Annuler</button>
+          <button class="danger" data-action="confirm-uninstall-plugin" data-i18n="plugins_uninstall_confirm" disabled>Désinstaller</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <!-- Export Unused Functions for AI Modal -->
+    <dialog id="unused-functions-export-modal" class="modal" style="min-width: 700px; max-width: 900px;">
+      <div class="modal-content">
+        <header>
+          <h3 data-i18n="functions_export_modal_title">🤖 Export Unused Functions for AI</h3>
+          <button class="ghost small" data-action="close-unused-export-modal">✕</button>
+        </header>
+        <div class="modal-body">
+          <p class="muted" data-i18n="functions_export_instructions">
+            Copy this formatted report and paste it into your AI coding assistant (ChatGPT, Claude, Copilot, GitHub Copilot Chat, etc.).
+            The AI agent will analyze each function to determine if it's truly orphan or used via reflection/dynamic imports.
+          </p>
+          <div class="export-stats" style="display: flex; gap: 1rem; margin: 1rem 0;">
+            <span class="badge badge-warning" id="export-unused-count">0 unused functions</span>
+            <span class="badge" id="export-files-count">0 files</span>
+          </div>
+          <textarea id="unused-functions-export-content" class="export-textarea" readonly rows="18" style="width: 100%; font-family: 'Fira Code', monospace; font-size: 0.85rem; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; resize: vertical;"></textarea>
+        </div>
+        <footer style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+          <button class="btn btn-primary" id="unused-functions-copy-btn" onclick="copyUnusedFunctionsExport()">📋 <span data-i18n="functions_export_copy">Copy to Clipboard</span></button>
+          <button class="btn btn-secondary" data-action="close-unused-export-modal" data-i18n="close">Close</button>
+        </footer>
       </div>
     </dialog>
   </body>

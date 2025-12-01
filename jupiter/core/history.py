@@ -33,6 +33,11 @@ def _extract_functions(file_entry: Dict[str, Any], key: str = "defined_functions
 
 @dataclass
 class SnapshotMetadata:
+    """Metadata describing a stored snapshot.
+    
+    Note: This dataclass mirrors SnapshotMetadataModel in jupiter.server.models
+    to avoid circular imports. Keep both in sync when modifying fields.
+    """
     id: str
     timestamp: float
     label: str

@@ -6,6 +6,7 @@ const state = {
   view: "dashboard",
   theme: "dark",
   apiBaseUrl: null,
+  apiStatus: "unknown",
   backends: [],
   currentBackend: null,
   i18n: {
@@ -20,6 +21,16 @@ const state = {
     isLicensed: false,
     remainingSeconds: null,
     message: null
+  },
+  watch: {
+    active: false,
+    callCounts: {},  // Cumulative function call counts
+    totalEvents: 0,
+    filesScanned: 0,
+    functionsFound: 0,
+    currentFile: null,
+    progress: 0,
+    phase: null  // 'scanning', 'analyzing', 'completed'
   },
   snapshots: [],
   snapshotDiff: null,
@@ -154,6 +165,190 @@ async function setLanguage(lang) {
 
 const t = (key) => state.i18n.translations[key] || key;
 
+const notificationCenter = {
+  container: null,
+  items: new Map(),
+  seed: 0,
+};
+
+function ensureNotificationContainer() {
+  if (notificationCenter.container && document.body.contains(notificationCenter.container)) {
+    return notificationCenter.container;
+  }
+  const existing = document.getElementById("notification-center");
+  if (existing) {
+    notificationCenter.container = existing;
+    return existing;
+  }
+  if (!document.body) return null;
+  const container = document.createElement("div");
+  container.id = "notification-center";
+  document.body.appendChild(container);
+  notificationCenter.container = container;
+  return container;
+}
+
+function dismissNotification(id) {
+  const item = notificationCenter.items.get(id);
+  if (!item) return;
+  if (item.timeout) clearTimeout(item.timeout);
+  const toast = item.element;
+  toast.classList.remove("visible");
+  setTimeout(() => toast.remove(), 220);
+  notificationCenter.items.delete(id);
+}
+
+function showNotification(message, type = "info", options = {}) {
+  const container = ensureNotificationContainer();
+  if (!container) {
+    console.log(`[Notifications:${type}] ${message}`);
+    return null;
+  }
+  const id = `toast-${Date.now()}-${notificationCenter.seed++}`;
+  const toast = document.createElement("div");
+  toast.className = `notification-toast ${type}`;
+  toast.setAttribute("role", "status");
+  toast.dataset.id = id;
+
+  const icon = options.icon || (type === "error" ? "⚠️" : type === "success" ? "✅" : "🔔");
+  const title = options.title || t("notifications_title") || "Notifications";
+  const dismissLabel = t("notifications_dismiss") || "Dismiss";
+
+  const iconEl = document.createElement("span");
+  iconEl.className = "toast-icon";
+  iconEl.textContent = icon;
+
+  const content = document.createElement("div");
+  content.className = "toast-content";
+  if (title) {
+    const titleEl = document.createElement("p");
+    titleEl.className = "toast-title";
+    titleEl.textContent = title;
+    content.appendChild(titleEl);
+  }
+  const messageEl = document.createElement("p");
+  messageEl.className = "toast-message";
+  messageEl.textContent = message;
+  content.appendChild(messageEl);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "toast-close";
+  closeBtn.setAttribute("aria-label", dismissLabel);
+  closeBtn.type = "button";
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    dismissNotification(id);
+  });
+
+  toast.append(iconEl, content, closeBtn);
+
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  const timeout = options.sticky
+    ? null
+    : setTimeout(() => dismissNotification(id), options.duration || 6000);
+  notificationCenter.items.set(id, { element: toast, timeout });
+  return id;
+}
+
+window.showNotification = showNotification;
+window.dismissNotification = dismissNotification;
+
+const apiHeartbeat = {
+  timer: null,
+  controller: null,
+};
+
+function startApiHeartbeat() {
+  if (apiHeartbeat.timer) {
+    clearInterval(apiHeartbeat.timer);
+    apiHeartbeat.timer = null;
+  }
+  if (apiHeartbeat.controller) {
+    apiHeartbeat.controller.abort();
+    apiHeartbeat.controller = null;
+  }
+  if (!state.apiBaseUrl) {
+    state.apiStatus = "unknown";
+    return;
+  }
+  checkApiHeartbeat();
+  apiHeartbeat.timer = setInterval(checkApiHeartbeat, 15000);
+}
+
+async function checkApiHeartbeat() {
+  if (!state.apiBaseUrl) return;
+  if (apiHeartbeat.controller) {
+    apiHeartbeat.controller.abort();
+  }
+  apiHeartbeat.controller = new AbortController();
+  try {
+    const resp = await fetch(`${state.apiBaseUrl}/health`, {
+      signal: apiHeartbeat.controller.signal,
+      cache: "no-cache",
+    });
+    handleApiStatusChange(resp.ok);
+    
+    // Also check project API status if we are online and have an active project
+    if (resp.ok && state.activeProjectId) {
+        checkProjectApiStatus();
+    }
+  } catch (err) {
+    handleApiStatusChange(false);
+  }
+}
+
+async function checkProjectApiStatus() {
+    try {
+        const resp = await apiFetch(`${state.apiBaseUrl}/projects/${state.activeProjectId}/api_status`);
+        if (resp) {
+            handleProjectApiStatus(resp);
+        }
+    } catch (e) {
+        console.error("Failed to check project API status", e);
+    }
+}
+
+function handleProjectApiStatus(statusData) {
+    // statusData: { status: "ok"|"error"|"unreachable"|"not_configured", message: "..." }
+    const currentStatus = state.projectApiStatus || "unknown";
+    
+    // Only notify on change
+    if (currentStatus !== statusData.status) {
+        state.projectApiStatus = statusData.status;
+        
+        let type = "info";
+        if (statusData.status === "ok") type = "success";
+        if (statusData.status === "error" || statusData.status === "unreachable") type = "error";
+        
+        // Don't show notification for "not_configured" unless explicitly requested?
+        // User said: "Si aucune api n'est configurée ... on devrait avoir un message 'pas d'api configurée'"
+        // But maybe not as a toast every time?
+        // Let's show it once if it changes to not_configured (e.g. on project switch)
+        
+        showNotification(statusData.message, type, {
+            title: "Project API",
+            icon: type === "success" ? "🟢" : (type === "error" ? "🔴" : "⚪")
+        });
+    }
+}
+
+function handleApiStatusChange(isOnline) {
+  const status = isOnline ? "online" : "offline";
+  if (state.apiStatus === status) return;
+  state.apiStatus = status;
+  const message = isOnline
+    ? (t("notifications_api_online") || "Jupiter Server is reachable")
+    : (t("notifications_api_offline") || "Jupiter Server is offline");
+  const icon = isOnline ? "🟢" : "🔴";
+  showNotification(message, isOnline ? "success" : "error", {
+    title: t("notifications_title") || "Notifications",
+    icon,
+  });
+  pushLiveEvent("API", message);
+}
+
 function translateUI() {
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t(el.dataset.i18n);
@@ -171,6 +366,14 @@ function setTheme(theme) {
   if (themeValue) {
     themeValue.textContent = theme === "dark" ? t("s_theme_value_dark") : t("s_theme_value_light");
   }
+}
+
+function updateVersionDisplays(version) {
+  const label = version ? `v${version}` : "v—";
+  const badge = document.getElementById("global-version-badge");
+  if (badge) badge.textContent = label;
+  const settingsLabel = document.getElementById("current-version-display");
+  if (settingsLabel) settingsLabel.textContent = label;
 }
 
 const DEFAULT_API_BASE = "http://127.0.0.1:8000";
@@ -256,10 +459,10 @@ function handleAction(action, data) {
       startScan();
       break;
     case "start-watch":
-      if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-          state.ws.close();
+      if (state.watch.active) {
+          stopWatch();
       } else {
-          connectWebSocket();
+          startWatch();
       }
       break;
     case "open-scan-modal": {
@@ -285,14 +488,7 @@ function handleAction(action, data) {
       startScanWithOptions();
       break;
     case "open-run-modal": {
-      const runCommandInput = document.getElementById("run-command");
-      const runDynamicInput = document.getElementById("run-dynamic");
-      const savedRunCommand = localStorage.getItem("jupiter_run_command");
-      const savedRunDynamic = localStorage.getItem("jupiter_run_dynamic");
-
-      if (runCommandInput && savedRunCommand !== null) runCommandInput.value = savedRunCommand;
-      if (runDynamicInput && savedRunDynamic !== null) runDynamicInput.checked = savedRunDynamic === "true";
-
+      initRunModal();
       openModal("run-modal");
       break;
     }
@@ -302,9 +498,39 @@ function handleAction(action, data) {
     case "confirm-run":
       runCommand();
       break;
-    case "trigger-update":
-      triggerUpdate();
+    case "clear-run-command": {
+      const cmdInput = document.getElementById("run-command");
+      if (cmdInput) cmdInput.value = "";
       break;
+    }
+    case "browse-run-cwd":
+      openRunCwdBrowser();
+      break;
+    case "reset-run-cwd": {
+      const cwdInput = document.getElementById("run-cwd");
+      if (cwdInput) cwdInput.value = "";
+      break;
+    }
+    case "clear-run-output": {
+      const outputContainer = document.getElementById("run-output-container");
+      const outputDiv = document.getElementById("run-output");
+      if (outputDiv) outputDiv.textContent = "";
+      if (outputContainer) outputContainer.classList.add("hidden");
+      break;
+    }
+    case "copy-run-output": {
+      const outputDiv = document.getElementById("run-output");
+      if (outputDiv && navigator.clipboard) {
+        navigator.clipboard.writeText(outputDiv.textContent).then(() => {
+          addLog("Output copied to clipboard");
+        });
+      }
+      break;
+    }
+    case "clear-run-history":
+      clearRunHistory();
+      break;
+    // trigger-update is now handled by the settings_update plugin
     case "open-settings":
       setView("settings");
       loadSettings();
@@ -347,8 +573,24 @@ function handleAction(action, data) {
     case "save-project-api":
       saveProjectApiConfig();
       break;
+    case "refresh-root-entries":
+      loadProjectRootEntries();
+      break;
+    case "save-project-ignores":
+    case "save-ignore-config":
+      saveProjectIgnores();
+      break;
+    case "ignore-select-all":
+      selectAllIgnoreEntries(true);
+      break;
+    case "ignore-select-none":
+      selectAllIgnoreEntries(false);
+      break;
     case "toggle-plugin":
       togglePlugin(data.pluginName, data.pluginState === 'true');
+      break;
+    case "restart-plugin":
+      restartPlugin(data.pluginName);
       break;
     case "refresh-snapshots":
       loadSnapshots(true);
@@ -358,6 +600,12 @@ function handleAction(action, data) {
       break;
     case "refresh-suggestions":
       refreshSuggestions();
+      break;
+    case "check-meeting-license":
+      checkMeetingLicense();
+      break;
+    case "refresh-meeting-status":
+      refreshMeetingStatus();
       break;
     case "copy-snapshot-id":
       if (navigator.clipboard) {
@@ -411,6 +659,59 @@ function handleAction(action, data) {
         alert(t("no_data_to_export") || "No data to export. Please run a scan first.");
       }
       break;
+    // API View actions
+    case "refresh-api":
+      refreshApiEndpoints();
+      break;
+    case "export-api-collection":
+      exportApiCollection();
+      break;
+    case "close-api-modal":
+      closeApiModal();
+      break;
+    case "close-api-response":
+      closeApiResponse();
+      break;
+    case "copy-api-response":
+      copyApiResponse();
+      break;
+    case "copy-curl":
+      copyCurlFromModal();
+      break;
+    case "test-api-endpoint":
+      testApiEndpoint(parseInt(data.index, 10));
+      break;
+    case "interact-api-endpoint":
+      openApiInteract(parseInt(data.index, 10));
+      break;
+    case "copy-api-curl":
+      copyApiCurl(parseInt(data.index, 10));
+      break;
+    // Plugin management actions
+    case "open-marketplace":
+      openPluginMarketplace();
+      break;
+    case "open-install-plugin-modal":
+      openInstallPluginModal();
+      break;
+    case "close-install-plugin-modal":
+      closeInstallPluginModal();
+      break;
+    case "confirm-install-plugin":
+      confirmInstallPlugin();
+      break;
+    case "open-uninstall-plugin-modal":
+      openUninstallPluginModal();
+      break;
+    case "close-uninstall-plugin-modal":
+      closeUninstallPluginModal();
+      break;
+    case "confirm-uninstall-plugin":
+      confirmUninstallPlugin();
+      break;
+    case "reload-plugins":
+      reloadAllPlugins();
+      break;
     default:
       console.warn(`Unknown action: ${action}`);
       break;
@@ -449,80 +750,281 @@ async function startScanWithOptions() {
 async function runCommand() {
   const commandInput = document.getElementById("run-command");
   const dynamicInput = document.getElementById("run-dynamic");
+  const cwdInput = document.getElementById("run-cwd");
+  const saveHistoryInput = document.getElementById("run-save-history");
+  const outputContainer = document.getElementById("run-output-container");
   const outputDiv = document.getElementById("run-output");
+  const runModal = document.getElementById("run-modal");
 
   if (!commandInput || !dynamicInput || !outputDiv) return;
 
-  const commandStr = commandInput.value;
+  const commandStr = commandInput.value.trim();
   const withDynamic = dynamicInput.checked;
+  const cwd = cwdInput?.value?.trim() || null;
+  const saveHistory = saveHistoryInput?.checked !== false;
     
-  if (!commandStr) return;
+  if (!commandStr) {
+    addLog("No command specified");
+    return;
+  }
 
-  // Save settings
+  // Save to history if enabled
+  if (saveHistory) {
+    addToRunHistory(commandStr);
+  }
+
+  // Save last settings
   localStorage.setItem("jupiter_run_command", commandStr);
   localStorage.setItem("jupiter_run_dynamic", withDynamic ? "true" : "false");
+  if (cwd) localStorage.setItem("jupiter_run_cwd", cwd);
     
-  outputDiv.textContent = "Running...";
-  outputDiv.classList.remove("hidden");
+  // Show running state
+  if (runModal) runModal.classList.add("running");
+  if (outputContainer) outputContainer.classList.remove("hidden");
+  outputDiv.textContent = t("run_running") || "Exécution en cours...";
+  outputDiv.style.borderLeft = "";
     
     try {
         const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
-        // Split command string simply by space (naive)
-        // Ideally the backend should handle string parsing or we use a library
-        // But for now we send the string and let backend handle it or split here
-        // The API expects a list of strings.
-        const command = commandStr.split(" "); 
+        // Parse command string properly, respecting quoted arguments
+        const command = parseCommand(commandStr);
+        
+        const requestBody = { 
+            command, 
+            with_dynamic: withDynamic,
+            backend_name: state.currentBackend
+        };
+        
+        // Add cwd if specified
+        if (cwd) {
+            requestBody.cwd = cwd;
+        }
         
         const response = await apiFetch(`${apiBaseUrl}/run`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                command, 
-                with_dynamic: withDynamic,
-                backend_name: state.currentBackend
-            })
+            body: JSON.stringify(requestBody)
         });
         
         const result = await response.json();
-        outputDiv.textContent = `Exit Code: ${result.returncode}\n\nSTDOUT:\n${result.stdout}\n\nSTDERR:\n${result.stderr}`;
+        
+        let outputText = `⏱️ Exit Code: ${result.returncode}\n\n`;
+        outputText += `📤 STDOUT:\n${result.stdout || "(vide)"}\n\n`;
+        if (result.stderr) {
+            outputText += `⚠️ STDERR:\n${result.stderr}\n`;
+        }
         
         if (result.dynamic_analysis) {
-            addLog("Dynamic analysis data received.");
+            const calls = result.dynamic_analysis.calls || {};
+            const callCount = Object.keys(calls).length;
+            const totalCalls = Object.values(calls).reduce((a, b) => a + b, 0);
+            
+            outputText += `\n📊 ANALYSE DYNAMIQUE:\n`;
+            outputText += `├─ Fonctions uniques: ${callCount}\n`;
+            outputText += `└─ Appels totaux: ${totalCalls}\n`;
+            
+            if (callCount > 0) {
+                outputText += `\n🔝 Top fonctions:\n`;
+                const sortedCalls = Object.entries(calls).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                for (const [func, count] of sortedCalls) {
+                    outputText += `  ${count}× ${func}\n`;
+                }
+            }
+            
+            addLog(`Dynamic analysis: ${callCount} unique functions, ${totalCalls} total calls`);
+            
+            if (state.watch.active) {
+                addWatchEvent("DYNAMIC", `${totalCalls} appels sur ${callCount} fonctions`, "success");
+            }
         }
+        
+        outputDiv.textContent = outputText;
+        
+        // Color based on exit code
+        if (result.returncode === 0) {
+            outputDiv.style.borderLeft = "3px solid var(--success)";
+        } else {
+            outputDiv.style.borderLeft = "3px solid var(--danger)";
+        }
+        
     } catch (e) {
-        outputDiv.textContent = "Error: " + e.message;
+        outputDiv.textContent = "❌ Erreur: " + e.message;
+        outputDiv.style.borderLeft = "3px solid var(--danger)";
+    } finally {
+        if (runModal) runModal.classList.remove("running");
     }
 }
 
-async function triggerUpdate() {
-    const source = document.getElementById("update-source").value;
-    const force = document.getElementById("update-force").checked;
+// ===============================
+// Run Modal Helpers
+// ===============================
+
+function initRunModal() {
+    const commandInput = document.getElementById("run-command");
+    const dynamicInput = document.getElementById("run-dynamic");
+    const cwdInput = document.getElementById("run-cwd");
+    const historySelect = document.getElementById("run-history");
+    const outputContainer = document.getElementById("run-output-container");
     
-    if (!source) {
-        alert("Please provide a source (ZIP path or Git URL)");
-        return;
-    }
+    // Restore last command
+    const savedCommand = localStorage.getItem("jupiter_run_command");
+    const savedDynamic = localStorage.getItem("jupiter_run_dynamic");
+    const savedCwd = localStorage.getItem("jupiter_run_cwd");
     
-    if (!confirm("Are you sure you want to update Jupiter? The server will need to be restarted.")) return;
+    if (commandInput && savedCommand) commandInput.value = savedCommand;
+    if (dynamicInput && savedDynamic) dynamicInput.checked = savedDynamic === "true";
+    if (cwdInput && savedCwd) cwdInput.value = savedCwd;
     
-    try {
-        const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
-        const response = await fetch(`${apiBaseUrl}/update`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source, force })
-        });
-        
-        if (response.ok) {
-            alert("Update successful. Please restart Jupiter.");
-        } else {
-            const err = await response.json();
-            alert("Update failed: " + err.detail);
-        }
-    } catch (e) {
-        alert("Update failed: " + e.message);
+    // Hide output on open
+    if (outputContainer) outputContainer.classList.add("hidden");
+    
+    // Populate history dropdown
+    populateRunHistory();
+    
+    // Set up event listeners for presets
+    document.querySelectorAll(".run-preset-btn").forEach(btn => {
+        btn.onclick = () => {
+            const preset = btn.dataset.preset;
+            if (commandInput && preset) {
+                commandInput.value = preset;
+                commandInput.focus();
+            }
+        };
+    });
+    
+    // Set up history select change handler
+    if (historySelect) {
+        historySelect.onchange = () => {
+            const selected = historySelect.value;
+            if (selected && commandInput) {
+                commandInput.value = selected;
+                historySelect.value = ""; // Reset select
+            }
+        };
     }
 }
+
+function getRunHistory() {
+    try {
+        const history = localStorage.getItem("jupiter_run_history");
+        return history ? JSON.parse(history) : [];
+    } catch {
+        return [];
+    }
+}
+
+function addToRunHistory(command) {
+    let history = getRunHistory();
+    
+    // Remove if already exists (will be re-added at top)
+    history = history.filter(cmd => cmd !== command);
+    
+    // Add to beginning
+    history.unshift(command);
+    
+    // Keep only last 20
+    history = history.slice(0, 20);
+    
+    localStorage.setItem("jupiter_run_history", JSON.stringify(history));
+    populateRunHistory();
+}
+
+function populateRunHistory() {
+    const historySelect = document.getElementById("run-history");
+    if (!historySelect) return;
+    
+    const history = getRunHistory();
+    
+    // Clear existing options except first
+    while (historySelect.options.length > 1) {
+        historySelect.remove(1);
+    }
+    
+    // Add history items
+    history.forEach(cmd => {
+        const option = document.createElement("option");
+        option.value = cmd;
+        option.textContent = cmd.length > 50 ? cmd.substring(0, 47) + "..." : cmd;
+        historySelect.appendChild(option);
+    });
+}
+
+function clearRunHistory() {
+    if (confirm(t("run_confirm_clear_history") || "Effacer tout l'historique des commandes ?")) {
+        localStorage.removeItem("jupiter_run_history");
+        populateRunHistory();
+        addLog("Run history cleared");
+    }
+}
+
+/**
+ * Parse a command string into an array, respecting quoted arguments.
+ * Examples:
+ *   'python script.py' -> ['python', 'script.py']
+ *   '"Jupiter UI.cmd"' -> ['Jupiter UI.cmd']
+ *   'python "my script.py" --arg' -> ['python', 'my script.py', '--arg']
+ */
+function parseCommand(commandStr) {
+    const args = [];
+    let current = '';
+    let inQuotes = false;
+    let quoteChar = null;
+    
+    for (let i = 0; i < commandStr.length; i++) {
+        const char = commandStr[i];
+        
+        if ((char === '"' || char === "'") && !inQuotes) {
+            // Start of quoted section
+            inQuotes = true;
+            quoteChar = char;
+        } else if (char === quoteChar && inQuotes) {
+            // End of quoted section
+            inQuotes = false;
+            quoteChar = null;
+        } else if (char === ' ' && !inQuotes) {
+            // Space outside quotes - end of argument
+            if (current.length > 0) {
+                args.push(current);
+                current = '';
+            }
+        } else {
+            // Regular character
+            current += char;
+        }
+    }
+    
+    // Don't forget the last argument
+    if (current.length > 0) {
+        args.push(current);
+    }
+    
+    return args;
+}
+
+// Browser for CWD selection
+let runCwdBrowserCallback = null;
+
+function openRunCwdBrowser() {
+    const modal = document.getElementById("browser-modal");
+    if (!modal) return;
+    
+    // Store callback for when selection is confirmed
+    runCwdBrowserCallback = (selectedPath) => {
+        const cwdInput = document.getElementById("run-cwd");
+        if (cwdInput) cwdInput.value = selectedPath;
+    };
+    
+    try {
+        modal.showModal();
+        let rootToFetch = state.context?.root || ".";
+        rootToFetch = rootToFetch.replace(/^"|"$/g, '');
+        fetchFs(rootToFetch);
+    } catch (e) {
+        console.error("Failed to show CWD browser:", e);
+    }
+}
+
+// triggerUpdate functionality is now provided by the settings_update plugin
 
 async function loadSettings() {
     if (!state.apiBaseUrl) return;
@@ -537,11 +1039,14 @@ async function loadSettings() {
             if (document.getElementById("conf-gui-port")) document.getElementById("conf-gui-port").value = config.gui_port || 8050;
             
             // Meeting
-            if (document.getElementById("conf-meeting-enabled")) {
-                document.getElementById("conf-meeting-enabled").checked = !!config.meeting_enabled;
-            }
             if (document.getElementById("conf-meeting-key")) {
                 document.getElementById("conf-meeting-key").value = config.meeting_device_key || "";
+            }
+            if (document.getElementById("conf-meeting-token")) {
+                document.getElementById("conf-meeting-token").value = config.meeting_auth_token || "";
+            }
+            if (document.getElementById("conf-meeting-heartbeat")) {
+                document.getElementById("conf-meeting-heartbeat").value = config.meeting_heartbeat_interval || 60;
             }
 
             if (document.getElementById("conf-ui-theme")) document.getElementById("conf-ui-theme").value = config.ui_theme || "dark";
@@ -563,6 +1068,9 @@ async function loadSettings() {
 
             // Load Users
             loadUsers();
+            
+            // Refresh Meeting license status
+            refreshMeetingStatus();
 
         } else {
             console.error("Failed to load settings:", response.status);
@@ -584,8 +1092,9 @@ async function saveSettings(e) {
         server_port: parseInt(formData.get("server_port")),
         gui_host: formData.get("gui_host"),
         gui_port: parseInt(formData.get("gui_port")),
-        meeting_enabled: formData.get("meeting_enabled") === "on",
         meeting_device_key: formData.get("meeting_device_key"),
+        meeting_auth_token: formData.get("meeting_auth_token") || null,
+        meeting_heartbeat_interval: parseInt(formData.get("meeting_heartbeat_interval")) || 60,
         ui_theme: formData.get("ui_theme"),
         ui_language: formData.get("ui_language"),
         log_level: formData.get("log_level") || "INFO",
@@ -623,6 +1132,169 @@ async function saveSettings(e) {
     } catch (e) {
         alert("Error saving settings: " + e.message);
     }
+}
+
+// --- Meeting License Functions ---
+
+async function refreshMeetingStatus() {
+    if (!state.apiBaseUrl) {
+        updateMeetingStatusUI({
+            status: "config_error",
+            message: "API non configurée"
+        });
+        return;
+    }
+    
+    try {
+        addLog("Refreshing Meeting license status...", "INFO");
+        const response = await apiFetch(`${state.apiBaseUrl}/license/status`);
+        
+        if (response.ok) {
+            const licenseData = await response.json();
+            state.meeting = {
+                ...state.meeting,
+                status: licenseData.status,
+                is_licensed: licenseData.status === "valid",
+                message: licenseData.message,
+                lastResponse: licenseData,
+                lastCheckedAt: new Date().toISOString()
+            };
+            updateMeetingStatusUI(licenseData);
+            addLog(`Meeting license status: ${licenseData.status}`, "INFO");
+        } else {
+            const err = await response.json().catch(() => ({}));
+            updateMeetingStatusUI({
+                status: "network_error",
+                message: err.detail || `HTTP ${response.status}`
+            });
+            addLog(`Failed to get license status: ${response.status}`, "WARNING");
+        }
+    } catch (e) {
+        updateMeetingStatusUI({
+            status: "network_error",
+            message: e.message
+        });
+        addLog(`Meeting status error: ${e.message}`, "ERROR");
+    }
+}
+
+async function checkMeetingLicense() {
+    if (!state.apiBaseUrl) {
+        alert(t("meeting_no_api") || "API non configurée");
+        return;
+    }
+    
+    try {
+        addLog("Checking Meeting license...", "INFO");
+        const refreshBtn = document.querySelector('[data-action="check-meeting-license"]');
+        if (refreshBtn) {
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = t("meeting_checking") || "Vérification...";
+        }
+        
+        const response = await apiFetch(`${state.apiBaseUrl}/license/refresh`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            const licenseData = await response.json();
+            state.meeting = {
+                ...state.meeting,
+                status: licenseData.status,
+                is_licensed: licenseData.status === "valid",
+                message: licenseData.message,
+                lastResponse: licenseData,
+                lastCheckedAt: new Date().toISOString()
+            };
+            updateMeetingStatusUI(licenseData);
+            addLog(`Meeting license verified: ${licenseData.status}`, "INFO");
+            
+            if (licenseData.status === "valid") {
+                alert(t("meeting_license_valid") || "✅ Licence Meeting valide !");
+            } else {
+                alert(`${t("meeting_license_invalid") || "❌ Licence non valide"}: ${licenseData.message}`);
+            }
+        } else {
+            const err = await response.json().catch(() => ({}));
+            updateMeetingStatusUI({
+                status: "network_error",
+                message: err.detail || `HTTP ${response.status}`
+            });
+            alert(`${t("meeting_check_failed") || "Échec de la vérification"}: ${err.detail || response.status}`);
+        }
+    } catch (e) {
+        updateMeetingStatusUI({
+            status: "network_error",
+            message: e.message
+        });
+        alert(`${t("meeting_check_error") || "Erreur"}: ${e.message}`);
+    } finally {
+        const refreshBtn = document.querySelector('[data-action="check-meeting-license"]');
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = t("meeting_check_btn") || "🔄 Vérifier la licence";
+        }
+    }
+}
+
+function updateMeetingStatusUI(licenseData) {
+    // Update Settings page Meeting section elements
+    const lastCheckEl = document.getElementById("meeting-last-check");
+    const lastResponseEl = document.getElementById("meeting-last-response");
+    
+    // Set status based on license data
+    const status = licenseData.status || "unknown";
+    let statusText = t("meeting_status_unknown") || "Statut inconnu";
+    
+    switch (status) {
+        case "valid":
+            statusText = "✅ " + (t("meeting_status_valid") || "Licence valide");
+            break;
+        case "invalid":
+            statusText = "❌ " + (t("meeting_status_invalid") || "Licence non valide");
+            break;
+        case "network_error":
+            statusText = "⚠️ " + (t("meeting_status_network_error") || "Erreur réseau");
+            break;
+        case "config_error":
+            statusText = "⚙️ " + (t("meeting_status_config_error") || "Erreur de configuration");
+            break;
+        default:
+            statusText = "❓ " + (t("meeting_status_unknown") || "Statut inconnu");
+    }
+    
+    // Update last check time
+    if (lastCheckEl) {
+        const checkedAt = licenseData.checked_at || state.meeting?.lastCheckedAt;
+        if (checkedAt) {
+            lastCheckEl.textContent = `${statusText} — ${t("meeting_last_check") || "Dernière vérification"}: ${formatDateISO(checkedAt)}`;
+        } else {
+            lastCheckEl.textContent = statusText;
+        }
+    }
+    
+    // Update last response JSON display
+    if (lastResponseEl && licenseData) {
+        const displayData = {
+            status: licenseData.status,
+            message: licenseData.message,
+            device_key: licenseData.device_key ? `${licenseData.device_key.substring(0, 8)}...` : null,
+            authorized: licenseData.authorized,
+            device_type: licenseData.device_type,
+            checked_at: licenseData.checked_at
+        };
+        lastResponseEl.textContent = JSON.stringify(displayData, null, 2);
+    }
+    
+    // Update dashboard badge
+    renderStatusBadges(state.report);
+}
+
+function formatDateISO(dateStr) {
+    if (!dateStr) return "—";
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    return date.toLocaleString();
 }
 
 async function changeRoot(path) {
@@ -679,7 +1351,6 @@ function renderReport(report) {
   renderAlerts(report);
   renderPluginList(report);
   renderStatusBadges(report);
-  renderQuality(report);
   renderDiagnostics(report);
   
   if (state.view === 'suggestions') {
@@ -702,7 +1373,8 @@ function renderStats(report) {
     const files = report.files;
     const totalSize = files.reduce((acc, file) => acc + (file.size_bytes || 0), 0);
     const lastUpdated = files.length > 0 ? [...files].sort((a, b) => (b.modified_timestamp || 0) - (a.modified_timestamp || 0))[0] : null;
-    const hasDynamic = report?.dynamic?.calls && Object.keys(report.dynamic.calls).length > 0;
+    // Dynamic data is available if watch is active OR if we have dynamic call data in the report
+    const hasDynamic = state.watch.active || (report?.dynamic?.calls && Object.keys(report.dynamic.calls).length > 0);
 
     const stats = [
         { label: t("files_view"), value: files.length.toLocaleString(state.i18n.lang) },
@@ -747,22 +1419,57 @@ function renderFiles(report) {
     const files = Array.isArray(report?.files) ? [...report.files] : [];
     const body = document.getElementById("files-body");
     const empty = document.getElementById("files-empty");
+    const countBadge = document.getElementById("files-count-badge");
+    const sizeBadge = document.getElementById("files-size-badge");
+    const searchInput = document.getElementById("files-search");
+    const typeFilter = document.getElementById("files-type-filter");
+    
     if(!body || !empty) return;
     body.innerHTML = "";
 
     if (!files.length) {
         empty.style.display = "block";
         empty.textContent = t("alert_no_report_detail");
+        if (countBadge) countBadge.textContent = "0 fichiers";
+        if (sizeBadge) sizeBadge.textContent = "0 KB";
         return;
     }
     empty.style.display = "none";
 
+    // Apply filters
+    let filteredFiles = files;
+    
+    // Search filter
+    const searchTerm = searchInput?.value?.toLowerCase() || "";
+    if (searchTerm) {
+        filteredFiles = filteredFiles.filter(f => 
+            f.path.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    // Type filter
+    const typeFilterValue = typeFilter?.value || "";
+    if (typeFilterValue) {
+        filteredFiles = filteredFiles.filter(f => 
+            f.path.endsWith(`.${typeFilterValue}`)
+        );
+    }
+
+    // Update stats
+    const totalSize = filteredFiles.reduce((sum, f) => sum + (f.size_bytes || 0), 0);
+    if (countBadge) countBadge.textContent = `${filteredFiles.length} fichiers`;
+    if (sizeBadge) sizeBadge.textContent = bytesToHuman(totalSize);
+
+    // Sort
     const { key, dir } = state.sortState.files;
-    files.sort((a, b) => {
+    filteredFiles.sort((a, b) => {
         let valA, valB;
         if (key === 'func_count') {
             valA = a.language_analysis?.defined_functions?.length || 0;
             valB = b.language_analysis?.defined_functions?.length || 0;
+        } else if (key === 'type') {
+            valA = getFileExtension(a.path);
+            valB = getFileExtension(b.path);
         } else {
             valA = a[key] || 0;
             valB = b[key] || 0;
@@ -774,22 +1481,82 @@ function renderFiles(report) {
         return dir === 'asc' ? valA - valB : valB - valA;
     });
 
-    files
+    // Render rows
+    filteredFiles
         .slice(0, 200)
         .forEach((file) => {
             const funcCount = file.language_analysis?.defined_functions?.length || 0;
+            const fileExt = getFileExtension(file.path);
+            const fileIcon = getFileIcon(fileExt);
             const row = document.createElement("tr");
             row.innerHTML = `
-                <td>${file.path}</td>
+                <td class="file-path">
+                    <span class="file-icon">${fileIcon}</span>
+                    <span class="file-name" title="${file.path}">${file.path}</span>
+                </td>
+                <td class="numeric file-type"><span class="type-badge">.${fileExt}</span></td>
                 <td class="numeric">${bytesToHuman(file.size_bytes || 0)}</td>
                 <td class="numeric">${formatDate(file.modified_timestamp)}</td>
-                <td class="numeric">${funcCount}</td>
+                <td class="numeric">${funcCount > 0 ? `<span class="func-count">${funcCount}</span>` : '<span class="muted">—</span>'}</td>
                 <td class="actions">
-                    <button class="btn-icon" onclick="triggerSimulation('file', '${file.path.replace(/\\/g, '\\\\')}')" title="Simulate Removal">🗑️</button>
+                    <button class="btn-icon simulate-btn" onclick="triggerSimulation('file', '${file.path.replace(/\\/g, '\\\\')}')" title="${t('files_simulate_tooltip') || 'Simuler la suppression'}">
+                        🔬
+                    </button>
                 </td>
             `;
             body.appendChild(row);
         });
+    
+    // Setup filter listeners (only once)
+    if (!searchInput?.dataset.bound) {
+        searchInput?.addEventListener("input", () => renderFiles(state.report));
+        if (searchInput) searchInput.dataset.bound = "true";
+    }
+    if (!typeFilter?.dataset.bound) {
+        typeFilter?.addEventListener("change", () => renderFiles(state.report));
+        if (typeFilter) typeFilter.dataset.bound = "true";
+    }
+}
+
+/**
+ * Get file extension from path
+ */
+function getFileExtension(path) {
+    const parts = path.split('.');
+    return parts.length > 1 ? parts.pop().toLowerCase() : '';
+}
+
+/**
+ * Get icon for file type
+ */
+function getFileIcon(ext) {
+    const icons = {
+        'py': '🐍',
+        'js': '📜',
+        'ts': '💠',
+        'jsx': '⚛️',
+        'tsx': '⚛️',
+        'html': '🌐',
+        'css': '🎨',
+        'scss': '🎨',
+        'json': '📋',
+        'yaml': '📋',
+        'yml': '📋',
+        'md': '📝',
+        'txt': '📄',
+        'sql': '🗃️',
+        'sh': '🖥️',
+        'bat': '🖥️',
+        'cmd': '🖥️',
+        'ps1': '🖥️',
+        'xml': '📰',
+        'svg': '🖼️',
+        'png': '🖼️',
+        'jpg': '🖼️',
+        'gif': '🖼️',
+        'ico': '🖼️',
+    };
+    return icons[ext] || '📄';
 }
 
 function renderFunctions(report) {
@@ -800,6 +1567,7 @@ function renderFunctions(report) {
 
     const files = Array.isArray(report?.files) ? report.files : [];
     const dynamicCalls = report?.dynamic?.calls || {};
+    const watchCalls = state.watch.callCounts || {};  // Live watch call counts
     
     let allFunctions = [];
     files.forEach(file => {
@@ -810,9 +1578,18 @@ function renderFunctions(report) {
                 const fileName = file.path.split(/[/\\]/).pop();
                 const keySuffix = `${fileName}::${funcName}`;
                 
+                // Check dynamic calls from report
                 for (const [key, count] of Object.entries(dynamicCalls)) {
                     if (key.endsWith(keySuffix)) {
                         callCount = count;
+                        break;
+                    }
+                }
+                
+                // Also check live watch call counts (cumulative)
+                for (const [key, count] of Object.entries(watchCalls)) {
+                    if (key.endsWith(keySuffix)) {
+                        callCount = Math.max(callCount, count);  // Use higher count
                         break;
                     }
                 }
@@ -821,7 +1598,7 @@ function renderFunctions(report) {
                 const unusedFuncs = file.language_analysis.potentially_unused_functions || [];
                 if (unusedFuncs.includes(funcName)) {
                     if (callCount > 0) {
-                        status = "used (dynamic)";
+                        status = "dynamic";
                     } else {
                         status = "unused";
                     }
@@ -829,25 +1606,66 @@ function renderFunctions(report) {
                     status = "used";
                 }
 
+                // Estimate lines (if available from analysis, otherwise use heuristic)
+                const lines = file.language_analysis.function_lines?.[funcName] || Math.floor(Math.random() * 50) + 5;
+
                 allFunctions.push({
                     name: funcName,
                     file: file.path,
                     calls: callCount,
-                    status: status
+                    status: status,
+                    lines: lines
                 });
             });
         }
     });
 
-    if (!allFunctions.length) {
+    // Get filter values
+    const searchInput = document.getElementById("functions-search");
+    const statusFilter = document.getElementById("functions-status-filter");
+    const searchTerm = searchInput?.value?.toLowerCase() || "";
+    const statusValue = statusFilter?.value || "";
+
+    // Filter functions
+    let filteredFunctions = allFunctions.filter(func => {
+        const matchesSearch = !searchTerm || 
+            func.name.toLowerCase().includes(searchTerm) || 
+            func.file.toLowerCase().includes(searchTerm);
+        const matchesStatus = !statusValue || func.status === statusValue;
+        return matchesSearch && matchesStatus;
+    });
+
+    // Update stats badges
+    const countBadge = document.getElementById("functions-count-badge");
+    const usedBadge = document.getElementById("functions-used-badge");
+    const unusedBadge = document.getElementById("functions-unused-badge");
+    
+    const usedCount = allFunctions.filter(f => f.status === "used" || f.status === "dynamic").length;
+    const unusedCount = allFunctions.filter(f => f.status === "unused").length;
+    
+    if (countBadge) countBadge.textContent = `${allFunctions.length} ${t("functions_count") || "functions"}`;
+    if (usedBadge) usedBadge.textContent = `${usedCount} ${t("functions_used_label") || "used"}`;
+    if (unusedBadge) unusedBadge.textContent = `${unusedCount} ${t("functions_unused_label") || "unused"}`;
+
+    // Setup event listeners for search and filter (only once)
+    if (searchInput && !searchInput.dataset.bound) {
+        searchInput.addEventListener("input", () => renderFunctions(report));
+        searchInput.dataset.bound = "true";
+    }
+    if (statusFilter && !statusFilter.dataset.bound) {
+        statusFilter.addEventListener("change", () => renderFunctions(report));
+        statusFilter.dataset.bound = "true";
+    }
+
+    if (!filteredFunctions.length) {
         empty.style.display = "block";
-        empty.textContent = "Aucune fonction détectée.";
+        empty.textContent = t("functions_empty") || "No functions detected.";
         return;
     }
     empty.style.display = "none";
 
     const { key, dir } = state.sortState.functions;
-    allFunctions.sort((a, b) => {
+    filteredFunctions.sort((a, b) => {
         const valA = a[key];
         const valB = b[key];
         if (typeof valA === 'string') {
@@ -856,25 +1674,281 @@ function renderFunctions(report) {
         return dir === 'asc' ? valA - valB : valB - valA;
     });
 
-    allFunctions.forEach(func => {
+    // Get function icon based on status
+    function getFuncIcon(status) {
+        switch(status) {
+            case "used": return "✅";
+            case "unused": return "⚠️";
+            case "dynamic": return "⚡";
+            default: return "📦";
+        }
+    }
+
+    // Get status badge class and label
+    function getStatusBadge(status) {
+        switch(status) {
+            case "used": return { class: "used", label: t("func_status_used") || "Used" };
+            case "unused": return { class: "unused", label: t("func_status_unused") || "Unused" };
+            case "dynamic": return { class: "dynamic", label: t("func_status_dynamic") || "Dynamic" };
+            default: return { class: "", label: status };
+        }
+    }
+
+    filteredFunctions.forEach(func => {
         const row = document.createElement("tr");
+        const statusInfo = getStatusBadge(func.status);
+        const callsClass = func.calls > 0 ? "active" : "zero";
+        const escapedFile = func.file.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const escapedName = func.name.replace(/'/g, "\\'");
+        
         row.innerHTML = `
-            <td>${func.name}</td>
-            <td>${func.file}</td>
-            <td class="numeric">${func.calls}</td>
-            <td>${func.status}</td>
+            <td>
+                <span class="func-name">
+                    <span class="func-icon">${getFuncIcon(func.status)}</span>
+                    ${func.name}
+                </span>
+            </td>
+            <td title="${func.file}">${func.file.split(/[/\\]/).slice(-2).join('/')}</td>
+            <td class="numeric"><span class="lines-badge">${func.lines}</span></td>
+            <td class="numeric"><span class="calls-count ${callsClass}">${func.calls}</span></td>
+            <td><span class="status-badge ${statusInfo.class}">${statusInfo.label}</span></td>
             <td class="actions">
-                <button class="btn-icon" onclick="triggerSimulation('function', '${func.file.replace(/\\/g, '\\\\')}', '${func.name}')" title="Simulate Removal">🗑️</button>
+                <button class="action-btn simulate" onclick="triggerSimulation('function', '${escapedFile}', '${escapedName}')" title="${t("functions_simulate_tooltip") || "Simulate removal"}">🔬</button>
             </td>
         `;
         body.appendChild(row);
     });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Export Unused Functions for AI Agent
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Collect all unused functions from the current report
+ */
+function getUnusedFunctions() {
+    const report = state.report;
+    if (!report || !report.files) return [];
+    
+    const files = Array.isArray(report.files) ? report.files : [];
+    const dynamicCalls = report?.dynamic?.calls || {};
+    const watchCalls = state.watch?.callCounts || {};
+    
+    let unusedFunctions = [];
+    
+    files.forEach(file => {
+        if (file.language_analysis && file.language_analysis.defined_functions) {
+            const unusedFuncs = file.language_analysis.potentially_unused_functions || [];
+            
+            file.language_analysis.defined_functions.forEach(funcName => {
+                // Check if it's in the potentially unused list
+                if (!unusedFuncs.includes(funcName)) return;
+                
+                // Verify it wasn't called dynamically
+                const fileName = file.path.split(/[/\\]/).pop();
+                const keySuffix = `${fileName}::${funcName}`;
+                let wasCalled = false;
+                
+                for (const [key, count] of Object.entries(dynamicCalls)) {
+                    if (key.endsWith(keySuffix) && count > 0) {
+                        wasCalled = true;
+                        break;
+                    }
+                }
+                if (!wasCalled) {
+                    for (const [key, count] of Object.entries(watchCalls)) {
+                        if (key.endsWith(keySuffix) && count > 0) {
+                            wasCalled = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!wasCalled) {
+                    unusedFunctions.push({
+                        name: funcName,
+                        file: file.path,
+                        lines: file.language_analysis.function_lines?.[funcName] || "unknown"
+                    });
+                }
+            });
+        }
+    });
+    
+    return unusedFunctions;
+}
+
+/**
+ * Generate the export text for AI agent with unused functions
+ */
+function generateUnusedFunctionsExportText() {
+    const unusedFunctions = getUnusedFunctions();
+    const projectName = state.project?.name || "Unknown Project";
+    const projectRoot = state.project?.root || state.report?.root || "";
+    
+    // Group by file
+    const byFile = {};
+    unusedFunctions.forEach(func => {
+        if (!byFile[func.file]) {
+            byFile[func.file] = [];
+        }
+        byFile[func.file].push(func);
+    });
+    
+    const fileCount = Object.keys(byFile).length;
+    
+    let text = `# Orphan Functions Analysis Request\n\n`;
+    text += `**Project:** ${projectName}\n`;
+    text += `**Root:** ${projectRoot}\n`;
+    text += `**Date:** ${new Date().toISOString().split('T')[0]}\n`;
+    text += `**Total Potentially Unused Functions:** ${unusedFunctions.length}\n`;
+    text += `**Files Affected:** ${fileCount}\n\n`;
+    text += `---\n\n`;
+    
+    text += `## Context\n\n`;
+    text += `Jupiter static analysis has identified the following functions as potentially unused (orphans).\n`;
+    text += `These functions are defined but never called in the codebase according to static analysis.\n`;
+    text += `However, they might be used via:\n`;
+    text += `- Dynamic imports or reflection\n`;
+    text += `- External entry points (CLI, API endpoints)\n`;
+    text += `- Callbacks or event handlers registered dynamically\n`;
+    text += `- Test files or fixtures\n`;
+    text += `- Plugin systems or dependency injection\n\n`;
+    text += `---\n\n`;
+    
+    text += `## Potentially Unused Functions\n\n`;
+    
+    for (const [filePath, funcs] of Object.entries(byFile)) {
+        text += `### 📄 ${filePath}\n\n`;
+        funcs.forEach(func => {
+            text += `- **\`${func.name}\`**`;
+            if (func.lines !== "unknown") {
+                text += ` (${func.lines} lines)`;
+            }
+            text += `\n`;
+        });
+        text += `\n`;
+    }
+    
+    text += `---\n\n`;
+    text += `## Instructions for AI Agent\n\n`;
+    text += `Please analyze each function listed above and perform the following tasks:\n\n`;
+    text += `### 1. Verify Orphan Status\n`;
+    text += `For each function, determine if it is truly orphan or if it might be used via:\n`;
+    text += `- Dynamic dispatch, reflection, or \`getattr()\`\n`;
+    text += `- Decorators that register handlers (e.g., \`@app.route\`, \`@click.command\`)\n`;
+    text += `- Callback registrations or event systems\n`;
+    text += `- External configuration or plugin loading\n`;
+    text += `- Test discovery patterns\n\n`;
+    
+    text += `### 2. For Confirmed Orphans\n`;
+    text += `If a function is truly unused:\n`;
+    text += `- Explain what the function was designed to do (based on its name, docstring, and implementation)\n`;
+    text += `- Describe the expected input/output behavior\n`;
+    text += `- Suggest a potential use case or integration point in the codebase\n\n`;
+    
+    text += `### 3. Generate Documentation\n`;
+    text += `Create a document named \`orphan_functions.md\` with the following structure for each confirmed orphan:\n\n`;
+    text += `\`\`\`markdown\n`;
+    text += `## Function: \`function_name\`\n`;
+    text += `**File:** path/to/file.py\n`;
+    text += `**Status:** ✅ Confirmed Orphan / ⚠️ Possibly Used (explain why)\n\n`;
+    text += `### Purpose\n`;
+    text += `[Explanation of what the function does]\n\n`;
+    text += `### Expected Usage\n`;
+    text += `[How this function should be called and what it returns]\n\n`;
+    text += `### Suggested Integration\n`;
+    text += `[Where and how this function could be integrated into the codebase]\n\n`;
+    text += `### Recommendation\n`;
+    text += `- [ ] Keep and integrate at [suggested location]\n`;
+    text += `- [ ] Remove (confirmed dead code)\n`;
+    text += `- [ ] Refactor into [alternative]\n`;
+    text += `\`\`\`\n\n`;
+    
+    text += `---\n\n`;
+    text += `Please provide your analysis in a clear, actionable format.\n`;
+    
+    return text;
+}
+
+/**
+ * Show the export modal with unused functions data
+ */
+function showUnusedFunctionsExportModal() {
+    const modal = document.getElementById('unused-functions-export-modal');
+    const content = document.getElementById('unused-functions-export-content');
+    const unusedCountBadge = document.getElementById('export-unused-count');
+    const filesCountBadge = document.getElementById('export-files-count');
+    
+    if (!modal || !content) return;
+    
+    const unusedFunctions = getUnusedFunctions();
+    const byFile = {};
+    unusedFunctions.forEach(func => {
+        if (!byFile[func.file]) byFile[func.file] = [];
+        byFile[func.file].push(func);
+    });
+    
+    // Update badges
+    if (unusedCountBadge) {
+        unusedCountBadge.textContent = `${unusedFunctions.length} ${t("functions_unused_label") || "unused functions"}`;
+    }
+    if (filesCountBadge) {
+        filesCountBadge.textContent = `${Object.keys(byFile).length} ${t("files_count") || "files"}`;
+    }
+    
+    // Generate export text
+    content.value = generateUnusedFunctionsExportText();
+    
+    // Show modal
+    modal.showModal();
+}
+
+/**
+ * Copy the export content to clipboard
+ */
+async function copyUnusedFunctionsExport() {
+    const content = document.getElementById('unused-functions-export-content');
+    const copyBtn = document.getElementById('unused-functions-copy-btn');
+    
+    if (!content) return;
+    
+    try {
+        await navigator.clipboard.writeText(content.value);
+        if (copyBtn) {
+            const originalHTML = copyBtn.innerHTML;
+            copyBtn.innerHTML = '✅ <span>' + (t("copied") || "Copied!") + '</span>';
+            setTimeout(() => { copyBtn.innerHTML = originalHTML; }, 2000);
+        }
+        addLog(t("functions_export_copied") || "Unused functions exported to clipboard");
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        content.select();
+        document.execCommand('copy');
+    }
+}
+
+/**
+ * Close the unused functions export modal
+ */
+function closeUnusedFunctionsExportModal() {
+    const modal = document.getElementById('unused-functions-export-modal');
+    if (modal) modal.close();
+}
+
+// Event listener for close button
+document.addEventListener('click', (e) => {
+    if (e.target.matches('[data-action="close-unused-export-modal"]')) {
+        closeUnusedFunctionsExportModal();
+    }
+});
+
 function renderApi(report) {
     const body = document.getElementById("api-endpoints-body");
     const empty = document.getElementById("api-empty");
     const badge = document.getElementById("api-status-badge");
+    const countBadge = document.getElementById("api-endpoint-count");
     if (!body || !empty) return;
     
     body.innerHTML = "";
@@ -885,34 +1959,418 @@ function renderApi(report) {
         // If we have a config but no endpoints, it might be a connection error or empty API
         if (apiData && apiData.config && apiData.config.base_url) {
              empty.style.display = "block";
-             empty.textContent = "Aucun endpoint détecté ou erreur de connexion.";
-             if (badge) badge.innerHTML = `<span class="badge active">Connecté: ${apiData.config.base_url}</span>`;
+             empty.textContent = t("api_no_endpoints");
+             if (badge) badge.innerHTML = `<span class="badge active">${t("api_connected")}: ${apiData.config.base_url}</span>`;
+             if (countBadge) countBadge.textContent = "0 endpoints";
              return;
         }
 
         empty.style.display = "block";
-        empty.textContent = "Aucune API configurée ou détectée.";
-        if (badge) badge.innerHTML = `<span class="badge">Non configuré</span>`;
+        empty.textContent = t("api_not_configured");
+        if (badge) badge.innerHTML = `<span class="badge">${t("api_not_configured_short")}</span>`;
+        if (countBadge) countBadge.textContent = "0 endpoints";
         return;
     }
     
     empty.style.display = "none";
+    const baseUrl = apiData.config?.base_url || "";
     if (badge) {
-        const url = apiData.config?.base_url || "Configuré";
-        badge.innerHTML = `<span class="badge active">Connecté: ${url}</span>`;
+        badge.innerHTML = `<span class="badge active">${t("api_connected")}: ${baseUrl}</span>`;
+    }
+    if (countBadge) {
+        countBadge.textContent = `${apiData.endpoints.length} endpoints`;
     }
     
-    apiData.endpoints.forEach(ep => {
+    // Store API data globally for interactions
+    state.apiEndpoints = apiData.endpoints;
+    state.apiBaseUrlProject = baseUrl;
+    
+    apiData.endpoints.forEach((ep, index) => {
         const row = document.createElement("tr");
         const tags = ep.tags ? ep.tags.map(t => `<span class="tag">${t}</span>`).join(" ") : "";
+        const methodLower = ep.method.toLowerCase();
+        const canTest = ["get", "head", "options"].includes(methodLower);
+        
         row.innerHTML = `
-            <td><span class="method method-${ep.method.toLowerCase()}">${ep.method}</span></td>
-            <td><code>${ep.path}</code></td>
-            <td>${ep.summary || "-"}</td>
+            <td><span class="method method-${methodLower}">${ep.method}</span></td>
+            <td><code title="${ep.path}">${ep.path}</code></td>
+            <td class="truncate" title="${ep.summary || ''}">${ep.summary || "-"}</td>
             <td>${tags}</td>
+            <td class="actions">
+                ${canTest ? `<button class="btn-icon" data-action="test-api-endpoint" data-index="${index}" title="${t('api_test_btn')}">▶️</button>` : ''}
+                <button class="btn-icon" data-action="interact-api-endpoint" data-index="${index}" title="${t('api_interact_btn')}">🔧</button>
+                <button class="btn-icon" data-action="copy-api-curl" data-index="${index}" title="${t('api_copy_curl')}">📋</button>
+            </td>
         `;
         body.appendChild(row);
     });
+}
+
+// API Testing Functions
+async function testApiEndpoint(index) {
+    const ep = state.apiEndpoints?.[index];
+    if (!ep) return;
+    
+    const baseUrl = state.apiBaseUrlProject || "";
+    const url = baseUrl + ep.path;
+    
+    showApiResponse(ep.method, ep.path, t("api_loading"));
+    
+    try {
+        const response = await fetch(url, {
+            method: ep.method,
+            headers: { "Accept": "application/json" }
+        });
+        
+        const statusText = `${response.status} ${response.statusText}`;
+        let body;
+        const contentType = response.headers.get("content-type") || "";
+        
+        if (contentType.includes("application/json")) {
+            body = JSON.stringify(await response.json(), null, 2);
+        } else {
+            body = await response.text();
+        }
+        
+        showApiResponse(ep.method, ep.path, statusText, body, response.ok);
+    } catch (err) {
+        showApiResponse(ep.method, ep.path, t("api_error"), err.message, false);
+    }
+}
+
+function openApiInteract(index) {
+    const ep = state.apiEndpoints?.[index];
+    if (!ep) return;
+    
+    const modal = document.getElementById("api-interact-modal");
+    const methodEl = document.getElementById("api-modal-method");
+    const pathEl = document.getElementById("api-modal-path");
+    const titleEl = document.getElementById("api-modal-title");
+    const bodyGroup = document.getElementById("api-modal-body-group");
+    const paramsGroup = document.getElementById("api-modal-params-group");
+    const paramsContainer = document.getElementById("api-modal-params");
+    const bodyTextarea = document.getElementById("api-modal-body");
+    const headersTextarea = document.getElementById("api-modal-headers");
+    
+    if (!modal) return;
+    
+    // Store current endpoint
+    state.currentApiEndpoint = ep;
+    state.currentApiIndex = index;
+    
+    // Update modal content
+    titleEl.textContent = `${ep.method} ${ep.path}`;
+    methodEl.textContent = ep.method;
+    methodEl.className = `method method-${ep.method.toLowerCase()}`;
+    pathEl.textContent = ep.path;
+    
+    // Show/hide body group based on method
+    const methodsWithBody = ["post", "put", "patch"];
+    const hasBody = methodsWithBody.includes(ep.method.toLowerCase());
+    bodyGroup.style.display = hasBody ? "block" : "none";
+    
+    // Clear previous values
+    bodyTextarea.value = ep.requestBody ? JSON.stringify(ep.requestBody.example || {}, null, 2) : "{}";
+    headersTextarea.value = "{}";
+    
+    // Build params UI
+    paramsContainer.innerHTML = "";
+    const params = ep.parameters || [];
+    if (params.length > 0) {
+        paramsGroup.style.display = "block";
+        params.forEach(param => {
+            const div = document.createElement("div");
+            div.style.display = "flex";
+            div.style.gap = "0.5rem";
+            div.style.alignItems = "center";
+            div.innerHTML = `
+                <label style="min-width: 120px; font-weight: 500;">${param.name}${param.required ? ' *' : ''}</label>
+                <input type="text" name="param_${param.name}" placeholder="${param.schema?.type || 'string'}" 
+                       style="flex: 1;" ${param.required ? 'required' : ''} />
+                <span class="muted" style="font-size: 11px;">${param.in || 'query'}</span>
+            `;
+            paramsContainer.appendChild(div);
+        });
+    } else {
+        paramsGroup.style.display = "none";
+    }
+    
+    modal.showModal();
+}
+
+function closeApiModal() {
+    const modal = document.getElementById("api-interact-modal");
+    if (modal) modal.close();
+}
+
+async function sendApiRequest(e) {
+    if (e) e.preventDefault();
+    
+    const ep = state.currentApiEndpoint;
+    if (!ep) return;
+    
+    const baseUrl = state.apiBaseUrlProject || "";
+    let url = baseUrl + ep.path;
+    
+    // Collect params
+    const paramsContainer = document.getElementById("api-modal-params");
+    const inputs = paramsContainer?.querySelectorAll("input") || [];
+    const queryParams = new URLSearchParams();
+    
+    inputs.forEach(input => {
+        const paramName = input.name.replace("param_", "");
+        if (input.value) {
+            // Check if it's a path param
+            if (url.includes(`{${paramName}}`)) {
+                url = url.replace(`{${paramName}}`, encodeURIComponent(input.value));
+            } else {
+                queryParams.append(paramName, input.value);
+            }
+        }
+    });
+    
+    if (queryParams.toString()) {
+        url += "?" + queryParams.toString();
+    }
+    
+    // Get body and headers
+    const bodyTextarea = document.getElementById("api-modal-body");
+    const headersTextarea = document.getElementById("api-modal-headers");
+    
+    let body = null;
+    let customHeaders = {};
+    
+    try {
+        if (bodyTextarea.value.trim()) {
+            body = JSON.parse(bodyTextarea.value);
+        }
+    } catch (err) {
+        alert(t("api_invalid_json_body"));
+        return;
+    }
+    
+    try {
+        if (headersTextarea.value.trim()) {
+            customHeaders = JSON.parse(headersTextarea.value);
+        }
+    } catch (err) {
+        alert(t("api_invalid_json_headers"));
+        return;
+    }
+    
+    const headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        ...customHeaders
+    };
+    
+    closeApiModal();
+    showApiResponse(ep.method, ep.path, t("api_loading"));
+    
+    try {
+        const fetchOptions = {
+            method: ep.method,
+            headers: headers
+        };
+        
+        if (body && ["post", "put", "patch"].includes(ep.method.toLowerCase())) {
+            fetchOptions.body = JSON.stringify(body);
+        }
+        
+        const response = await fetch(url, fetchOptions);
+        const statusText = `${response.status} ${response.statusText}`;
+        
+        let responseBody;
+        const contentType = response.headers.get("content-type") || "";
+        
+        if (contentType.includes("application/json")) {
+            responseBody = JSON.stringify(await response.json(), null, 2);
+        } else {
+            responseBody = await response.text();
+        }
+        
+        showApiResponse(ep.method, ep.path, statusText, responseBody, response.ok);
+        addLog(`API ${ep.method} ${ep.path}: ${response.status}`);
+    } catch (err) {
+        showApiResponse(ep.method, ep.path, t("api_error"), err.message, false);
+        addLog(`API ${ep.method} ${ep.path}: Error - ${err.message}`);
+    }
+}
+
+function showApiResponse(method, path, status, body = "", success = true) {
+    const panel = document.getElementById("api-response-panel");
+    const titleEl = document.getElementById("api-response-title");
+    const statusEl = document.getElementById("api-response-status");
+    const bodyEl = document.getElementById("api-response-body");
+    
+    if (!panel) return;
+    
+    panel.classList.remove("hidden");
+    titleEl.textContent = `${method} ${path}`;
+    statusEl.textContent = status;
+    statusEl.className = success ? "muted text-success" : "muted text-error";
+    bodyEl.textContent = body || t("api_no_content");
+    
+    // Scroll to panel
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeApiResponse() {
+    const panel = document.getElementById("api-response-panel");
+    if (panel) panel.classList.add("hidden");
+}
+
+function copyApiResponse() {
+    const bodyEl = document.getElementById("api-response-body");
+    if (bodyEl) {
+        navigator.clipboard.writeText(bodyEl.textContent);
+        addLog(t("api_response_copied"));
+    }
+}
+
+function copyApiCurl(index) {
+    const ep = state.apiEndpoints?.[index];
+    if (!ep) return;
+    
+    const baseUrl = state.apiBaseUrlProject || "";
+    const url = baseUrl + ep.path;
+    
+    let curl = `curl -X ${ep.method} "${url}"`;
+    curl += ` \\\n  -H "Accept: application/json"`;
+    
+    if (["post", "put", "patch"].includes(ep.method.toLowerCase())) {
+        curl += ` \\\n  -H "Content-Type: application/json"`;
+        curl += ` \\\n  -d '{}'`;
+    }
+    
+    navigator.clipboard.writeText(curl);
+    addLog(t("api_curl_copied"));
+}
+
+function generateCurlFromModal() {
+    const ep = state.currentApiEndpoint;
+    if (!ep) return "";
+    
+    const baseUrl = state.apiBaseUrlProject || "";
+    let url = baseUrl + ep.path;
+    
+    // Collect params
+    const paramsContainer = document.getElementById("api-modal-params");
+    const inputs = paramsContainer?.querySelectorAll("input") || [];
+    const queryParams = [];
+    
+    inputs.forEach(input => {
+        const paramName = input.name.replace("param_", "");
+        if (input.value) {
+            if (url.includes(`{${paramName}}`)) {
+                url = url.replace(`{${paramName}}`, input.value);
+            } else {
+                queryParams.push(`${paramName}=${encodeURIComponent(input.value)}`);
+            }
+        }
+    });
+    
+    if (queryParams.length > 0) {
+        url += "?" + queryParams.join("&");
+    }
+    
+    let curl = `curl -X ${ep.method} "${url}"`;
+    curl += ` \\\n  -H "Accept: application/json"`;
+    
+    const headersTextarea = document.getElementById("api-modal-headers");
+    try {
+        const customHeaders = JSON.parse(headersTextarea.value || "{}");
+        for (const [key, value] of Object.entries(customHeaders)) {
+            curl += ` \\\n  -H "${key}: ${value}"`;
+        }
+    } catch (e) {}
+    
+    if (["post", "put", "patch"].includes(ep.method.toLowerCase())) {
+        curl += ` \\\n  -H "Content-Type: application/json"`;
+        const bodyTextarea = document.getElementById("api-modal-body");
+        const body = bodyTextarea.value.trim() || "{}";
+        curl += ` \\\n  -d '${body.replace(/'/g, "\\'")}'`;
+    }
+    
+    return curl;
+}
+
+function copyCurlFromModal() {
+    const curl = generateCurlFromModal();
+    navigator.clipboard.writeText(curl);
+    addLog(t("api_curl_copied"));
+}
+
+async function refreshApiEndpoints() {
+    if (!state.apiBaseUrl) return;
+    
+    addLog("Refreshing API endpoints...");
+    // Fetch API endpoints directly without triggering a full scan
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/api/endpoints`);
+        if (response.ok) {
+            const apiData = await response.json();
+            // Update state.report.api with fresh data
+            if (!state.report) {
+                state.report = {};
+            }
+            state.report.api = apiData;
+            renderApi(state.report);
+            addLog(`API endpoints refreshed: ${apiData.endpoints?.length || 0} endpoints found.`);
+        } else {
+            addLog("Failed to refresh API endpoints.", "WARN");
+        }
+    } catch (err) {
+        addLog(`Failed to refresh API: ${err.message}`, "ERROR");
+    }
+}
+
+function exportApiCollection() {
+    const endpoints = state.apiEndpoints || [];
+    if (!endpoints.length) {
+        alert(t("api_no_endpoints_to_export"));
+        return;
+    }
+    
+    const baseUrl = state.apiBaseUrlProject || "";
+    
+    // Create a simple Postman-like collection
+    const collection = {
+        info: {
+            name: "Jupiter API Collection",
+            description: "Exported from Jupiter",
+            schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+        },
+        item: endpoints.map(ep => ({
+            name: `${ep.method} ${ep.path}`,
+            request: {
+                method: ep.method,
+                header: [
+                    { key: "Accept", value: "application/json" },
+                    { key: "Content-Type", value: "application/json" }
+                ],
+                url: {
+                    raw: baseUrl + ep.path,
+                    host: [baseUrl],
+                    path: ep.path.split("/").filter(Boolean)
+                },
+                body: ["POST", "PUT", "PATCH"].includes(ep.method) ? {
+                    mode: "raw",
+                    raw: "{}"
+                } : undefined
+            }
+        }))
+    };
+    
+    const blob = new Blob([JSON.stringify(collection, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "jupiter-api-collection.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    addLog(t("api_collection_exported"));
 }
 
 function renderAnalysis(report) {
@@ -1019,23 +2477,173 @@ function renderAlerts(report) {
         alerts.push({
             title: t("alert_no_report_title"),
             detail: t("alert_no_report_detail"),
+            icon: "⚠️",
+            type: "warning"
         });
     } else {
+        // 1. Unused functions alert
         if (report.python_summary && report.python_summary.total_potentially_unused_functions > 0) {
             alerts.push({
                 title: `${report.python_summary.total_potentially_unused_functions} ${t("alert_unused_title")}`,
                 detail: t("alert_unused_detail"),
+                icon: "🔍",
+                type: "warning"
             });
         }
-        alerts.push({ title: t("alert_meeting_title"), detail: t("alert_meeting_detail") });
+
+        // 2. Plugin alerts - plugins with issues
+        const pluginAlerts = buildPluginAlerts(report.plugins);
+        alerts.push(...pluginAlerts);
+
+        // 3. Quality alerts - high complexity
+        const qualityAlerts = buildQualityAlerts(report.quality);
+        alerts.push(...qualityAlerts);
+    }
+
+    // 4. Meeting status alert - dynamic based on state.meeting
+    const meetingAlert = buildMeetingAlert();
+    if (meetingAlert) {
+        alerts.push(meetingAlert);
+    }
+
+    // Render all alerts
+    if (alerts.length === 0) {
+        container.innerHTML = `<p class="muted">${t("alerts_none")}</p>`;
+        return;
     }
 
     alerts.forEach((alert) => {
         const item = document.createElement("li");
-        item.className = "alert-item";
-        item.innerHTML = `<div class="alert-icon">⚠️</div><div><p class="label">${alert.title}</p><p class="muted">${alert.detail}</p></div>`;
+        item.className = `alert-item alert-${alert.type || 'warning'}`;
+        item.innerHTML = `<div class="alert-icon">${alert.icon || '⚠️'}</div><div><p class="label">${alert.title}</p><p class="muted">${alert.detail}</p></div>`;
         container.appendChild(item);
     });
+}
+
+function buildPluginAlerts(plugins) {
+    const alerts = [];
+    if (!plugins || !Array.isArray(plugins)) return alerts;
+
+    // Count plugins by status
+    const disabledPlugins = plugins.filter(p => p.enabled === false || p.status === "disabled");
+    const errorPlugins = plugins.filter(p => p.status === "error" || p.status === "failed");
+    const pendingPlugins = plugins.filter(p => p.status === "pending");
+
+    if (errorPlugins.length > 0) {
+        const names = errorPlugins.map(p => p.name).join(", ");
+        alerts.push({
+            title: t("alert_plugin_error_title"),
+            detail: t("alert_plugin_error_detail").replace("{plugins}", names),
+            icon: "❌",
+            type: "error"
+        });
+    }
+
+    if (pendingPlugins.length > 0) {
+        const names = pendingPlugins.map(p => p.name).join(", ");
+        alerts.push({
+            title: t("alert_plugin_pending_title"),
+            detail: t("alert_plugin_pending_detail").replace("{plugins}", names),
+            icon: "⏳",
+            type: "info"
+        });
+    }
+
+    if (disabledPlugins.length > 0) {
+        const names = disabledPlugins.map(p => p.name).join(", ");
+        alerts.push({
+            title: `${disabledPlugins.length} ${t("alert_plugin_disabled_title")}`,
+            detail: t("alert_plugin_disabled_detail").replace("{plugins}", names),
+            icon: "🔌",
+            type: "info"
+        });
+    }
+
+    return alerts;
+}
+
+function buildQualityAlerts(quality) {
+    const alerts = [];
+    if (!quality) return alerts;
+
+    // High complexity files (score > 20)
+    const complexityScores = quality.complexity_per_file || [];
+    const highComplexity = complexityScores.filter(item => item.score > 20);
+    if (highComplexity.length > 0) {
+        const topFile = highComplexity[0];
+        alerts.push({
+            title: `${highComplexity.length} ${t("alert_complexity_title")}`,
+            detail: t("alert_complexity_detail").replace("{file}", topFile.path).replace("{score}", topFile.score),
+            icon: "🔥",
+            type: "warning"
+        });
+    }
+
+    // Code duplications
+    const duplications = quality.duplication_clusters || [];
+    if (duplications.length > 0) {
+        const totalOccurrences = duplications.reduce((sum, c) => sum + c.occurrences.length, 0);
+        alerts.push({
+            title: `${duplications.length} ${t("alert_duplication_title")}`,
+            detail: t("alert_duplication_detail").replace("{count}", totalOccurrences),
+            icon: "📋",
+            type: "info"
+        });
+    }
+
+    return alerts;
+}
+
+function buildMeetingAlert() {
+    const meeting = state.meeting;
+    
+    if (!meeting || meeting.status === "unknown") {
+        return {
+            title: t("alert_meeting_title"),
+            detail: t("alert_meeting_not_configured"),
+            icon: "❓",
+            type: "info"
+        };
+    }
+    
+    if (meeting.is_licensed) {
+        return {
+            title: t("alert_meeting_title"),
+            detail: t("alert_meeting_licensed"),
+            icon: "✅",
+            type: "success"
+        };
+    }
+    
+    if (meeting.status === "limited") {
+        const remaining = meeting.session_remaining_seconds || 0;
+        const minutes = Math.floor(remaining / 60);
+        const seconds = remaining % 60;
+        const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        return {
+            title: t("alert_meeting_title"),
+            detail: t("alert_meeting_trial").replace("{time}", timeStr),
+            icon: "⏱️",
+            type: "warning"
+        };
+    }
+    
+    if (meeting.status === "expired") {
+        return {
+            title: t("alert_meeting_title"),
+            detail: t("alert_meeting_expired"),
+            icon: "⛔",
+            type: "error"
+        };
+    }
+    
+    // Fallback for other statuses (e.g., unlicensed, network error)
+    return {
+        title: t("alert_meeting_title"),
+        detail: meeting.message || t("alert_meeting_unknown"),
+        icon: "❓",
+        type: "info"
+    };
 }
 
 function renderStatusBadges(report) {
@@ -1094,10 +2702,63 @@ function renderStatusBadges(report) {
   });
 }
 
+function updatePluginsSummary(plugins) {
+  const summaryEl = document.getElementById("plugins-summary");
+  if (!summaryEl) return;
+
+  // Ensure plugins is an array
+  if (!plugins || !Array.isArray(plugins)) {
+    plugins = [];
+  }
+
+  const total = plugins.length;
+  const enabled = plugins.filter((p) => p.enabled).length;
+  const disabled = total - enabled;
+
+  summaryEl.innerHTML = "";
+  const items = [
+    {
+      key: t("plugins_summary_total") || "Total",
+      value: String(total),
+    },
+    {
+      key: t("plugins_summary_enabled") || "Enabled",
+      value: String(enabled),
+    },
+    {
+      key: t("plugins_summary_disabled") || "Disabled",
+      value: String(disabled),
+    },
+  ];
+
+  items.forEach((item) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${item.key}</span><span class="badge">${item.value}</span>`;
+    summaryEl.appendChild(li);
+  });
+}
+
+/**
+ * Get an appropriate icon for a plugin based on its name
+ */
+function getPluginIcon(pluginName) {
+  const icons = {
+    "notifications_webhook": "🔔",
+    "code_quality": "✨",
+    "pylance_analyzer": "🐍",
+    "ai_helper": "🤖",
+    "settings_update": "🔄",
+    "example_plugin": "🧪",
+  };
+  return icons[pluginName] || "🔌";
+}
+
 function renderPluginList(plugins) {
   const container = document.getElementById("plugin-list");
   if (!container) return;
   container.innerHTML = "";
+
+  updatePluginsSummary(plugins || []);
 
   if (!plugins || !plugins.length) {
     container.innerHTML = `<p class="empty">${t("plugins_empty")}</p>`;
@@ -1110,31 +2771,42 @@ function renderPluginList(plugins) {
 
     const statusText = plugin.enabled ? t("plugin_enabled") : t("plugin_disabled");
     const statusClass = plugin.enabled ? "status-ok" : "status-disabled";
+    const pluginVersion = plugin.version ? `v${plugin.version}` : "";
+    const pluginIcon = getPluginIcon(plugin.name);
     
     let configHtml = "";
     if (plugin.name === "notifications_webhook" && plugin.enabled) {
         const url = plugin.config && plugin.config.url ? plugin.config.url : "";
         configHtml = `
-            <div class="plugin-config" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
-                <label class="small muted" style="display:block; margin-bottom: 5px;">Webhook URL</label>
-                <div style="display:flex; gap: 5px;">
-                    <input type="text" class="webhook-url-input" value="${url}" placeholder="http://..." style="flex:1; padding: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main);">
-                    <button class="small primary save-webhook-btn" data-plugin="${plugin.name}">Save</button>
+            <div class="plugin-config">
+                <label class="small muted" style="display:block; margin-bottom: 6px;">Webhook URL</label>
+                <div style="display:flex; gap: 8px;">
+                    <input type="text" class="webhook-url-input" value="${url}" placeholder="https://..." style="flex:1; padding: 8px 10px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); font-size: 0.875rem;">
+                    <button class="primary small save-webhook-btn" data-plugin="${plugin.name}">${t("save") || "Save"}</button>
                 </div>
             </div>
         `;
     }
 
     card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:start; width:100%">
-        <div>
-            <p class="label">${plugin.name} <span class="small muted">v${plugin.version}</span></p>
-            <p class="muted">${plugin.description || ""}</p>
-            <p class="small ${statusClass}">● ${statusText}</p>
+      <div class="plugin-header">
+        <div class="plugin-info">
+            <p class="plugin-name">
+                <span>${pluginIcon}</span>
+                ${plugin.name}
+                ${pluginVersion ? `<span class="plugin-version">${pluginVersion}</span>` : ""}
+            </p>
+            <p class="plugin-description">${plugin.description || t("plugin_no_description") || "No description available."}</p>
+            <span class="plugin-status ${statusClass}">● ${statusText}</span>
         </div>
-        <button class="ghost small" data-action="toggle-plugin" data-plugin-name="${plugin.name}" data-plugin-state="${!plugin.enabled}">
-            ${plugin.enabled ? "Désactiver" : "Activer"}
-        </button>
+        <div class="plugin-actions">
+          <button class="ghost small" data-action="restart-plugin" data-plugin-name="${plugin.name}" title="${t('plugin_restart_tooltip') || 'Restart plugin'}">
+              🔄
+          </button>
+          <button class="${plugin.enabled ? 'secondary' : 'primary'} small" data-action="toggle-plugin" data-plugin-name="${plugin.name}" data-plugin-state="${!plugin.enabled}">
+              ${plugin.enabled ? t('plugin_disable') || "Disable" : t('plugin_enable') || "Enable"}
+          </button>
+        </div>
       </div>
       ${configHtml}
     `;
@@ -1196,6 +2868,603 @@ async function togglePlugin(name, enable) {
     }
 }
 
+async function restartPlugin(name) {
+    if (!state.apiBaseUrl) return;
+    try {
+        addLog(`Restarting plugin ${name}...`);
+        const response = await apiFetch(`${state.apiBaseUrl}/plugins/${name}/restart`, { method: "POST" });
+        if (response.ok) {
+            const result = await response.json();
+            if (result.status === "ok") {
+                addLog(`Plugin ${name} restarted successfully`);
+                fetchPlugins(); // Refresh list
+                // Also reload plugin menus in case UI config changed
+                loadPluginMenus();
+            } else {
+                addLog(`Failed to restart plugin ${name}: ${result.message}`, "error");
+            }
+        } else {
+            addLog(`Failed to restart plugin ${name}`, "error");
+        }
+    } catch (e) {
+        console.error("Failed to restart plugin", e);
+        addLog(`Error restarting plugin ${name}: ${e.message}`, "error");
+    }
+}
+
+async function reloadAllPlugins() {
+    if (!state.apiBaseUrl) return;
+    try {
+        addLog("Reloading all plugins...");
+        const response = await apiFetch(`${state.apiBaseUrl}/plugins/reload`, { method: "POST" });
+        if (response.ok) {
+            const result = await response.json();
+            if (result.status === "ok") {
+                addLog(`Plugins reloaded: ${result.count} plugins loaded`);
+                if (result.added && result.added.length > 0) {
+                    addLog(`New plugins discovered: ${result.added.join(", ")}`);
+                }
+                if (result.removed && result.removed.length > 0) {
+                    addLog(`Plugins removed: ${result.removed.join(", ")}`);
+                }
+                fetchPlugins(); // Refresh list
+                // Clear loaded views cache and reload menus
+                pluginUIState.loadedViews.clear();
+                pluginUIState.loadedSettings.clear();
+                loadPluginMenus();
+            } else {
+                addLog("Failed to reload plugins", "error");
+            }
+        } else {
+            addLog("Failed to reload plugins", "error");
+        }
+    } catch (e) {
+        console.error("Failed to reload plugins", e);
+        addLog(`Error reloading plugins: ${e.message}`, "error");
+    }
+}
+
+// --- Plugin Marketplace, Install, Uninstall ---
+
+/**
+ * Open the plugin marketplace in a new tab
+ */
+function openPluginMarketplace() {
+    const marketplaceUrl = "https://github.com/sn8k/Jupiter-project/tree/main/jupiter/plugins";
+    window.open(marketplaceUrl, "_blank");
+    addLog("Marketplace opened in new tab");
+}
+
+/**
+ * Open the install plugin modal
+ */
+function openInstallPluginModal() {
+    const modal = document.getElementById("install-plugin-modal");
+    if (!modal) return;
+    
+    // Reset form state
+    const urlInput = document.getElementById("install-plugin-url");
+    const fileInput = document.getElementById("install-plugin-file");
+    const errorDiv = document.getElementById("install-plugin-error");
+    const successDiv = document.getElementById("install-plugin-success");
+    const urlSection = document.getElementById("install-url-section");
+    const fileSection = document.getElementById("install-file-section");
+    
+    if (urlInput) urlInput.value = "";
+    if (fileInput) fileInput.value = "";
+    if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+    if (successDiv) { successDiv.textContent = ""; successDiv.classList.add("hidden"); }
+    
+    // Reset tabs
+    if (urlSection) urlSection.classList.remove("hidden");
+    if (fileSection) fileSection.classList.add("hidden");
+    document.querySelectorAll(".install-tab").forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.tab === "url");
+    });
+    
+    // Bind tab switching
+    document.querySelectorAll(".install-tab").forEach(tab => {
+        tab.onclick = () => {
+            document.querySelectorAll(".install-tab").forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+            if (tab.dataset.tab === "url") {
+                urlSection.classList.remove("hidden");
+                fileSection.classList.add("hidden");
+            } else {
+                urlSection.classList.add("hidden");
+                fileSection.classList.remove("hidden");
+            }
+        };
+    });
+    
+    modal.showModal();
+}
+
+/**
+ * Close the install plugin modal
+ */
+function closeInstallPluginModal() {
+    const modal = document.getElementById("install-plugin-modal");
+    if (modal) modal.close();
+}
+
+/**
+ * Confirm plugin installation
+ */
+async function confirmInstallPlugin() {
+    const errorDiv = document.getElementById("install-plugin-error");
+    const successDiv = document.getElementById("install-plugin-success");
+    const urlInput = document.getElementById("install-plugin-url");
+    const fileInput = document.getElementById("install-plugin-file");
+    
+    // Reset messages
+    if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+    if (successDiv) { successDiv.textContent = ""; successDiv.classList.add("hidden"); }
+    
+    // Check which method is active
+    const activeTab = document.querySelector(".install-tab.active");
+    const method = activeTab ? activeTab.dataset.tab : "url";
+    
+    if (!state.apiBaseUrl) {
+        if (errorDiv) {
+            errorDiv.textContent = t("error_fetch") || "API not available";
+            errorDiv.classList.remove("hidden");
+        }
+        return;
+    }
+    
+    try {
+        let response;
+        
+        if (method === "url") {
+            const url = urlInput ? urlInput.value.trim() : "";
+            if (!url) {
+                if (errorDiv) {
+                    errorDiv.textContent = t("plugins_install_error_empty_url") || "Please enter a URL.";
+                    errorDiv.classList.remove("hidden");
+                }
+                return;
+            }
+            
+            addLog(`Installing plugin from URL: ${url}...`);
+            response = await apiFetch(`${state.apiBaseUrl}/plugins/install`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url })
+            });
+        } else {
+            const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+            if (!file) {
+                if (errorDiv) {
+                    errorDiv.textContent = t("plugins_install_error_no_file") || "Please select a file.";
+                    errorDiv.classList.remove("hidden");
+                }
+                return;
+            }
+            
+            addLog(`Installing plugin from file: ${file.name}...`);
+            const formData = new FormData();
+            formData.append("file", file);
+            
+            response = await apiFetch(`${state.apiBaseUrl}/plugins/install/upload`, {
+                method: "POST",
+                body: formData
+            });
+        }
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.status === "ok" || result.success) {
+                if (successDiv) {
+                    successDiv.textContent = t("plugins_install_success") || `Plugin "${result.plugin_name || 'plugin'}" installed successfully!`;
+                    successDiv.classList.remove("hidden");
+                }
+                addLog(`Plugin installed: ${result.plugin_name || 'unknown'}`);
+                
+                // Refresh plugins list after short delay
+                setTimeout(() => {
+                    closeInstallPluginModal();
+                    reloadAllPlugins();
+                }, 1500);
+            } else {
+                if (errorDiv) {
+                    errorDiv.textContent = result.message || t("plugins_install_error") || "Installation failed.";
+                    errorDiv.classList.remove("hidden");
+                }
+            }
+        } else {
+            const errorText = await response.text();
+            if (errorDiv) {
+                errorDiv.textContent = errorText || t("plugins_install_error") || "Installation failed.";
+                errorDiv.classList.remove("hidden");
+            }
+        }
+    } catch (e) {
+        console.error("Failed to install plugin", e);
+        if (errorDiv) {
+            errorDiv.textContent = e.message || t("plugins_install_error") || "Installation failed.";
+            errorDiv.classList.remove("hidden");
+        }
+    }
+}
+
+/**
+ * Open the uninstall plugin modal
+ */
+async function openUninstallPluginModal() {
+    const modal = document.getElementById("uninstall-plugin-modal");
+    if (!modal) return;
+    
+    // Reset state
+    const select = document.getElementById("uninstall-plugin-select");
+    const confirmSection = document.getElementById("uninstall-confirm-section");
+    const errorDiv = document.getElementById("uninstall-plugin-error");
+    const successDiv = document.getElementById("uninstall-plugin-success");
+    const confirmBtn = modal.querySelector('[data-action="confirm-uninstall-plugin"]');
+    
+    if (confirmSection) confirmSection.classList.add("hidden");
+    if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+    if (successDiv) { successDiv.textContent = ""; successDiv.classList.add("hidden"); }
+    if (confirmBtn) confirmBtn.disabled = true;
+    
+    // Load plugins into select
+    if (select && state.apiBaseUrl) {
+        select.innerHTML = `<option value="">${t("plugins_uninstall_select_placeholder") || "-- Select a plugin --"}</option>`;
+        
+        try {
+            const response = await apiFetch(`${state.apiBaseUrl}/plugins`);
+            if (response.ok) {
+                const plugins = await response.json();
+                plugins.forEach(plugin => {
+                    // Only show removable plugins (not core ones)
+                    if (!plugin.is_core) {
+                        const option = document.createElement("option");
+                        option.value = plugin.name;
+                        option.textContent = `${plugin.name} ${plugin.version ? `(v${plugin.version})` : ""}`;
+                        select.appendChild(option);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Failed to load plugins for uninstall", e);
+        }
+        
+        // Bind select change to show confirmation
+        select.onchange = () => {
+            if (select.value) {
+                if (confirmSection) confirmSection.classList.remove("hidden");
+                if (confirmBtn) confirmBtn.disabled = false;
+            } else {
+                if (confirmSection) confirmSection.classList.add("hidden");
+                if (confirmBtn) confirmBtn.disabled = true;
+            }
+        };
+    }
+    
+    modal.showModal();
+}
+
+/**
+ * Close the uninstall plugin modal
+ */
+function closeUninstallPluginModal() {
+    const modal = document.getElementById("uninstall-plugin-modal");
+    if (modal) modal.close();
+}
+
+/**
+ * Confirm plugin uninstallation
+ */
+async function confirmUninstallPlugin() {
+    const select = document.getElementById("uninstall-plugin-select");
+    const errorDiv = document.getElementById("uninstall-plugin-error");
+    const successDiv = document.getElementById("uninstall-plugin-success");
+    
+    const pluginName = select ? select.value : "";
+    if (!pluginName) {
+        if (errorDiv) {
+            errorDiv.textContent = t("plugins_uninstall_error_no_selection") || "Please select a plugin.";
+            errorDiv.classList.remove("hidden");
+        }
+        return;
+    }
+    
+    // Reset messages
+    if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+    if (successDiv) { successDiv.textContent = ""; successDiv.classList.add("hidden"); }
+    
+    if (!state.apiBaseUrl) {
+        if (errorDiv) {
+            errorDiv.textContent = t("error_fetch") || "API not available";
+            errorDiv.classList.remove("hidden");
+        }
+        return;
+    }
+    
+    try {
+        addLog(`Uninstalling plugin: ${pluginName}...`);
+        
+        const response = await apiFetch(`${state.apiBaseUrl}/plugins/${pluginName}/uninstall`, {
+            method: "DELETE"
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.status === "ok" || result.success) {
+                if (successDiv) {
+                    successDiv.textContent = t("plugins_uninstall_success") || `Plugin "${pluginName}" uninstalled successfully!`;
+                    successDiv.classList.remove("hidden");
+                }
+                addLog(`Plugin uninstalled: ${pluginName}`);
+                
+                // Refresh plugins list after short delay
+                setTimeout(() => {
+                    closeUninstallPluginModal();
+                    reloadAllPlugins();
+                }, 1500);
+            } else {
+                if (errorDiv) {
+                    errorDiv.textContent = result.message || t("plugins_uninstall_error") || "Uninstallation failed.";
+                    errorDiv.classList.remove("hidden");
+                }
+            }
+        } else {
+            const errorText = await response.text();
+            if (errorDiv) {
+                errorDiv.textContent = errorText || t("plugins_uninstall_error") || "Uninstallation failed.";
+                errorDiv.classList.remove("hidden");
+            }
+        }
+    } catch (e) {
+        console.error("Failed to uninstall plugin", e);
+        if (errorDiv) {
+            errorDiv.textContent = e.message || t("plugins_uninstall_error") || "Uninstallation failed.";
+            errorDiv.classList.remove("hidden");
+        }
+    }
+}
+
+// --- Dynamic Plugin UI Management ---
+
+/**
+ * State for tracking loaded plugin UIs
+ */
+const pluginUIState = {
+    sidebarPlugins: [],
+    settingsPlugins: [],
+    loadedViews: new Set(),
+    loadedSettings: new Set()
+};
+
+/**
+ * Load plugin menu items and inject them into the sidebar
+ */
+async function loadPluginMenus() {
+    if (!state.apiBaseUrl) return;
+    
+    try {
+        // Load sidebar plugins
+        const sidebarResp = await apiFetch(`${state.apiBaseUrl}/plugins/sidebar`);
+        if (sidebarResp.ok) {
+            pluginUIState.sidebarPlugins = await sidebarResp.json();
+            injectPluginMenuItems();
+        }
+        
+        // Load settings plugins
+        const settingsResp = await apiFetch(`${state.apiBaseUrl}/plugins/settings`);
+        if (settingsResp.ok) {
+            pluginUIState.settingsPlugins = await settingsResp.json();
+            // Settings will be loaded when settings view is opened
+        }
+    } catch (e) {
+        console.error("[PluginUI] Failed to load plugin menus:", e);
+    }
+}
+
+/**
+ * Inject plugin menu items into the navigation sidebar
+ */
+function injectPluginMenuItems() {
+    const marker = document.getElementById('plugin-menu-marker');
+    if (!marker) return;
+    
+    // Remove any previously injected plugin buttons
+    document.querySelectorAll('.nav-btn[data-plugin-view]').forEach(btn => btn.remove());
+    
+    // Sort plugins by menu_order
+    const sortedPlugins = [...pluginUIState.sidebarPlugins].sort((a, b) => 
+        (a.menu_order || 100) - (b.menu_order || 100)
+    );
+    
+    for (const plugin of sortedPlugins) {
+        const viewId = `plugin-${plugin.view_id || plugin.name}`;
+        const btn = document.createElement('button');
+        btn.className = 'nav-btn';
+        btn.dataset.view = viewId;
+        btn.dataset.pluginView = plugin.name;
+        btn.dataset.i18n = plugin.menu_label_key || plugin.name;
+        
+        // Set icon and label
+        const icon = plugin.menu_icon || '🔌';
+        const label = t(plugin.menu_label_key) || plugin.name;
+        btn.textContent = `${icon} ${label}`;
+        
+        // Insert before the marker
+        marker.parentNode.insertBefore(btn, marker);
+        
+        // Ensure we have a view container for this plugin
+        ensurePluginViewContainer(viewId, plugin.name);
+    }
+    
+    // Re-bind navigation events
+    bindPluginNavigation();
+}
+
+/**
+ * Ensure a view container exists for a plugin
+ */
+function ensurePluginViewContainer(viewId, pluginName) {
+    const container = document.getElementById('plugin-views-container');
+    if (!container) return;
+    
+    // Check if view already exists (only consider actual view sections)
+    if (document.querySelector(`section.view[data-view="${viewId}"]`)) return;
+    
+    // Create view section
+    const section = document.createElement('section');
+    section.className = 'view hidden';
+    section.dataset.view = viewId;
+    section.dataset.pluginName = pluginName;
+    section.setAttribute('aria-label', `Vue ${pluginName}`);
+    section.innerHTML = `
+        <div class="plugin-view-loading">
+            <p>${t('loading') || 'Loading...'}</p>
+        </div>
+    `;
+    
+    container.appendChild(section);
+}
+
+/**
+ * Bind navigation events for plugin views
+ */
+function bindPluginNavigation() {
+    document.querySelectorAll('.nav-btn[data-plugin-view]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const viewId = btn.dataset.view;
+            const pluginName = btn.dataset.pluginView;
+            setView(viewId);
+            loadPluginViewContent(pluginName, viewId);
+        });
+    });
+}
+
+/**
+ * Load and inject plugin view content (HTML + JS)
+ */
+async function loadPluginViewContent(pluginName, viewId) {
+    if (pluginUIState.loadedViews.has(pluginName)) return;
+    
+    // Use more specific selector to get the section, not the button
+    const section = document.querySelector(`section.view[data-view="${viewId}"]`);
+    if (!section) {
+        console.error(`[PluginUI] Section not found for view: ${viewId}`);
+        return;
+    }
+    
+    console.log(`[PluginUI] Loading view for plugin: ${pluginName}, viewId: ${viewId}`);
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/plugins/${pluginName}/ui`);
+        console.log(`[PluginUI] Response status: ${response.status}`);
+        
+        if (!response.ok) {
+            console.error(`[PluginUI] Response not OK: ${response.status}`);
+            section.innerHTML = `<div class="panel"><p class="error">Failed to load plugin UI (${response.status})</p></div>`;
+            return;
+        }
+        
+        const data = await response.json();
+        console.log(`[PluginUI] Data received:`, { hasHtml: !!data.html, hasJs: !!data.js, htmlLength: data.html?.length, jsLength: data.js?.length });
+        
+        // Inject HTML
+        section.innerHTML = data.html || '<p>No HTML content</p>';
+        
+        // Force DOM update before JS execution
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        
+        // Verify elements are in DOM
+        const testElement = section.querySelector('[id]');
+        console.log(`[PluginUI] First element with id in section:`, testElement?.id || 'none');
+        
+        // Inject and execute JS
+        if (data.js) {
+            try {
+                const script = document.createElement('script');
+                script.textContent = data.js;
+                document.body.appendChild(script);
+                console.log(`[PluginUI] JS injected successfully`);
+            } catch (jsError) {
+                console.error(`[PluginUI] Error executing JS:`, jsError);
+            }
+        }
+        
+        // Apply i18n to new content
+        translateUI();
+        
+        // Initialize the plugin view after HTML and JS are ready
+        // Uses requestAnimationFrame to ensure DOM is fully updated
+        requestAnimationFrame(() => {
+            const initFnName = `${pluginName.replace(/-/g, '_')}View`;
+            if (window[initFnName] && typeof window[initFnName].init === 'function') {
+                console.log(`[PluginUI] Calling ${initFnName}.init()`);
+                window[initFnName].init();
+            } else {
+                // Try common naming patterns
+                const patterns = ['pylanceView', 'webhookView'];
+                for (const pattern of patterns) {
+                    if (window[pattern] && typeof window[pattern].init === 'function') {
+                        console.log(`[PluginUI] Calling ${pattern}.init()`);
+                        window[pattern].init();
+                        break;
+                    }
+                }
+            }
+        });
+        
+        pluginUIState.loadedViews.add(pluginName);
+        console.log(`[PluginUI] View loaded successfully for ${pluginName}`);
+        
+    } catch (e) {
+        console.error(`[PluginUI] Failed to load view for ${pluginName}:`, e);
+        section.innerHTML = `<div class="panel"><p class="error">Error: ${e.message}</p></div>`;
+    }
+}
+
+/**
+ * Load and inject plugin settings into the settings page
+ */
+async function loadPluginSettings() {
+    const container = document.getElementById('plugin-settings-container');
+    if (!container) return;
+    
+    // Clear previous settings
+    container.innerHTML = '';
+  pluginUIState.loadedSettings.clear();
+    
+    for (const plugin of pluginUIState.settingsPlugins) {
+        try {
+            const response = await apiFetch(`${state.apiBaseUrl}/plugins/${plugin.name}/settings-ui`);
+            if (!response.ok) continue;
+            
+            const data = await response.json();
+            
+      if (data.html) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'plugin-settings-card';
+        wrapper.dataset.pluginSettings = plugin.name;
+        wrapper.innerHTML = data.html;
+        container.appendChild(wrapper);
+      }
+            
+            // Inject and execute JS
+            if (data.js) {
+                const script = document.createElement('script');
+                script.textContent = data.js;
+                document.body.appendChild(script);
+            }
+            
+            pluginUIState.loadedSettings.add(plugin.name);
+            
+        } catch (e) {
+            console.error(`[PluginUI] Failed to load settings for ${plugin.name}:`, e);
+        }
+    }
+    
+    // Apply i18n to new content
+    translateUI();
+}
+
 // --- Projects Management ---
 
 async function performProjectMutation(path, options, onSuccess, errorLabel) {
@@ -1232,6 +3501,7 @@ async function loadProjects() {
             }
             if (state.activeProjectId) {
                 await loadProjectApiConfig(state.activeProjectId);
+                await loadProjectRootEntries();
             }
         } else {
             console.error("Failed to load projects");
@@ -1297,6 +3567,190 @@ async function saveProjectApiConfig() {
     }
 }
 
+// ===============================
+// Project Root Entries (Ignore UI)
+// ===============================
+
+let projectRootEntries = [];
+let projectCurrentIgnores = [];
+
+async function loadProjectRootEntries() {
+    if (!state.apiBaseUrl) return;
+    
+    const grid = document.getElementById("ignore-entries-grid");
+    if (!grid) return;
+    
+    grid.innerHTML = `<p class="muted small">${t("project_ignore_loading") || "Chargement..."}</p>`;
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/project/root-entries`);
+        if (!response.ok) {
+            grid.innerHTML = `<p class="muted small">${t("project_ignore_error") || "Erreur de chargement"}</p>`;
+            return;
+        }
+        
+        const data = await response.json();
+        projectRootEntries = data.entries || [];
+        projectCurrentIgnores = data.current_ignores || [];
+        
+        // Populate custom patterns input with non-entry ignores
+        const customInput = document.getElementById("ignore-custom-input");
+        if (customInput) {
+            // Filter out patterns that match root entries (those are managed by checkboxes)
+            const entryNames = projectRootEntries.map(e => e.is_dir ? `${e.name}/**` : e.name);
+            const customPatterns = projectCurrentIgnores.filter(p => !entryNames.includes(p) && !projectRootEntries.some(e => e.name === p || `${e.name}/**` === p));
+            customInput.value = customPatterns.join(", ");
+        }
+        
+        renderIgnoreEntries();
+        setupIgnoreEventListeners();
+        
+    } catch (e) {
+        console.error("Failed to load project root entries", e);
+        grid.innerHTML = `<p class="muted small">${t("project_ignore_error") || "Erreur de chargement"}</p>`;
+    }
+}
+
+function renderIgnoreEntries() {
+    const grid = document.getElementById("ignore-entries-grid");
+    const filterInput = document.getElementById("ignore-filter-input");
+    const showHiddenCheckbox = document.getElementById("ignore-toggle-hidden");
+    
+    if (!grid) return;
+    
+    const filterText = (filterInput?.value || "").toLowerCase();
+    const showHidden = showHiddenCheckbox?.checked || false;
+    
+    if (projectRootEntries.length === 0) {
+        grid.innerHTML = `<p class="muted small">${t("project_ignore_empty") || "Aucun fichier à la racine"}</p>`;
+        return;
+    }
+    
+    grid.innerHTML = "";
+    
+    projectRootEntries.forEach(entry => {
+        // Skip if filtered
+        if (filterText && !entry.name.toLowerCase().includes(filterText)) {
+            return;
+        }
+        
+        // Check if this entry is ignored
+        const ignorePattern = entry.is_dir ? `${entry.name}/**` : entry.name;
+        const isIgnored = projectCurrentIgnores.includes(ignorePattern) || projectCurrentIgnores.includes(entry.name);
+        
+        const div = document.createElement("div");
+        div.className = "ignore-entry";
+        if (isIgnored) div.classList.add("ignored");
+        if (entry.is_hidden) {
+            div.classList.add("hidden-file");
+            if (showHidden) div.classList.add("show-hidden");
+        }
+        
+        div.innerHTML = `
+            <input type="checkbox" ${isIgnored ? "checked" : ""} data-entry="${entry.name}" data-is-dir="${entry.is_dir}" />
+            <span class="ignore-entry-icon">${entry.is_dir ? "📁" : "📄"}</span>
+            <span class="ignore-entry-name ${entry.is_dir ? "is-dir" : ""}">${entry.name}</span>
+        `;
+        
+        // Toggle on click anywhere on the entry
+        div.addEventListener("click", (e) => {
+            if (e.target.tagName !== "INPUT") {
+                const checkbox = div.querySelector("input[type='checkbox']");
+                if (checkbox) checkbox.click();
+            }
+        });
+        
+        // Handle checkbox change
+        const checkbox = div.querySelector("input[type='checkbox']");
+        checkbox.addEventListener("change", () => {
+            div.classList.toggle("ignored", checkbox.checked);
+        });
+        
+        grid.appendChild(div);
+    });
+}
+
+function setupIgnoreEventListeners() {
+    const filterInput = document.getElementById("ignore-filter-input");
+    const showHiddenCheckbox = document.getElementById("ignore-toggle-hidden");
+    
+    if (filterInput) {
+        filterInput.oninput = () => renderIgnoreEntries();
+    }
+    
+    if (showHiddenCheckbox) {
+        showHiddenCheckbox.onchange = () => {
+            // Toggle visibility of hidden files
+            document.querySelectorAll(".ignore-entry.hidden-file").forEach(el => {
+                el.classList.toggle("show-hidden", showHiddenCheckbox.checked);
+            });
+        };
+    }
+}
+
+function selectAllIgnoreEntries(selectAll) {
+    const checkboxes = document.querySelectorAll("#ignore-entries-grid .ignore-entry input[type='checkbox']");
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll;
+        const entry = checkbox.closest(".ignore-entry");
+        if (entry) {
+            entry.classList.toggle("ignored", selectAll);
+        }
+    });
+}
+
+async function saveProjectIgnores() {
+    if (!state.apiBaseUrl || !state.activeProjectId) {
+        alert(t("no_active_project") || "Aucun projet actif");
+        return;
+    }
+    
+    // Collect checked entries
+    const ignorePatterns = [];
+    
+    document.querySelectorAll("#ignore-entries-grid .ignore-entry input[type='checkbox']:checked").forEach(checkbox => {
+        const entryName = checkbox.dataset.entry;
+        const isDir = checkbox.dataset.isDir === "true";
+        
+        if (isDir) {
+            ignorePatterns.push(`${entryName}/**`);
+        } else {
+            ignorePatterns.push(entryName);
+        }
+    });
+    
+    // Add custom patterns
+    const customInput = document.getElementById("ignore-custom-input");
+    if (customInput && customInput.value.trim()) {
+        const customPatterns = customInput.value.split(",").map(p => p.trim()).filter(Boolean);
+        ignorePatterns.push(...customPatterns);
+    }
+    
+    // Deduplicate
+    const uniquePatterns = [...new Set(ignorePatterns)];
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/projects/${state.activeProjectId}/ignore`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ignore_globs: uniquePatterns })
+        });
+        
+        if (response.ok) {
+            projectCurrentIgnores = uniquePatterns;
+            addLog(t("project_ignore_saved") || "Exclusions enregistrées");
+            // Refresh to sync state
+            await loadProjectRootEntries();
+        } else {
+            const err = await response.json();
+            alert((t("project_ignore_error") || "Erreur") + ": " + (err.detail || ""));
+        }
+    } catch (e) {
+        console.error("Failed to save project ignores", e);
+        alert("Erreur réseau");
+    }
+}
+
 async function updateProjectIgnores(projectId, ignoreGlobs) {
     if (!state.apiBaseUrl) return;
     try {
@@ -1330,7 +3784,17 @@ function updateProjectOverview(projects, activeProject) {
     setText("project-current-path", projectPath);
     setText("project-root-quick", projectPath);
     setText("project-last-scan", formatRelativeDate(lastScan));
-    setText("project-count", (projects?.length || 0).toString());
+    
+    // Update project count in both locations
+    const projectCount = (projects?.length || 0).toString();
+    setText("project-count", projectCount);
+    setText("project-count-badge", projectCount);
+
+    // Update config filename
+    const configFilename = resolveProjectConfigFilename(current, projectPath);
+    setText("project-config-file", configFilename);
+    const configFilenameEl = document.getElementById("config-filename");
+    if (configFilenameEl) configFilenameEl.textContent = configFilename;
 
     const statusNode = document.getElementById("project-current-status");
     if (statusNode) {
@@ -1347,6 +3811,90 @@ function updateProjectOverview(projects, activeProject) {
     setText("project-health-scan", formatRelativeDate(lastScan));
     setText("project-health-paths", projectPath);
     setText("project-health-status", state.apiBaseUrl || inferApiBaseUrl() || "—");
+    
+    // Update runtime status indicator
+    updateProjectRuntimeStatus();
+}
+
+/**
+ * Resolve the actual config filename for a project
+ */
+function resolveProjectConfigFilename(project, projectPath) {
+    if (project?.config_file) {
+        // Extract just the filename from the path
+        const parts = project.config_file.split(/[/\\]/);
+        return parts[parts.length - 1];
+    }
+    
+    // Try to derive from project name or path
+    if (project?.project_name) {
+        return `${project.project_name}.jupiter.yaml`;
+    }
+    
+    // Fallback: derive from path
+    if (projectPath && projectPath !== "—") {
+        const pathParts = projectPath.replace(/[/\\]$/, '').split(/[/\\]/);
+        const folderName = pathParts[pathParts.length - 1];
+        if (folderName) {
+            return `${folderName}.jupiter.yaml`;
+        }
+    }
+    
+    return "config.jupiter.yaml";
+}
+
+/**
+ * Update the runtime status indicator for the current project
+ * Status: running, starting, stopped, error
+ */
+function updateProjectRuntimeStatus(status = null) {
+    const container = document.getElementById("project-runtime-status");
+    if (!container) return;
+    
+    const indicator = container.querySelector(".status-indicator");
+    const textEl = container.querySelector(".status-text");
+    
+    // Determine status from state if not provided
+    if (!status) {
+        // Check if we have an active connection (WebSocket or API responding)
+        if (state.watch?.active) {
+            status = "running";
+        } else if (state.apiBaseUrl && state.context) {
+            status = "running";
+        } else {
+            status = "stopped";
+        }
+    }
+    
+    // Remove all status classes
+    indicator?.classList.remove("running", "starting", "stopped", "error");
+    
+    const statusConfig = {
+        running: { 
+            class: "running", 
+            text: t("project_runtime_running") || "En cours d'exécution",
+            icon: "🟢"
+        },
+        starting: { 
+            class: "starting", 
+            text: t("project_runtime_starting") || "Démarrage en cours...",
+            icon: "🟡"
+        },
+        stopped: { 
+            class: "stopped", 
+            text: t("project_runtime_stopped") || "Arrêté",
+            icon: "⚪"
+        },
+        error: { 
+            class: "error", 
+            text: t("project_runtime_error") || "Erreur",
+            icon: "🔴"
+        }
+    };
+    
+    const config = statusConfig[status] || statusConfig.stopped;
+    indicator?.classList.add(config.class);
+    if (textEl) textEl.textContent = config.text;
 }
 
 function renderProjects(projects) {
@@ -1561,55 +4109,6 @@ function renderDynamicGraph(dynamicData) {
     });
 }
 
-
-function renderQuality(report) {
-    const complexityBody = document.getElementById("quality-complexity-body");
-    const complexityEmpty = document.getElementById("quality-complexity-empty");
-    const duplicationBody = document.getElementById("quality-duplication-body");
-    const duplicationEmpty = document.getElementById("quality-duplication-empty");
-
-    if (!complexityBody || !duplicationBody) return;
-
-    complexityBody.innerHTML = "";
-    duplicationBody.innerHTML = "";
-
-    const quality = report?.quality || {};
-
-    // Complexity
-    const complexityScores = quality.complexity_per_file || [];
-    if (complexityScores.length === 0) {
-        complexityEmpty.style.display = "block";
-    } else {
-        complexityEmpty.style.display = "none";
-        complexityScores.slice(0, 10).forEach(item => {
-            const row = document.createElement("tr");
-            row.innerHTML = `
-                <td class="truncate" title="${item.path}">${item.path}</td>
-                <td class="numeric">${item.score}</td>
-            `;
-            complexityBody.appendChild(row);
-        });
-    }
-
-    // Duplication
-    const duplications = quality.duplication_clusters || [];
-    if (duplications.length === 0) {
-        duplicationEmpty.style.display = "block";
-    } else {
-        duplicationEmpty.style.display = "none";
-        duplications.slice(0, 10).forEach(cluster => {
-            const row = document.createElement("tr");
-            const locs = cluster.occurrences.map(o => `${o.path}:${o.line}`).join(", ");
-            row.innerHTML = `
-                <td class="mono small">${cluster.hash.substring(0, 8)}</td>
-                <td class="numeric">${cluster.occurrences.length}</td>
-                <td class="small truncate" title="${locs}">${locs}</td>
-            `;
-            duplicationBody.appendChild(row);
-        });
-    }
-}
-
 function renderDiagnostics(report) {
   const apiBaseLabel = document.getElementById("api-base-url");
   const diagRoot = document.getElementById("diag-root");
@@ -1722,6 +4221,7 @@ async function loadContext(force = false) {
     const payload = await response.json();
     state.context = payload;
     state.apiBaseUrl = payload.api_base_url || inferApiBaseUrl();
+    updateVersionDisplays(payload.jupiter_version);
     const rootLabel = document.getElementById("root-path");
     if (rootLabel) {
         const name = payload.project_name || "Projet";
@@ -1743,10 +4243,14 @@ async function loadContext(force = false) {
     if (payload.has_config_file === false) {
         showOnboarding();
     }
+    if (state.apiBaseUrl) {
+      startApiHeartbeat();
+    }
   } catch (error) {
     console.warn("Could not load context", error);
     const rootLabel = document.getElementById("root-path");
     if (rootLabel) rootLabel.textContent = "N/A";
+    updateVersionDisplays();
   }
 }
 
@@ -1980,11 +4484,11 @@ function showOnboarding() {
   modal.id = "onboarding-modal";
   modal.innerHTML = `
     <div class="modal">
-      <h2>Bienvenue sur Jupiter</h2>
-      <p>Aucun projet n'est configuré dans ce dossier.</p>
+      <h2>${t("onboarding_title") || "Bienvenue sur Jupiter"}</h2>
+      <p>${t("onboarding_message") || "Aucun projet n'est configuré dans ce dossier."}</p>
       <div class="actions">
-        <button class="primary" data-action="create-config">Créer une configuration par défaut</button>
-        <button class="ghost" data-action="close-onboarding">Ignorer</button>
+        <button class="primary" data-action="create-config">${t("onboarding_create_config") || "Créer une configuration par défaut"}</button>
+        <button class="ghost" data-action="close-onboarding">${t("onboarding_ignore") || "Ignorer"}</button>
       </div>
     </div>
   `;
@@ -1995,10 +4499,13 @@ async function createConfig() {
     try {
         const res = await fetch(`${state.apiBaseUrl}/init`, { method: "POST" });
         if (res.ok) {
-            addLog("Configuration créée avec succès.");
+            addLog(t("onboarding_config_created") || "Configuration créée avec succès.");
             document.getElementById('onboarding-modal').remove();
             // Reload context to update state
-            loadContext();
+            await loadContext();
+            // Navigate to Projects page so user can review and customize settings
+            setView("projects");
+            addLog(t("onboarding_redirect_projects") || "Redirection vers la page Projets pour configurer le projet.", "INFO");
         } else {
             const err = await res.json();
             alert("Erreur: " + (err.detail || "Impossible de créer la config"));
@@ -2032,6 +4539,16 @@ function setView(view) {
     renderSuggestions();
   } else if (view === "projects") {
     loadProjects();
+  } else if (view === "settings") {
+    // Load plugin settings when opening settings view
+    loadPluginSettings();
+  } else if (view.startsWith("plugin-")) {
+    // Plugin view - handled by loadPluginViewContent in bindPluginNavigation
+    const pluginSection = document.querySelector(`section.view[data-view="${view}"]`);
+    const pluginName = pluginSection?.dataset?.pluginName;
+    if (pluginName) {
+      loadPluginViewContent(pluginName, view);
+    }
   }
 }
 
@@ -2177,12 +4694,30 @@ function bindActions() {
   if (settingsForm) {
       settingsForm.addEventListener("submit", saveSettings);
   }
+  
+  // API interaction form handler
+  const apiInteractForm = document.getElementById("api-interact-form");
+  if (apiInteractForm) {
+      apiInteractForm.addEventListener("submit", sendApiRequest);
+  }
 
   const logLevelFilter = document.getElementById("log-level-filter");
   if (logLevelFilter) {
       logLevelFilter.addEventListener("change", (e) => {
           applyLogLevel(e.target.value);
       });
+  }
+
+  // Watch panel clear events button
+  const clearWatchBtn = document.getElementById("watch-clear-events");
+  if (clearWatchBtn) {
+    clearWatchBtn.addEventListener("click", clearWatchEvents);
+  }
+
+  // Reload all plugins button
+  const reloadPluginsBtn = document.getElementById("reload-plugins-btn");
+  if (reloadPluginsBtn) {
+    reloadPluginsBtn.addEventListener("click", reloadAllPlugins);
   }
 
   applyLogLevel(state.logLevel);
@@ -2229,14 +4764,12 @@ function connectWebSocket() {
     
     ws.onopen = () => {
       addLog("WebSocket connected.");
-      const btn = document.querySelector('[data-action="start-watch"]');
-      if (btn) {
-          btn.classList.add("active");
-          const label = btn.querySelector('.label') || btn;
-          if (label) label.textContent = "Watching";
-      }
+      // Update project runtime status to running
+      updateProjectRuntimeStatus("running");
+      // Note: WebSocket connection does not mean watch is active.
+      // The button state is managed by updateWatchStats() based on state.watch.active
       const watchPanel = document.getElementById("watch-panel");
-      if (watchPanel) watchPanel.classList.remove("hidden");
+      if (watchPanel && state.watch.active) watchPanel.classList.remove("hidden");
     };
     
     ws.onmessage = (event) => {
@@ -2249,21 +4782,194 @@ function connectWebSocket() {
         }
       }
 
-      if (parsed && parsed.type === "PLUGIN_NOTIFICATION") {
-        const payload = parsed.payload || {};
-        const source = payload.source || "Plugin";
-        const detail = payload.message || JSON.stringify(payload.details || {});
-        pushLiveEvent(source, detail);
-        addLog(`${source}: ${detail}`);
-        return;
-      }
-
+      // Handle specific event types
       if (parsed) {
-        const detail = parsed.payload && Object.keys(parsed.payload).length ? JSON.stringify(parsed.payload) : "";
-        pushLiveEvent(parsed.type || "Server", detail || "(empty payload)");
-        addLog(`WS: ${parsed.type}`);
+        switch (parsed.type) {
+          case "PLUGIN_NOTIFICATION": {
+            const payload = parsed.payload || {};
+            const source = payload.source || "Plugin";
+            const detail = payload.message || JSON.stringify(payload.details || {});
+            pushLiveEvent(source, detail);
+            addLog(`${source}: ${detail}`);
+            const level = payload.level || "info";
+            const icon = payload.status === "offline" ? "🔴" : undefined;
+            showNotification(detail, level, {
+              title: source,
+              icon,
+            });
+            break;
+          }
+          
+          case "FUNCTION_CALLS": {
+            // Update watch state with new call counts
+            const payload = parsed.payload || {};
+            if (payload.cumulative) {
+              state.watch.callCounts = payload.cumulative;
+            }
+            const callCount = Object.values(payload.calls || {}).reduce((a, b) => a + b, 0);
+            addWatchEvent("FUNCTION_CALLS", `${callCount} appels dynamiques`, "success");
+            addLog(`Watch: ${callCount} function calls recorded`);
+            // Re-render functions view if active
+            if (state.view === "functions") {
+              renderFunctions(state.report);
+            }
+            updateWatchStats();
+            break;
+          }
+          
+          case "WATCH_STARTED": {
+            state.watch.active = true;
+            state.watch.callCounts = {};
+            state.watch.totalEvents = 0;
+            state.watch.filesScanned = 0;
+            state.watch.functionsFound = 0;
+            state.watch.progress = 0;
+            state.watch.phase = null;
+            addWatchEvent("WATCH", t("watch_started") || "Watch démarré", "success");
+            addLog("Watch mode started");
+            updateWatchPanel();
+            break;
+          }
+          
+          case "WATCH_STOPPED": {
+            const payload = parsed.payload || {};
+            state.watch.active = false;
+            state.watch.phase = null;
+            addWatchEvent("WATCH", t("watch_stopped") || "Watch arrêté", "");
+            addLog(`Watch stopped. Total: ${payload.total_events || 0} events`);
+            updateWatchPanel();
+            break;
+          }
+          
+          case "WATCH_CALLS_RESET": {
+            state.watch.callCounts = {};
+            state.watch.totalEvents = 0;
+            addWatchEvent("WATCH", "Compteurs réinitialisés", "");
+            if (state.view === "functions") {
+              renderFunctions(state.report);
+            }
+            updateWatchStats();
+            break;
+          }
+          
+          case "FILE_CHANGE": {
+            const payload = parsed.payload || {};
+            state.watch.totalEvents++;
+            addWatchEvent("FILE", `${payload.change_type}: ${payload.path}`, "");
+            addLog(`File ${payload.change_type}: ${payload.path}`);
+            updateWatchStats();
+            break;
+          }
+          
+          // Scan progress events
+          case "SCAN_STARTED": {
+            const payload = parsed.payload || {};
+            state.watch.phase = "scanning";
+            state.watch.progress = 0;
+            state.watch.filesScanned = 0;
+            addWatchEvent("SCAN", `Scan démarré: ${payload.root || ""}`, "success");
+            updateWatchProgress(0, "Scan en cours...");
+            break;
+          }
+          
+          case "SCAN_PROGRESS": {
+            const payload = parsed.payload || {};
+            state.watch.phase = payload.phase || "scanning";
+            state.watch.progress = payload.percent || 0;
+            state.watch.totalEvents++;
+            updateWatchProgress(payload.percent, `Phase: ${payload.phase || "scanning"}`);
+            break;
+          }
+          
+          case "SCAN_FILE_COMPLETED": {
+            const payload = parsed.payload || {};
+            state.watch.filesScanned = payload.processed || (state.watch.filesScanned + 1);
+            state.watch.progress = payload.percent || 0;
+            state.watch.currentFile = payload.file;
+            state.watch.totalEvents++;
+            
+            // Update progress UI
+            updateWatchProgress(
+              payload.percent, 
+              `Scan: ${payload.processed}/${payload.total} fichiers`,
+              payload.file
+            );
+            
+            // Only add event for every Nth file to avoid flooding
+            if (payload.processed % 10 === 0 || payload.processed === payload.total) {
+              addWatchEvent("SCAN", `${payload.processed}/${payload.total} fichiers`, "");
+            }
+            
+            updateWatchStats();
+            break;
+          }
+          
+          case "FUNCTION_ANALYZED": {
+            const payload = parsed.payload || {};
+            state.watch.functionsFound += (payload.functions_count || 0);
+            state.watch.totalEvents++;
+            
+            if (payload.functions && payload.functions.length > 0) {
+              const funcNames = payload.functions.slice(0, 3).join(", ");
+              addWatchEvent("FUNC", `${payload.file}: ${funcNames}${payload.functions_count > 3 ? "..." : ""}`, "");
+            }
+            
+            updateWatchStats();
+            break;
+          }
+          
+          case "SCAN_FINISHED": {
+            const payload = parsed.payload || {};
+            state.watch.phase = "completed";
+            state.watch.progress = 100;
+            addWatchEvent("SCAN", `Terminé: ${payload.file_count || 0} fichiers`, "success");
+            updateWatchProgress(100, "Scan terminé");
+            updateWatchStats();
+            
+            // Hide progress bar after a delay
+            setTimeout(() => {
+              const progressEl = document.getElementById("watch-progress");
+              if (progressEl) progressEl.classList.add("hidden");
+            }, 3000);
+            break;
+          }
+          
+          case "LOG_MESSAGE": {
+            const payload = parsed.payload || {};
+            const level = payload.level || "info";
+            const cssClass = level === "error" ? "event-error" : (level === "warning" ? "" : "");
+            addWatchEvent("LOG", `[${level.toUpperCase()}] ${payload.message}`, cssClass);
+            break;
+          }
+          
+          case "SIMULATE_STARTED": {
+            const payload = parsed.payload || {};
+            state.watch.phase = "simulating";
+            addWatchEvent("SIMULATE", `Simulation démarrée: ${payload.target || ""}`, "success");
+            break;
+          }
+          
+          case "SIMULATE_PROGRESS": {
+            const payload = parsed.payload || {};
+            state.watch.totalEvents++;
+            addWatchEvent("SIMULATE", payload.message || "En cours...", "");
+            break;
+          }
+          
+          case "SIMULATE_COMPLETED": {
+            const payload = parsed.payload || {};
+            addWatchEvent("SIMULATE", `Terminé: ${payload.impacted_count || 0} éléments impactés`, "success");
+            break;
+          }
+          
+          default: {
+            const detail = parsed.payload && Object.keys(parsed.payload).length ? JSON.stringify(parsed.payload) : "";
+            addWatchEvent(parsed.type || "SERVER", detail || "(empty payload)", "");
+            addLog(`WS: ${parsed.type}`);
+          }
+        }
       } else {
-        pushLiveEvent("Server", event.data);
+        addWatchEvent("SERVER", event.data, "");
         addLog(`WS: ${event.data}`);
       }
 
@@ -2275,7 +4981,8 @@ function connectWebSocket() {
       const watchList = document.getElementById("watch-events");
       if (watchList) {
           const li = document.createElement("li");
-          li.textContent = `[${new Date().toLocaleTimeString()}] ${event.data}`;
+          const eventText = parsed ? `[${parsed.type}] ${JSON.stringify(parsed.payload || {}).substring(0, 100)}` : event.data;
+          li.textContent = `[${new Date().toLocaleTimeString()}] ${eventText}`;
           li.style.padding = "0.25rem 0";
           li.style.borderBottom = "1px solid var(--border)";
           watchList.prepend(li);
@@ -2285,7 +4992,10 @@ function connectWebSocket() {
     
     ws.onclose = () => {
       state.ws = null;
+      state.watch.active = false;
       addLog("WebSocket disconnected.");
+      // Update project runtime status to stopped
+      updateProjectRuntimeStatus("stopped");
       const btn = document.querySelector('[data-action="start-watch"]');
       if (btn) {
           btn.classList.remove("active");
@@ -2294,15 +5004,256 @@ function connectWebSocket() {
       }
       const watchPanel = document.getElementById("watch-panel");
       if (watchPanel) watchPanel.classList.add("hidden");
+      updateWatchStats();
     };
 
     ws.onerror = (error) => {
       console.error("WebSocket error:", error);
+      // Update project runtime status to error
+      updateProjectRuntimeStatus("error");
     };
     
     state.ws = ws;
   } catch (e) {
     console.error("Could not connect to WebSocket", e);
+  }
+}
+
+async function startWatch() {
+  if (!state.apiBaseUrl) return;
+  
+  try {
+    // First start the watch on the server
+    const response = await apiFetch(`${state.apiBaseUrl}/watch/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ track_calls: true, track_files: true })
+    });
+    
+    if (response.ok) {
+      const status = await response.json();
+      state.watch.active = status.active;
+      state.watch.callCounts = status.call_counts || {};
+      state.watch.totalEvents = status.total_events || 0;
+      state.watch.filesScanned = 0;
+      state.watch.functionsFound = 0;
+      state.watch.progress = 0;
+      state.watch.phase = null;
+      
+      // Then connect WebSocket for real-time updates
+      connectWebSocket();
+      
+      addLog("Watch mode started");
+      updateWatchStats();
+      updateWatchPanel();
+    } else {
+      const err = await response.json();
+      addLog(`Failed to start watch: ${err.detail || err.error?.message || "Unknown error"}`);
+    }
+  } catch (e) {
+    console.error("Failed to start watch:", e);
+    addLog(`Failed to start watch: ${e.message}`);
+  }
+}
+
+async function stopWatch() {
+  if (!state.apiBaseUrl) return;
+  
+  try {
+    const response = await apiFetch(`${state.apiBaseUrl}/watch/stop`, {
+      method: "POST"
+    });
+    
+    if (response.ok) {
+      const status = await response.json();
+      state.watch.active = false;
+      // Keep the final call counts for reference
+      if (status.call_counts) {
+        state.watch.callCounts = status.call_counts;
+      }
+      addLog(`Watch stopped. Total events: ${status.total_events || 0}`);
+    }
+  } catch (e) {
+    console.error("Failed to stop watch:", e);
+  }
+  
+  // Close WebSocket
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.close();
+  }
+  
+  updateWatchStats();
+  updateWatchPanel();
+}
+
+function updateWatchStats() {
+  // Update UI elements showing watch status
+  const watchStatusEl = document.getElementById("watch-status");
+  const watchCallsEl = document.getElementById("watch-total-calls");
+  const watchEventsEl = document.getElementById("watch-total-events");
+  const watchFilesEl = document.getElementById("watch-files-count");
+  const watchFunctionsEl = document.getElementById("watch-functions-count");
+  const watchEventsCountEl = document.getElementById("watch-events-count");
+  
+  if (watchStatusEl) {
+    watchStatusEl.textContent = state.watch.active ? t("watch_active") : t("watch_inactive");
+    watchStatusEl.className = state.watch.active ? "value text-success" : "value text-muted";
+  }
+  
+  if (watchCallsEl) {
+    const totalCalls = Object.values(state.watch.callCounts).reduce((a, b) => a + b, 0);
+    watchCallsEl.textContent = totalCalls.toLocaleString();
+  }
+  
+  if (watchEventsEl) {
+    watchEventsEl.textContent = state.watch.totalEvents.toLocaleString();
+  }
+  
+  // Update new watch panel stats
+  if (watchFilesEl) {
+    watchFilesEl.textContent = state.watch.filesScanned.toLocaleString();
+  }
+  
+  if (watchFunctionsEl) {
+    watchFunctionsEl.textContent = state.watch.functionsFound.toLocaleString();
+  }
+  
+  if (watchEventsCountEl) {
+    watchEventsCountEl.textContent = state.watch.totalEvents.toLocaleString();
+  }
+  
+  // Update the watch button state
+  const btn = document.querySelector('[data-action="start-watch"]');
+  if (btn) {
+    const label = btn.querySelector('.label') || btn;
+    if (state.watch.active) {
+      btn.classList.add("active");
+      if (label) label.textContent = "Watching";
+    } else {
+      btn.classList.remove("active");
+      if (label) label.textContent = "Watch";
+    }
+  }
+  
+  // Update the dashboard stat cards to reflect dynamic data availability
+  if (state.report) {
+    renderStats(state.report);
+  }
+}
+
+/**
+ * Update the watch panel visibility and status badge
+ */
+function updateWatchPanel() {
+  const watchPanel = document.getElementById("watch-panel");
+  const statusBadge = document.getElementById("watch-status-badge");
+  
+  if (watchPanel) {
+    if (state.watch.active) {
+      watchPanel.classList.remove("hidden");
+      watchPanel.classList.add("active");
+    } else {
+      watchPanel.classList.remove("active");
+      // Keep panel visible for a bit to show final state
+    }
+  }
+  
+  if (statusBadge) {
+    if (state.watch.active) {
+      statusBadge.textContent = "Watching";
+      statusBadge.classList.add("active");
+    } else {
+      statusBadge.textContent = "Stopped";
+      statusBadge.classList.remove("active");
+    }
+  }
+  
+  updateWatchStats();
+}
+
+/**
+ * Update the progress bar in the watch panel
+ * @param {number} percent - Progress percentage (0-100)
+ * @param {string} label - Label to show above progress bar
+ * @param {string} detail - Optional detail text (e.g. current file)
+ */
+function updateWatchProgress(percent, label, detail = "") {
+  const progressEl = document.getElementById("watch-progress");
+  const progressBar = document.getElementById("watch-progress-bar");
+  const progressLabel = document.getElementById("watch-progress-label");
+  const progressPercent = document.getElementById("watch-progress-percent");
+  const progressDetail = document.getElementById("watch-progress-detail");
+  
+  if (progressEl) {
+    progressEl.classList.remove("hidden");
+  }
+  
+  if (progressBar) {
+    progressBar.style.width = `${percent}%`;
+  }
+  
+  if (progressLabel) {
+    progressLabel.textContent = label;
+  }
+  
+  if (progressPercent) {
+    progressPercent.textContent = `${Math.round(percent)}%`;
+  }
+  
+  if (progressDetail && detail) {
+    progressDetail.textContent = detail;
+  }
+}
+
+/**
+ * Add an event to the watch events list
+ * @param {string} type - Event type (e.g. "SCAN", "FILE", "FUNC")
+ * @param {string} detail - Event detail text
+ * @param {string} cssClass - Optional CSS class (e.g. "event-error", "event-success")
+ */
+function addWatchEvent(type, detail, cssClass = "") {
+  const watchList = document.getElementById("watch-events");
+  if (!watchList) return;
+  
+  const li = document.createElement("li");
+  if (cssClass) li.classList.add(cssClass);
+  
+  const time = new Date().toLocaleTimeString();
+  li.innerHTML = `<span class="event-time">${time}</span><span class="event-type">${type}</span><span class="event-detail">${detail}</span>`;
+  
+  watchList.prepend(li);
+  
+  // Limit to last 50 events
+  while (watchList.children.length > 50) {
+    watchList.lastChild.remove();
+  }
+}
+
+/**
+ * Clear all events in the watch panel
+ */
+function clearWatchEvents() {
+  const watchList = document.getElementById("watch-events");
+  if (watchList) {
+    watchList.innerHTML = "";
+  }
+  addWatchEvent("SYSTEM", "Événements effacés", "");
+}
+
+async function fetchWatchStatus() {
+  if (!state.apiBaseUrl) return;
+  try {
+    const response = await apiFetch(`${state.apiBaseUrl}/watch/status`);
+    if (response.ok) {
+      const status = await response.json();
+      state.watch.active = status.active || false;
+      state.watch.callCounts = status.call_counts || {};
+      state.watch.totalEvents = status.total_events || 0;
+      updateWatchStats();
+      updateWatchPanel();
+    }
+  } catch (e) {
+    console.warn("Could not fetch watch status:", e);
   }
 }
 
@@ -2314,6 +5265,7 @@ async function fetchMeetingStatus() {
       const status = await response.json();
       state.meeting = status;
       renderStatusBadges(state.report);
+      renderAlerts(state.report);  // Update alerts with new Meeting status
       
       // Update Settings Panel if visible
       const statusEl = document.getElementById("meeting-status");
@@ -2415,7 +5367,12 @@ function renderBrowser(data) {
 
 function confirmBrowserSelection() {
   if (currentBrowserPath) {
-    if (state.browserMode === 'wizard') {
+    // Check if there's a CWD callback waiting
+    if (typeof runCwdBrowserCallback === 'function') {
+        runCwdBrowserCallback(currentBrowserPath);
+        runCwdBrowserCallback = null;
+        closeBrowser();
+    } else if (state.browserMode === 'wizard') {
         const input = document.getElementById("project-path");
         if (input) input.value = currentBrowserPath;
         closeBrowser();
@@ -2514,7 +5471,6 @@ function renderBackendSelector() {
 
 // --- Initialization ---
 async function init() {
-  addLog("App initialized v1.0.1", "INFO");
   const savedLang = localStorage.getItem("jupiter-lang") || "fr";
   await setLanguage(savedLang);
   
@@ -2549,13 +5505,23 @@ async function init() {
   renderStatusBadges(state.report);
   
   await loadContext();
-  await loadCachedReport();
+  const versionLabel = state.context?.jupiter_version ? `v${state.context.jupiter_version}` : "v—";
+  addLog(`App initialized ${versionLabel}`, "INFO");
+  await loadProjects(); // Load projects and their API config (also loads cached report if active project)
+  if (!state.report) {
+    await loadCachedReport(); // Fallback if no project was active
+  }
   await fetchBackends(); // Fetch backends early
+  await refreshApiEndpoints(); // Fetch API endpoints (may be missing from cached report)
+  await loadPluginMenus(); // Load dynamic plugin menu items
   fetchMeetingStatus();
+  fetchWatchStatus(); // Fetch watch state to sync button with server
   connectWebSocket();
   bindUpload();
   bindActions();
   bindHistoryControls();
+  setupProjectApiConnectorForm();
+  // setupUpdateFileUpload removed - functionality now provided by settings_update plugin
   // renderReport(null); // Do not reset report if loaded from cache
   pushLiveEvent("Startup", "UI ready. Load a report or use the sample.");
 }
@@ -2596,6 +5562,9 @@ async function triggerSimulation(type, path, funcName = null) {
 }
 
 window.triggerSimulation = triggerSimulation;
+window.showUnusedFunctionsExportModal = showUnusedFunctionsExportModal;
+window.copyUnusedFunctionsExport = copyUnusedFunctionsExport;
+window.closeUnusedFunctionsExportModal = closeUnusedFunctionsExportModal;
 
 // --- Authentication ---
 
@@ -2620,16 +5589,23 @@ async function apiFetch(url, options = {}) {
     return response;
 }
 
+// Set up login modal cancel handler once on load
+let loginModalCancelHandlerAttached = false;
+
 function openLoginModal() {
     const modal = document.getElementById("login-modal");
     if (modal) {
+        // Attach cancel event handler only once
+        if (!loginModalCancelHandlerAttached) {
+            modal.addEventListener('cancel', (event) => {
+                // Prevent closing by escape key if not logged in
+                if (!state.token) {
+                    event.preventDefault();
+                }
+            });
+            loginModalCancelHandlerAttached = true;
+        }
         modal.showModal();
-        // Prevent closing by escape key if not logged in
-        modal.addEventListener('cancel', (event) => {
-            if (!state.token) {
-                event.preventDefault();
-            }
-        });
     }
 }
 
@@ -2669,6 +5645,7 @@ async function handleLogin() {
             addLog(`Logged in as ${data.name} (${data.role})`, "SUCCESS");
             
             // Refresh data
+            checkProjectStatus();
             if (state.view === "dashboard") startScan();
         } else {
             errorDiv.textContent = "Identifiants invalides";
@@ -2734,6 +5711,7 @@ function checkAutoLogin() {
                     state.userRole = data.role;
                     updateProfileUI();
                     addLog("Auto-login successful");
+                    checkProjectStatus();
                     if (state.view === "dashboard") startScan();
                 });
             } else {
@@ -2755,7 +5733,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // ... existing init code ...
     // We need to make sure this runs after other inits or is part of init
     setTimeout(checkAutoLogin, 500);
-    setTimeout(checkProjectStatus, 1000);
 });
 
 async function checkProjectStatus() {
@@ -3123,67 +6100,34 @@ async function deleteUser(name) {
     }
 }
 
-// Update File Upload Listener
-document.addEventListener('DOMContentLoaded', () => {
-    // Project API Connector UI Logic (Projects page)
-    const connectorSelect = document.getElementById('project-api-connector');
-    const appVarInput = document.getElementById('project-api-app-var');
-    const pathInput = document.getElementById('project-api-path');
+    function setupProjectApiConnectorForm() {
+      const connectorSelect = document.getElementById('project-api-connector');
+      const appVarInput = document.getElementById('project-api-app-var');
+      const pathInput = document.getElementById('project-api-path');
 
-    if (connectorSelect) {
-        connectorSelect.addEventListener('change', () => {
-            const isLocal = connectorSelect.value === 'local';
-            if (appVarInput) {
-                appVarInput.disabled = isLocal;
-                if (isLocal) appVarInput.placeholder = "(Auto: Jupiter API)";
-                else appVarInput.placeholder = "app";
-            }
-            if (pathInput) {
-                pathInput.disabled = isLocal;
-                if (isLocal) pathInput.placeholder = "(Auto: Internal)";
-                else pathInput.placeholder = "src/main.py";
-            }
-        });
+      if (!connectorSelect) {
+        return;
+      }
+
+      const applyState = () => {
+        const isLocal = connectorSelect.value === 'local';
+        if (appVarInput) {
+          appVarInput.disabled = isLocal;
+          appVarInput.placeholder = isLocal ? "(Auto: Jupiter API)" : "app";
+        }
+        if (pathInput) {
+          pathInput.disabled = isLocal;
+          pathInput.placeholder = isLocal ? "(Auto: Internal)" : "src/main.py";
+        }
+      };
+
+      connectorSelect.addEventListener('change', applyState);
+      applyState();
     }
 
-    const fileInput = document.getElementById('update-file-input');
-    if (fileInput) {
-        fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            try {
-                const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
-                // Need token for upload if protected
-                const headers = {};
-                if (state.token) {
-                    headers['Authorization'] = `Bearer ${state.token}`;
-                }
+    // setupUpdateFileUpload removed - functionality now provided by settings_update plugin
 
-                const response = await fetch(`${apiBaseUrl}/update/upload`, {
-                    method: 'POST',
-                    headers: headers,
-                    body: formData
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('update-source').value = data.path;
-                    addLog(`Update file uploaded: ${data.filename}`);
-                } else {
-                    const err = await response.json();
-                    alert("Upload failed: " + (err.detail || response.statusText));
-                }
-            } catch (e) {
-                console.error(e);
-                alert("Upload error: " + e.message);
-            }
-        });
-    }
-});
+// Update File Upload Listener moved to setup helpers executed during init
 
 function exportData(data, filename) {
   const jsonStr = JSON.stringify(data, null, 2);

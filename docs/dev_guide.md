@@ -73,6 +73,33 @@ The AI Helper plugin demonstrates how to extend Jupiter with intelligent feature
     *   `compare_snapshots(id_a, id_b) -> SnapshotDiff`: Produce structured file/function delta.
 *   **Usage**: Called automatically by the CLI `scan` flow and the FastAPI `/scan` endpoint (unless explicitly disabled by the client).
 
+## Connectors (`jupiter.core.connectors`)
+
+Connectors abstract the source of project data. `ProjectManager` uses them to execute operations.
+
+*   **BaseConnector (`base.py`)**: Abstract base class defining the interface (`scan`, `analyze`, `run_command`).
+*   **LocalConnector (`local.py`)**:
+    *   Scans the local filesystem using `ProjectScanner`.
+    *   Analyzes using `ProjectAnalyzer`.
+    *   Runs commands locally via `runner.py`.
+    *   Can optionally inspect a local API if `project_api` is configured.
+*   **RemoteConnector (`remote.py`)**:
+    *   Connects to another Jupiter instance via HTTP.
+    *   Delegates all operations to the remote API.
+*   **GenericApiConnector (`generic_api.py`)**:
+    *   Connects to a generic API (e.g., OpenAPI).
+    *   `scan`: Fetches the OpenAPI schema and lists endpoints as "files".
+    *   `analyze`: Returns API statistics.
+    *   `run_command`: Not supported.
+
+### Graph Builder (`graph.py`)
+
+The `GraphBuilder` constructs the dependency graph for the Live Map.
+
+*   **Optimization**: Uses an internal index (`filename -> [paths]`) to resolve imports in $O(1)$ (best case) instead of $O(N)$, significantly speeding up graph generation for large projects.
+*   **Simplification**: Can aggregate nodes by directory when the graph is too large (`max_nodes` threshold).
+*   **Lazy Loading**: The graph structure supports partial loading (though currently the UI loads the full graph).
+
 ## API Server (`jupiter.server`)
 
 The API is built with FastAPI and provides endpoints for the Web UI and CLI. It uses `ProjectManager` to delegate operations to the appropriate backend (local or remote).
@@ -87,7 +114,7 @@ The API is built with FastAPI and provides endpoints for the Web UI and CLI. It 
     *   `POST /simulate/remove`: Delegates to `ProjectSimulator` to compute impact of removing a file or function.
     *   `GET /graph`: Delegates to `GraphBuilder` to expose a graph suitable for the Live Map. Supports `simplify` (group by directory) and `max_nodes` parameters for large projects.
     *   `GET /backends`: Lists configured backends.
-    *   `GET /plugins`, `POST /plugins/{name}/toggle`, `POST /plugins/{name}/config`: Introspect and manage plugins (including webhook configuration).
+    *   `GET /plugins`, `GET /plugins/{name}/config`, `POST /plugins/{name}/toggle`, `POST /plugins/{name}/config`, `POST /plugins/{name}/test`: Introspect, configure, and validate plugins (including webhook configuration/tests).
     *   `GET /config` & `POST /config`: Manages `<project>.jupiter.yaml`.
     *   `POST /update`: Handles self-update.
     *   `WS /ws`: WebSocket for real-time events (watch mode).

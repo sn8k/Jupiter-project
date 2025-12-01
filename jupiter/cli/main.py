@@ -25,6 +25,7 @@ from jupiter.cli.command_handlers import (
     handle_snapshot_show,
     handle_snapshot_diff,
     handle_simulate_remove,
+    handle_meeting_check_license,
 )
 
 configure_logging("INFO")
@@ -139,9 +140,15 @@ def build_parser() -> argparse.ArgumentParser:
     sim_remove.add_argument("root", type=Path, nargs="?", default=None, help="Project root")
     sim_remove.add_argument("--json", action="store_true", help="Output as JSON")
 
+    # Meeting subcommand
+    meeting_parser = subcommands.add_parser("meeting", help="Meeting service integration commands")
+    meeting_sub = meeting_parser.add_subparsers(dest="meeting_command", required=True)
+    
+    meeting_check = meeting_sub.add_parser("check-license", help="Check Jupiter license via Meeting API")
+    meeting_check.add_argument("root", type=Path, nargs="?", default=None, help="Project root")
+    meeting_check.add_argument("--json", action="store_true", help="Output as JSON")
+
     return parser
-
-
 def main() -> None:
     """Entrypoint for the CLI."""
     parser = build_parser()
@@ -203,7 +210,7 @@ def main() -> None:
     elif args.command == "gui":
         host = args.host or config.gui.host
         port = args.port or config.gui.port
-        device_key = config.meeting.deviceKey if config.meeting.enabled else None
+        device_key = config.meeting.deviceKey
         handle_gui(root=root, host=host, port=port, device_key=device_key)
     elif args.command == "watch":
         handle_watch(root)
@@ -223,6 +230,14 @@ def main() -> None:
         save_last_root(sim_root)
         if args.simulate_command == "remove":
             handle_simulate_remove(sim_root, args.target, args.json)
+    elif args.command == "meeting":
+        meeting_root = resolve_root_argument(getattr(args, "root", None))
+        save_last_root(meeting_root)
+        if args.meeting_command == "check-license":
+            exit_code = handle_meeting_check_license(meeting_root, args.json)
+            raise SystemExit(exit_code)
+        else:
+            raise ValueError(f"Unhandled meeting command {args.meeting_command}")
     elif args.command == "update":
         handle_update(args.source, args.force)
     elif args.command == "ci":

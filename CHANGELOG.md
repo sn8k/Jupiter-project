@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.1.13 – Manual Duplication Linking
+- Code Quality plugin duplication tab now lets you select overlapping detector clusters and merge them into a single linked block with a custom label. Linked blocks display verification badges (verified / missing / diverged) and can be rechecked without rerunning a scan.
+- Linked definitions are persisted to `.jupiter/manual_duplication_links.json` (and optionally via config) so they survive restarts and are injected into `/analyze` responses without inflating duplication percentages.
+- Added admin-only endpoints to automate this workflow: `POST /plugins/code_quality/manual-links`, `DELETE /plugins/code_quality/manual-links/{link_id}`, and `POST /plugins/code_quality/manual-links/recheck`.
+- Duplication detector now records `end_line` for every occurrence, enabling accurate block spans when manual links are recomputed and tightening UI previews.
+- Updated README, Manual, and API docs to describe the new workflow and storage format.
+
+## 1.1.12 – Meeting License WebUI & Heartbeat
+- Added complete Meeting license management section in Settings page.
+- Meeting status box with colored indicators based on license status (valid=green, invalid=red, network_error=orange, config_error=purple).
+- Device Key and Auth Token input fields for Meeting configuration.
+- "Check license" and "Refresh" buttons for manual license verification against Meeting API.
+- Last Meeting API response display panel with JSON preview and timestamp.
+- Added i18n support for all Meeting-related UI texts (fr.json, en.json).
+- Split Settings "Interface & Meeting" section into separate panels for better organization.
+- **Heartbeat implementation**: Jupiter now sends a POST to `/api/devices/{device_key}/online` on every license check to signal presence to Meeting.
+
+## 1.1.11 – Meeting License Verification
+- Implemented full Meeting license verification via the Meeting backend API.
+- Added `MeetingLicenseStatus` enum and `MeetingLicenseCheckResult` dataclass for detailed license status.
+- License validation checks: `authorized == true`, `device_type == "Jupiter"`, `token_count > 0`.
+- Added new API endpoints:
+  - `GET /license/status` – Returns detailed license verification status
+  - `POST /license/refresh` – Forces a license re-check (admin only)
+- Added CLI command: `jupiter meeting check-license [--json]` with appropriate exit codes.
+- Extended `MeetingConfig` with new parameters: `base_url`, `device_type`, `timeout_seconds`, `auth_token`.
+- Server startup now verifies license automatically with graceful degradation to restricted mode.
+- Updated global_config.yaml with full Meeting configuration section.
+- Added comprehensive unit tests in `tests/test_meeting_adapter.py`.
+
 ## 1.1.10 – Internal Deduplication
 - CLI scan/analyze commands now reuse a shared service builder to remove repeated argument blocks.
 - API routers reuse a common history manager helper (SystemState) instead of duplicated local implementations.

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, List, Dict, Optional
 from dataclasses import dataclass, asdict
-from jupiter import __version__
+
+PLUGIN_VERSION = "0.3.1"
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class AISuggestion:
@@ -23,7 +27,7 @@ class AIHelperPlugin:
     """
 
     name = "ai_helper"
-    version = __version__
+    version = PLUGIN_VERSION
     description = "AI-assisted analysis and suggestions."
 
     def __init__(self) -> None:
@@ -35,15 +39,29 @@ class AIHelperPlugin:
 
     def configure(self, settings: Dict[str, Any]) -> None:
         """Configure the plugin."""
-        self.config = settings
-        self.enabled = settings.get("enabled", True) # Default to True if settings exist
-        self.provider = settings.get("provider", "mock")
-        self.api_key = settings.get("api_key", None)
+        self.config = settings or {}
+        self.enabled = self.config.get("enabled", True)  # Default to True if settings exist
+        self.provider = self.config.get("provider", "mock")
+        self.api_key = self.config.get("api_key")
+        logger.info(
+            "AIHelperPlugin configured: enabled=%s, provider=%s",
+            self.enabled,
+            self.provider,
+        )
+        logger.debug(
+            "AIHelperPlugin config keys=%s api_key_present=%s",
+            sorted(self.config.keys()),
+            bool(self.api_key),
+        )
 
     def on_scan(self, report: dict[str, Any]) -> None:
         """Hook called after a scan is complete."""
-        if "files" in report:
-            self.scanned_files = report["files"]
+        files = report.get("files", [])
+        self.scanned_files = files
+        logger.info("AIHelperPlugin captured %d files from scan", len(files))
+        if logger.isEnabledFor(logging.DEBUG):
+            sample = [f.get("path") for f in files[:5]]
+            logger.debug("AIHelperPlugin sample files=%s", sample)
 
     def on_analyze(self, summary: dict[str, Any]) -> None:
         """
@@ -51,9 +69,16 @@ class AIHelperPlugin:
         Populates summary['refactoring'] with AI suggestions.
         """
         if not self.enabled:
+            logger.debug("AIHelperPlugin disabled; skipping on_analyze")
             return
 
         suggestions = self._generate_suggestions(summary)
+        logger.info("AIHelperPlugin generated %d suggestion(s)", len(suggestions))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "AIHelperPlugin suggestions detail=%s",
+                [asdict(s) for s in suggestions],
+            )
         
         # Merge into existing refactoring list or create it
         if "refactoring" not in summary:
@@ -73,6 +98,7 @@ class AIHelperPlugin:
         Generate suggestions based on the summary.
         In a real implementation, this would call an LLM.
         """
+        logger.debug("AIHelperPlugin generating suggestions via provider=%s", self.provider)
         suggestions = []
         
         # Mock implementation for demonstration
@@ -81,20 +107,24 @@ class AIHelperPlugin:
             if "python_summary" in summary and summary["python_summary"]:
                 py_sum = summary["python_summary"]
                 if py_sum.get("avg_functions_per_file", 0) > 3:
-                    suggestions.append(AISuggestion(
+                    suggestion = AISuggestion(
                         path="Global",
                         type="doc",
                         details="High function density detected. Consider adding module-level docstrings.",
                         severity="info"
-                    ))
+                    )
+                    suggestions.append(suggestion)
+                    logger.debug("AIHelperPlugin added doc suggestion: %s", asdict(suggestion))
                 
                 if py_sum.get("total_potentially_unused_functions", 0) > 10:
-                     suggestions.append(AISuggestion(
+                    suggestion = AISuggestion(
                         path="Global",
                         type="cleanup",
                         details=f"Found {py_sum['total_potentially_unused_functions']} potentially unused functions. Run 'jupiter check' to verify.",
                         severity="low"
-                    ))
+                    )
+                    suggestions.append(suggestion)
+                    logger.debug("AIHelperPlugin added cleanup suggestion: %s", asdict(suggestion))
             
             # Example: Suggest splitting large files
             if "hotspots" in summary:
@@ -106,12 +136,14 @@ class AIHelperPlugin:
                             size_str = item.get("details", "0").split()[0]
                             size = int(size_str)
                             if size > 50 * 1024: # 50KB
-                                suggestions.append(AISuggestion(
+                                suggestion = AISuggestion(
                                     path=item["path"],
                                     type="refactoring",
                                     details=f"File is large ({size // 1024}KB). AI suggests splitting into smaller modules.",
                                     severity="medium"
-                                ))
+                                )
+                                suggestions.append(suggestion)
+                                logger.debug("AIHelperPlugin added large-file suggestion: %s", asdict(suggestion))
                         except (ValueError, IndexError):
                             pass
 
@@ -123,12 +155,14 @@ class AIHelperPlugin:
                             count_str = item.get("details", "0").split()[0]
                             count = int(count_str)
                             if count > 20:
-                                suggestions.append(AISuggestion(
+                                suggestion = AISuggestion(
                                     path=item["path"],
                                     type="refactoring",
                                     details=f"High function count ({count}). This might be a 'God Object'. Consider extracting logic.",
                                     severity="high"
-                                ))
+                                )
+                                suggestions.append(suggestion)
+                                logger.debug("AIHelperPlugin added god-object suggestion: %s", asdict(suggestion))
                         except (ValueError, IndexError):
                             pass
 
@@ -149,11 +183,13 @@ class AIHelperPlugin:
                         missing_tests += 1
                 
                 if missing_tests > 0:
-                     suggestions.append(AISuggestion(
+                    suggestion = AISuggestion(
                         path="Global",
                         type="testing",
                         details=f"Detected {missing_tests} source files without obvious corresponding tests.",
                         severity="medium"
-                    ))
+                    )
+                    suggestions.append(suggestion)
+                    logger.debug("AIHelperPlugin added testing suggestion: %s", asdict(suggestion))
 
         return suggestions

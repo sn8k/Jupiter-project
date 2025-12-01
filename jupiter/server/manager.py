@@ -10,11 +10,13 @@ from jupiter.config.config import (
     save_global_config,
     ProjectDefinition,
     load_config,
+    load_merged_config,
 )
 from jupiter.core.state import save_last_root
 from jupiter.core.connectors.base import BaseConnector
 from jupiter.core.connectors.local import LocalConnector
 from jupiter.core.connectors.remote import RemoteConnector
+from jupiter.core.connectors.generic_api import GenericApiConnector
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +59,10 @@ class ProjectManager:
             return False
             
         try:
-            # Load config from project path
+            # Load config from project path, merging with global settings (users, security, etc.)
             project_path = Path(project.path)
-            new_config = load_config(project_path, config_file=project.config_file)
+            # Use merged config to get global settings (users, security) along with project settings
+            new_config = load_merged_config(project_path, project_path)
             new_config.project_root = project_path # Ensure root is set
             
             self.refresh_for_root(new_config)
@@ -147,6 +150,12 @@ class ProjectManager:
                         base_url=backend_conf.api_url, 
                         api_key=backend_conf.api_key
                     )
+            elif backend_conf.type == "openapi":
+                if backend_conf.api_url:
+                    self.connectors[backend_conf.name] = GenericApiConnector(
+                        base_url=backend_conf.api_url,
+                        openapi_url=backend_conf.path or "/openapi.json"
+                    )
 
     def get_connector(self, name: str = "local") -> Optional[BaseConnector]:
         """Get a connector by name."""
@@ -171,7 +180,8 @@ class ProjectManager:
         base_path = Path(backend_path or ".")
         if base_path.is_absolute():
             return base_path.resolve()
-        return (self.config.project_root / base_path).resolve()
+        project_root = self.config.project_root if self.config else Path.cwd()
+        return (project_root / base_path).resolve()
 
     def list_backends(self) -> list[dict]:
         """List available backends."""

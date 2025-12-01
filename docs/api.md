@@ -42,6 +42,13 @@ Jupiter supports token-based authentication with roles. Tokens are configured in
     *   `WS /ws` (via query parameter `token`)
     *   `GET /projects`
 
+### Backends
+
+Manage project backends (local, remote Jupiter, or generic API).
+
+* `GET /backends`: List configured backends for the current project.
+  * Returns: `[{ "name": "local", "type": "local_fs", "path": "..." }, { "name": "remote", "type": "remote_jupiter_api", "api_url": "..." }, { "name": "api", "type": "openapi", "api_url": "..." }]`
+
 ## Endpoints
 
 ### Projects
@@ -348,6 +355,19 @@ Enable or disable a plugin. Protected by token.
 {"success": true, "enabled": true}
 ```
 
+### `GET /plugins/{name}/config`
+
+Return the persisted configuration for the specified plugin (requires an authenticated token).
+
+**Response:**
+```json
+{
+  "enabled": true,
+  "url": "https://hooks.example.com/jupiter",
+  "events": ["scan_complete", "api_connected"]
+}
+```
+
 ### `POST /plugins/{name}/config`
 
 Update a plugin configuration (for example, the webhook URL). Protected by token.
@@ -360,6 +380,78 @@ Update a plugin configuration (for example, the webhook URL). Protected by token
 **Response:**
 ```json
 {"success": true}
+```
+
+### `POST /plugins/{name}/test`
+
+Trigger a plugin-provided self-test (for example, to send a sample webhook). Requires admin token.
+
+**Response:**
+```json
+{"status": "ok", "result": {"event": "test_notification", "transport": "webhook"}}
+```
+
+### `POST /plugins/code_quality/manual-links`
+
+Create a manual duplication link by merging two or more detector clusters selected in the UI. Requires admin token.
+
+**Body:**
+```json
+{
+  "hashes": ["92e4cc1...", "6bd02f4..."],
+  "label": "CLI scan/analyze options"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "cluster": {
+    "hash": "manual::cli-scan-options",
+    "manual_link_id": "cli-scan-options",
+    "manual_label": "CLI scan/analyze options",
+    "source": "manual",
+    "verification": {"status": "verified", "checked_at": "2025-12-01T09:30:00Z"},
+    "occurrences": [
+      {"path": ".../command_handlers.py", "line": 71, "end_line": 77}
+    ]
+  }
+}
+```
+
+Linked blocks are stored in `.jupiter/manual_duplication_links.json` so they survive restarts and appear in `/analyze` responses.
+
+### `DELETE /plugins/code_quality/manual-links/{link_id}`
+
+Remove a manual duplication link created from the UI or API. Only links persisted on disk (`manual_origin == "file"`) can be deleted via this endpoint. Requires admin token.
+
+**Response:**
+```json
+{"status": "ok"}
+```
+
+### `POST /plugins/code_quality/manual-links/recheck`
+
+Force a verification pass on all manual duplication links or a specific link. Useful after editing `.jupiter/manual_duplication_links.json` or when a linked block drifts.
+
+**Body (optional):**
+```json
+{"link_id": "cli-scan-options"}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "links": [
+    {
+      "manual_link_id": "cli-scan-options",
+      "verification": {"status": "diverged", "issues": ["Path missing: ..."]},
+      "occurrences": [...]
+    }
+  ]
+}
 ```
 
 ## WebSockets
