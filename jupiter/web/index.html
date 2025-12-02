@@ -39,10 +39,10 @@
         <nav class="app-nav" aria-label="Navigation principale">
           <button class="nav-btn active" data-view="dashboard" data-i18n="dashboard_view">📊 Dashboard</button>
           <button class="nav-btn" data-view="analysis" data-i18n="analysis_view">🔍 Analyse</button>
+          <button class="nav-btn" data-view="ci" data-i18n="ci_view">🚦 CI</button>
           <button class="nav-btn" data-view="diagnostics" data-i18n="diagnostic_view">🩺 Diagnostic</button>
           <button class="nav-btn" data-view="files" data-i18n="files_view">📁 Fichiers</button>
           <button class="nav-btn" data-view="functions" data-i18n="functions_view">⚙️ Fonctions</button>
-          <button class="nav-btn" data-view="graph" data-i18n="graph_view">🗺️ Live Map</button>
           <button class="nav-btn" data-view="api" data-i18n="api_view">🔌 API</button>
           <button class="nav-btn" data-view="history" data-i18n="history_view">📜 Historique</button>
           <button class="nav-btn" data-view="projects" data-i18n="projects_view">📂 Projets</button>
@@ -201,6 +201,118 @@
                   <tbody id="hotspot-body"></tbody>
                 </table>
                 <p class="empty" id="hotspot-empty"></p>
+              </div>
+            </section>
+          </section>
+
+          <!-- CI / Quality Gates View -->
+          <section class="view hidden" data-view="ci" aria-label="Vue CI">
+            <div class="grid two-cols">
+              <section class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="ci_eyebrow">Quality Gates</p>
+                    <h2 data-i18n="ci_title">CI / Quality Check</h2>
+                    <p class="muted" data-i18n="ci_subtitle">Validate code quality against configured thresholds.</p>
+                  </div>
+                  <div class="badges">
+                    <span class="badge" id="ci-status-badge" data-i18n="ci_not_run">Not run</span>
+                  </div>
+                </header>
+
+                <!-- CI Status Card -->
+                <div id="ci-result-card" class="ci-result-card" style="margin-bottom: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-subtle);">
+                  <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                    <span id="ci-status-icon" style="font-size: 2rem;">⏳</span>
+                    <div>
+                      <p class="label" data-i18n="ci_status">Status</p>
+                      <p class="value" id="ci-status-text" style="font-size: 1.25rem; font-weight: bold;">—</p>
+                    </div>
+                  </div>
+                  <div id="ci-failures" class="ci-failures" style="display: none;">
+                    <p class="label" style="color: var(--error);" data-i18n="ci_failures">Failures:</p>
+                    <ul id="ci-failures-list" style="margin: 0.5rem 0; padding-left: 1.5rem; color: var(--error);"></ul>
+                  </div>
+                </div>
+
+                <!-- Metrics -->
+                <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+                  <div class="stat-card mini">
+                    <p class="label" data-i18n="ci_complexity">Max Complexity</p>
+                    <p class="value" id="ci-metric-complexity">—</p>
+                    <p class="small muted" id="ci-threshold-complexity"></p>
+                  </div>
+                  <div class="stat-card mini">
+                    <p class="label" data-i18n="ci_duplication">Duplication Clusters</p>
+                    <p class="value" id="ci-metric-duplication">—</p>
+                    <p class="small muted" id="ci-threshold-duplication"></p>
+                  </div>
+                  <div class="stat-card mini">
+                    <p class="label" data-i18n="ci_unused">Unused Functions</p>
+                    <p class="value" id="ci-metric-unused">—</p>
+                    <p class="small muted" id="ci-threshold-unused"></p>
+                  </div>
+                </div>
+
+                <!-- Run CI Button -->
+                <div style="margin-top: 1.5rem;">
+                  <button class="primary" id="ci-run-btn" data-action="run-ci" data-i18n="ci_run">🚀 Run CI Check</button>
+                  <button class="secondary" id="ci-export-btn" data-action="export-ci" data-i18n="ci_export" style="margin-left: 0.5rem;">📥 Export JSON</button>
+                </div>
+              </section>
+
+              <section class="panel">
+                <header>
+                  <div>
+                    <p class="eyebrow" data-i18n="ci_config_eyebrow">Configuration</p>
+                    <h2 data-i18n="ci_config_title">Quality Thresholds</h2>
+                    <p class="muted" data-i18n="ci_config_subtitle">Override thresholds for this check (leave empty for config defaults).</p>
+                  </div>
+                </header>
+
+                <div class="form-group" style="margin-bottom: 1rem;">
+                  <label for="ci-threshold-complexity-input" data-i18n="ci_max_complexity">Max Complexity</label>
+                  <input type="number" id="ci-threshold-complexity-input" min="1" placeholder="e.g. 15" style="width: 100%;" />
+                </div>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                  <label for="ci-threshold-duplication-input" data-i18n="ci_max_duplication">Max Duplication Clusters</label>
+                  <input type="number" id="ci-threshold-duplication-input" min="0" placeholder="e.g. 5" style="width: 100%;" />
+                </div>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                  <label for="ci-threshold-unused-input" data-i18n="ci_max_unused">Max Unused Functions</label>
+                  <input type="number" id="ci-threshold-unused-input" min="0" placeholder="e.g. 10" style="width: 100%;" />
+                </div>
+
+                <p class="small muted" data-i18n="ci_config_note">
+                  Defaults are read from your project's <code>ci.fail_on</code> config section.
+                </p>
+              </section>
+            </div>
+
+            <!-- CI History -->
+            <section class="panel" style="margin-top: 1.5rem;">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="ci_history_eyebrow">History</p>
+                  <h3 data-i18n="ci_history_title">Recent CI Runs</h3>
+                  <p class="muted" data-i18n="ci_history_subtitle">Track your quality gate results over time.</p>
+                </div>
+                <button class="ghost small" id="ci-clear-history" title="Clear history">🗑️</button>
+              </header>
+              <div class="table-wrapper">
+                <table aria-label="CI History">
+                  <thead>
+                    <tr>
+                      <th data-i18n="ci_history_date">Date</th>
+                      <th data-i18n="ci_history_status">Status</th>
+                      <th data-i18n="ci_complexity">Complexity</th>
+                      <th data-i18n="ci_duplication">Duplication</th>
+                      <th data-i18n="ci_unused">Unused</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ci-history-body"></tbody>
+                </table>
+                <p class="empty" id="ci-history-empty" data-i18n="ci_history_empty">No CI runs yet.</p>
               </div>
             </section>
           </section>
@@ -522,21 +634,7 @@ api:
             </section>
           </section>
 
-          <section class="view hidden" data-view="graph" aria-label="Vue Live Map">
-            <section class="panel full-height">
-              <header>
-                <div>
-                  <p class="eyebrow" data-i18n="graph_eyebrow">Visualisation</p>
-                  <h2 data-i18n="graph_title">Live Map</h2>
-                  <p class="muted" data-i18n="graph_subtitle">Graphe de dépendances interactif.</p>
-                </div>
-                <div class="actions">
-                  <button class="ghost small" data-action="refresh-graph" data-i18n="graph_refresh">Rafraîchir</button>
-                </div>
-              </header>
-              <div id="graph-container" style="width: 100%; height: 600px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: var(--bg-subtle);"></div>
-            </section>
-          </section>
+          <!-- Live Map view removed - now provided by livemap plugin -->
 
           <section class="view hidden" data-view="history" aria-label="Vue historique">
             <div class="grid two-cols">
@@ -559,7 +657,7 @@ api:
                         <th data-i18n="history_col_date">Date</th>
                         <th class="numeric" data-i18n="history_col_files">Fichiers</th>
                         <th class="numeric" data-i18n="history_col_size">Taille</th>
-                        <th></th>
+                        <th data-i18n="history_col_actions">Actions</th>
                       </tr>
                     </thead>
                     <tbody id="snapshot-table-body"></tbody>
@@ -598,6 +696,34 @@ api:
                 <div class="history-diff" style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius);" id="snapshot-diff-output"></div>
               </section>
             </div>
+
+            <!-- Snapshot Detail Panel -->
+            <section class="panel hidden" id="snapshot-detail-panel" style="margin-top: 1.5rem;">
+              <header>
+                <div>
+                  <p class="eyebrow" data-i18n="snapshot_detail_eyebrow">Snapshot Detail</p>
+                  <h3 id="snapshot-detail-title" data-i18n="snapshot_detail_title">Full Report</h3>
+                  <p class="muted" id="snapshot-detail-subtitle"></p>
+                </div>
+                <div class="actions">
+                  <button class="primary small" id="snapshot-export-btn" data-i18n="snapshot_export">📥 Export JSON</button>
+                  <button class="ghost small" id="snapshot-detail-close">✕</button>
+                </div>
+              </header>
+              <div class="stats-grid" id="snapshot-detail-stats" style="margin-bottom: 1rem;"></div>
+              <div class="table-wrapper">
+                <table aria-label="Snapshot Files">
+                  <thead>
+                    <tr>
+                      <th data-i18n="files_col_path">Path</th>
+                      <th class="numeric" data-i18n="files_col_size">Size</th>
+                      <th data-i18n="files_col_type">Type</th>
+                    </tr>
+                  </thead>
+                  <tbody id="snapshot-detail-files"></tbody>
+                </table>
+              </div>
+            </section>
           </section>
 
           <section class="view hidden" data-view="plugins" aria-label="Vue plugins">
@@ -660,11 +786,10 @@ api:
 
           <section class="view hidden" data-view="settings" aria-label="Vue paramètres">
             <div class="settings-layout">
-                <!-- Save Button at Top -->
-                <div class="settings-header" style="grid-column: 1 / -1; margin-bottom: 1rem; display: flex; justify-content: flex-end;">
-                    <button type="submit" form="settings-form" class="primary" data-i18n="save_settings">Enregistrer</button>
-                </div>
-                <form id="settings-form" class="settings-form-grid">
+                <div class="settings-two-columns">
+                  <!-- Left column: Main settings -->
+                  <div class="settings-main-column">
+                    <form id="settings-form" class="settings-form-grid">
                     <!-- Network Section -->
                     <section class="panel settings-section">
                         <header>
@@ -686,6 +811,10 @@ api:
                             <label for="conf-gui-port">GUI Port</label>
                             <input type="number" id="conf-gui-port" name="gui_port" />
                         </div>
+                        <div class="form-actions" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+                            <button type="button" class="primary small" data-action="save-network-settings" data-i18n="save">💾 Enregistrer</button>
+                            <span class="setting-result" id="network-settings-status"></span>
+                        </div>
                     </section>
 
                     <!-- UI Section -->
@@ -703,14 +832,95 @@ api:
                         <div class="form-group">
                             <label for="conf-ui-lang">Language</label>
                             <select id="conf-ui-lang" name="ui_language">
-                                <option value="fr">Français</option>
-                                <option value="en">English</option>
+                                <!-- Options populated dynamically from lang/*.json files -->
                             </select>
+                            <p class="muted small" id="lang-version-info"></p>
+                        </div>
+                        <div class="form-actions" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+                            <button type="button" class="primary small" data-action="save-ui-settings" data-i18n="save">💾 Enregistrer</button>
+                            <span class="setting-result" id="ui-settings-status"></span>
                         </div>
                     </section>
 
-                    <!-- Meeting License Section -->
+                    <!-- Security Section -->
                     <section class="panel settings-section">
+                        <header>
+                            <h3 data-i18n="settings_security_title">🔒 Sécurité</h3>
+                        </header>
+                        <div class="form-group checkbox-group" title="Autoriser l'exécution de commandes shell via l'interface">
+                            <label for="conf-sec-allow-run" data-i18n="settings_allow_run">Allow Run Command</label>
+                            <input type="checkbox" id="conf-sec-allow-run" name="sec_allow_run" />
+                            <p class="muted small" data-i18n="settings_allow_run_hint">Autoriser l'exécution de commandes shell via l'interface.</p>
+                        </div>
+                        <div class="form-group" title="Niveau de log global">
+                            <label for="conf-log-level" data-i18n="settings_log_level_label">Log Level</label>
+                            <select id="conf-log-level" name="log_level">
+                                <option value="DEBUG">DEBUG</option>
+                                <option value="INFO" selected>INFO</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="ERROR">ERROR</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                            </select>
+                            <p class="muted small" data-i18n="settings_log_level_hint">Niveau de verbosité des logs (DEBUG = plus détaillé).</p>
+                        </div>
+                        <div class="form-group" title="Chemin du fichier de log">
+                            <label for="conf-log-path" data-i18n="settings_log_path_label">Log File Path</label>
+                            <input type="text" id="conf-log-path" name="log_path" placeholder="logs/jupiter.log" />
+                            <p class="muted small" data-i18n="settings_log_path_hint">Destination file for logs (leave empty to disable file output).</p>
+                        </div>
+                        <div class="form-group checkbox-group" title="Réinitialiser le fichier log à chaque démarrage">
+                            <label for="conf-log-reset" data-i18n="settings_log_reset_label">Reset log on startup</label>
+                            <input type="checkbox" id="conf-log-reset" name="log_reset_on_start" checked />
+                            <p class="muted small" data-i18n="settings_log_reset_hint">If checked, log file is cleared on each startup. Otherwise, a separator is added.</p>
+                        </div>
+                        <div class="form-actions" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+                            <button type="button" class="primary small" data-action="save-security-settings" data-i18n="save">💾 Enregistrer</button>
+                            <span class="setting-result" id="security-settings-status"></span>
+                        </div>
+                    </section>
+
+                    <!-- User Management Section -->
+                    <section class="panel settings-section settings-section-wide">
+                        <header>
+                            <h3 data-i18n="settings_users_title">👥 Utilisateurs</h3>
+                        </header>
+                        <div class="table-wrapper">
+                            <table aria-label="Utilisateurs" class="users-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="settings_users_name">Nom</th>
+                                        <th data-i18n="settings_users_token">Token</th>
+                                        <th data-i18n="settings_users_role">Rôle</th>
+                                        <th data-i18n="settings_users_actions">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+                            <h4 class="small muted" data-i18n="settings_users_add">➕ Ajouter un utilisateur</h4>
+                            <div class="user-form-row" style="display: grid; grid-template-columns: 1fr 1fr 100px auto; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
+                                <input type="text" id="new-user-name" placeholder="Nom d'utilisateur" />
+                                <input type="text" id="new-user-token" placeholder="Token d'accès" />
+                                <select id="new-user-role">
+                                    <option value="viewer">Viewer</option>
+                                    <option value="editor">Editor</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                                <button type="button" class="primary small" data-action="add-user" title="Ajouter">➕</button>
+                            </div>
+                        </div>
+                    </section>
+                    </form>
+
+                    <!-- Dynamic Plugin Settings - populated by plugins with settings UI -->
+                    <div id="plugin-settings-container" class="plugin-settings-container"></div>
+                  </div>
+                  
+                  <!-- Right column: Meeting License (separate, full height) -->
+                  <div class="settings-meeting-column">
+                    <!-- Meeting License Section -->
+                    <section class="panel settings-section meeting-license-panel">
                         <header>
                             <h3 data-i18n="settings_meeting_title">🔐 Licence Meeting</h3>
                         </header>
@@ -730,88 +940,51 @@ api:
                             <p class="muted small" data-i18n="meeting_heartbeat_hint">Fréquence d'envoi des signaux de présence à Meeting.</p>
                         </div>
                         <div class="form-group" style="margin-top: 1rem;">
-                            <button type="button" class="secondary" data-action="check-meeting-license" data-i18n="meeting_check_btn">🔄 Vérifier la licence</button>
+                            <button type="button" class="primary" data-action="save-meeting-settings" data-i18n="meeting_save_btn">💾 Enregistrer</button>
+                            <button type="button" class="secondary" data-action="check-meeting-license" data-i18n="meeting_check_btn" style="margin-left: 0.5rem;">🔄 Vérifier</button>
                         </div>
-                        <div class="meeting-status-box" style="margin-top: 1rem; padding: 1rem; background: var(--bg-subtle); border-radius: var(--radius); border: 1px solid var(--border);">
-                            <h4 class="small" data-i18n="meeting_last_response_title">Dernière réponse Meeting</h4>
-                            <p class="small muted" id="meeting-last-check"></p>
-                            <pre id="meeting-last-response" class="code-block" style="max-height: 150px; overflow: auto; font-size: 0.75rem; margin-top: 0.5rem;"></pre>
-                        </div>
-                    </section>
-
-                    <!-- Performance Section (New) -->
-                    <section class="panel settings-section">
-                        <header>
-                            <h3 data-i18n="settings_perf_title">Performance</h3>
-                        </header>
-                        <div class="form-group checkbox-group">
-                            <label for="conf-perf-parallel">Parallel Scan</label>
-                            <input type="checkbox" id="conf-perf-parallel" name="perf_parallel_scan" />
-                        </div>
-                        <div class="form-group">
-                            <label for="conf-perf-workers">Max Workers (0 = Auto)</label>
-                            <input type="number" id="conf-perf-workers" name="perf_max_workers" />
-                        </div>
-                        <div class="form-group">
-                            <label for="conf-perf-timeout">Scan Timeout (sec)</label>
-                            <input type="number" id="conf-perf-timeout" name="perf_scan_timeout" />
-                        </div>
-                        <div class="form-group checkbox-group">
-                            <label for="conf-perf-graph-simple">Graph Simplification</label>
-                            <input type="checkbox" id="conf-perf-graph-simple" name="perf_graph_simplification" />
-                        </div>
-                        <div class="form-group">
-                            <label for="conf-perf-graph-nodes">Max Graph Nodes</label>
-                            <input type="number" id="conf-perf-graph-nodes" name="perf_max_graph_nodes" />
-                        </div>
-                    </section>
-
-                    <!-- Security Section (New) -->
-                    <section class="panel settings-section">
-                        <header>
-                            <h3 data-i18n="settings_security_title">Sécurité</h3>
-                        </header>
-                        <div class="form-group checkbox-group" title="Autoriser l'exécution de commandes shell via l'interface">
-                            <label for="conf-sec-allow-run">Allow Run Command</label>
-                            <input type="checkbox" id="conf-sec-allow-run" name="sec_allow_run" />
-                        </div>
-                    </section>
-                    
-                    <!-- User Management Section -->
-                    <section class="panel settings-section">
-                        <header>
-                            <h3 data-i18n="settings_users_title">Utilisateurs</h3>
-                        </header>
-                        <div class="table-wrapper">
-                            <table aria-label="Utilisateurs">
-                                <thead>
-                                    <tr>
-                                        <th data-i18n="settings_users_name">Nom</th>
-                                        <th data-i18n="settings_users_role">Rôle</th>
-                                        <th data-i18n="settings_users_actions">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="users-table-body"></tbody>
-                            </table>
-                        </div>
-                        <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
-                            <h4 class="small muted" data-i18n="settings_users_add">Ajouter un utilisateur</h4>
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                <input type="text" id="new-user-name" placeholder="Nom" style="flex: 1;" />
-                                <input type="text" id="new-user-token" placeholder="Token" style="flex: 1;" />
-                                <select id="new-user-role" style="width: 100px;">
-                                    <option value="viewer">Viewer</option>
-                                    <option value="editor">Editor</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                                <button type="button" class="primary small" data-action="add-user">+</button>
+                        
+                        <!-- License Details Section -->
+                        <div class="license-details-box" style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-subtle); border-radius: var(--radius); border: 1px solid var(--border);">
+                            <h4 class="small" style="margin-bottom: 0.75rem;" data-i18n="license_details_title">📋 License Details</h4>
+                            <div class="license-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                                <div>
+                                    <p class="small muted" data-i18n="license_status">Status</p>
+                                    <p class="small" id="license-detail-status">—</p>
+                                </div>
+                                <div>
+                                    <p class="small muted" data-i18n="license_authorized">Authorized</p>
+                                    <p class="small" id="license-detail-authorized">—</p>
+                                </div>
+                                <div>
+                                    <p class="small muted" data-i18n="license_device_type">Device Type</p>
+                                    <p class="small" id="license-detail-device-type">—</p>
+                                </div>
+                                <div>
+                                    <p class="small muted" data-i18n="license_token_count">Token Count</p>
+                                    <p class="small" id="license-detail-token-count">—</p>
+                                </div>
+                                <div>
+                                    <p class="small muted" data-i18n="license_checked_at">Last Checked</p>
+                                    <p class="small" id="license-detail-checked-at">—</p>
+                                </div>
+                                <div>
+                                    <p class="small muted" data-i18n="license_http_status">HTTP Status</p>
+                                    <p class="small" id="license-detail-http-status">—</p>
+                                </div>
+                                <div style="grid-column: 1 / -1;">
+                                    <p class="small muted" data-i18n="license_meeting_url">Meeting URL</p>
+                                    <p class="small mono" id="license-detail-meeting-url">—</p>
+                                </div>
+                                <div style="grid-column: 1 / -1;">
+                                    <p class="small muted" data-i18n="license_message">Message</p>
+                                    <p class="small" id="license-detail-message">—</p>
+                                </div>
                             </div>
                         </div>
                     </section>
-                </form>
-
-                <!-- Dynamic Plugin Settings - populated by plugins with settings UI -->
-                <div id="plugin-settings-container" class="plugin-settings-container"></div>
+                  </div>
+                </div>
             </div>
           </section>
 
@@ -907,6 +1080,38 @@ api:
                 </div>
                 <div class="form-actions" style="margin-top: 0.75rem;">
                   <button class="primary small" data-action="save-project-api" data-i18n="project_api_save">Enregistrer</button>
+                </div>
+              </div>
+
+              <!-- Performance Section (Project-specific) -->
+              <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                <h4 class="small" style="margin-bottom: 0.75rem;" data-i18n="settings_perf_title">⚡ Performance</h4>
+                <p class="muted small" style="margin-bottom: 1rem;" data-i18n="project_perf_hint">Paramètres de performance pour ce projet.</p>
+                <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+                  <div class="form-group checkbox-group">
+                    <label for="conf-perf-parallel" data-i18n="perf_parallel_scan">Parallel Scan</label>
+                    <input type="checkbox" id="conf-perf-parallel" name="perf_parallel_scan" />
+                  </div>
+                  <div class="form-group">
+                    <label for="conf-perf-workers" data-i18n="perf_max_workers">Max Workers (0 = Auto)</label>
+                    <input type="number" id="conf-perf-workers" name="perf_max_workers" min="0" />
+                  </div>
+                  <div class="form-group">
+                    <label for="conf-perf-timeout" data-i18n="perf_scan_timeout">Scan Timeout (sec)</label>
+                    <input type="number" id="conf-perf-timeout" name="perf_scan_timeout" min="10" />
+                  </div>
+                  <div class="form-group checkbox-group">
+                    <label for="conf-perf-graph-simple" data-i18n="perf_graph_simplification">Graph Simplification</label>
+                    <input type="checkbox" id="conf-perf-graph-simple" name="perf_graph_simplification" />
+                  </div>
+                  <div class="form-group">
+                    <label for="conf-perf-graph-nodes" data-i18n="perf_max_graph_nodes">Max Graph Nodes</label>
+                    <input type="number" id="conf-perf-graph-nodes" name="perf_max_graph_nodes" min="10" />
+                  </div>
+                </div>
+                <div class="form-actions" style="margin-top: 0.75rem;">
+                  <button class="primary small" data-action="save-project-perf" data-i18n="save">💾 Enregistrer</button>
+                  <span class="setting-result" id="project-perf-status"></span>
                 </div>
               </div>
             </section>
@@ -1017,10 +1222,22 @@ api:
               <span data-i18n="scan_opt_inc">Scan incrémental</span>
               <input type="checkbox" id="scan-incremental" />
             </label>
+            <label class="scan-toggle" for="scan-no-cache">
+              <span data-i18n="scan_opt_no_cache">Ignorer le cache</span>
+              <input type="checkbox" id="scan-no-cache" />
+            </label>
+            <label class="scan-toggle" for="scan-no-snapshot">
+              <span data-i18n="scan_opt_no_snapshot">Ne pas créer de snapshot</span>
+              <input type="checkbox" id="scan-no-snapshot" />
+            </label>
           </div>
           <div class="form-group scan-ignore-field">
             <label for="scan-ignore" data-i18n="scan_opt_ignore">Ignorer (glob patterns, séparés par virgule)</label>
             <input type="text" id="scan-ignore" placeholder="*.log, temp/*" />
+          </div>
+          <div class="form-group">
+            <label for="scan-snapshot-label" data-i18n="scan_opt_snapshot_label">Label du snapshot (optionnel)</label>
+            <input type="text" id="scan-snapshot-label" placeholder="e.g. v1.0, before-refactor" />
           </div>
         </div>
         <footer>

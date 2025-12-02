@@ -10,12 +10,18 @@ Jupiter is a modular tool designed to scan, analyze, and observe software projec
 *   **Dynamic Analysis**: Trace function calls during execution to find dead code.
 *   **Incremental Scanning**: Fast re-scans using caching.
 *   **Snapshot History**: Automatically persist each scan, label important milestones, and diff snapshots via CLI/API/UI.
-*   **Live Map**: Interactive dependency graph combining static structure, hotspots, and dynamic usage.
+*   **Live Map Plugin**: Interactive dependency graph combining static structure, hotspots, and dynamic usage. Now a full plugin with sidebar view, contextual help panel, configurable settings, and improved import resolution for JS/TS.
+*   **Plugin Watchdog**: Developer-oriented system plugin that monitors plugin files for changes and triggers automatic hot-reloads without restarting Jupiter. Configurable check interval and per-plugin reload tracking.
+*   **Plugin Bridge**: Core services gateway that decouples plugins from Jupiter internals. Provides stable, versioned API access to scanning, caching, events, configuration, and history services. Enables future-proof plugin development.
 *   **Polyglot Support**: First-class support for Python and JS/TS projects.
 *   **Pylance Diagnostics**: Pyright-powered analysis in the Pylance view now explains when no Python files are present, avoiding misleading “no data” states on polyglot repos.
 *   **Simulation**: Impact analysis when virtually removing a file or function.
 *   **Project API Connectors**: OpenAPI connector to inspect your own project's HTTP API.
 *   **Web Interface**: Visual dashboard for exploring your project.
+*   **CI / Quality Gates View (v1.2.0)**: Complete quality gates workflow in the WebUI with configurable thresholds, metrics display, violations list, and CI history.
+*   **Advanced Scan Options (v1.2.0)**: Skip cache, disable snapshot, custom snapshot labels from the scan modal.
+*   **Snapshot Detail View (v1.2.0)**: View full snapshot summary and export individual snapshots as JSON.
+*   **License Details Panel (v1.2.0)**: Complete Meeting license info in Settings with refresh capability.
 *   **Plugins & Webhooks**: Extensible plugin architecture with webhook notifications.
 *   **Notification Center**: Global toast popups surface plugin alerts (including the API connectivity event) and webhook messages directly inside the Web UI.
 *   **Manual Duplicate Linking**: Merge overlapping duplication clusters directly from the Code Quality plugin UI; linked definitions live in `.jupiter/manual_duplication_links.json` and can be rechecked on demand.
@@ -27,6 +33,8 @@ Jupiter is a modular tool designed to scan, analyze, and observe software projec
 *   **Multi-Project Management**: Manage multiple projects with distinct configurations and switch between them easily.
 *   **Projects Control Center**: Dedicated Web UI dashboard to view the active project, key stats, and manage configured roots in one place.
 *   **AI Suggestions Evidence**: Duplication recommendations now surface the exact file/line, nearest function, and a code excerpt inside reports and the Suggestions tab.
+*   **Dynamic Multilingual UI (v1.3.0)**: Fully dynamic i18n system with automatic language detection and version tracking. The language selector auto-populates with available translations, each file exposing its own version via `_meta` metadata.
+*   **Fun Language Packs (v1.3.0)**: Beyond French and English, the Web UI now ships with three fun translations—Klingon 🖖, Sindarin/Elvish 🧝, and Pirate French 🏴‍☠️—for entertainment and community enjoyment.
 
 ## Quick Start
 
@@ -125,6 +133,12 @@ See [Manual.md](Manual.md) for detailed configuration.
 
 ## Release Notes
 
+- **1.8.1** – Live Map Plugin: migrated from core to plugin architecture with sidebar view, help panel, and settings. Plugin Watchdog: new system plugin for auto-reloading modified plugins during development. Comprehensive logging for livemap debugging.
+- **1.3.3** – Settings Save Fix: Added `PATCH /config` endpoint for partial config updates. Fixed Code Quality plugin Save button (JS was not executing when injected via innerHTML).
+- **1.3.2** – Log Level Setting Restored: the global log level dropdown was accidentally removed in v1.3.1 and is now back in the Security section of Settings.
+- **1.3.1** – Settings UX Refactor: each section (Network, Interface, Security) now has its own Save button. Performance settings moved to Projects view. Fixed Code Quality plugin config save and project API restoration on startup.
+- **1.3.0** – Dynamic i18n: language selector auto-detects available translations with versioned `_meta` metadata. Adds 3 fun language packs: Klingon, Elvish, and Pirate French. Full translation audit with 729 keys in perfect French/English parity.
+- **1.2.1** – Settings UX Improvements & User Management.
 - **1.1.12** – La page Settings adopte une grille deux colonnes avec carte "Mise à jour" dédiée, les panneaux plugins (Notifications & Code Quality) reçoivent une UI plus claire avec états de sauvegarde, et leurs paramètres sont maintenant persistés dans la configuration globale/projet.
 - **1.1.11** – La vue Qualité est désormais intégrée dans l'onglet *Dashboard* du plugin Code Quality (tableaux complexité/duplication + export), avec un panneau de paramètres revu et plus descriptif.
 - **1.1.10** – Internal deduplication: shared helpers now drive CLI scan/analyze setup, server snapshot handling, and project UI mutations to reduce drift.

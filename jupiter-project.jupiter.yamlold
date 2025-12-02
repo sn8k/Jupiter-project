@@ -1,0 +1,31 @@
+# Jupiter Project Configuration
+# Project-specific settings only
+# Global settings (server, gui, meeting, ui, security, plugins, users, logging)
+# are stored in global_config.yaml
+
+api:
+  type: openapi
+  openapi_url: /openapi.json
+  base_url: null
+  path: null
+  connector: null
+  app_var: null
+
+backends: []
+
+ci:
+  fail_on: {}
+
+performance:
+  parallel_scan: true
+  max_workers: null
+  scan_timeout: 300
+  large_file_threshold: 1048576
+  max_graph_nodes: 1000
+  graph_simplification: false
+  excluded_dirs:
+    - node_modules
+    - venv
+    - .venv
+    - dist
+    - build

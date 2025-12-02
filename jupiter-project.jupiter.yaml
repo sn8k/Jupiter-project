@@ -1,19 +1,27 @@
 api:
   app_var: null
   base_url: null
-  connector: null
+  connector: local
   openapi_url: /openapi.json
   path: null
   type: openapi
-backends: []
+autodiag:
+  collect_runtime_stats: false
+  enabled: true
+  introspect_api: true
+  port: 8081
+  validate_handlers: true
+backends:
+- api_url: null
+  name: local
+  path: .
+  type: local_fs
 ci:
   fail_on: {}
-gui:
-  host: 127.0.0.1
-  port: 8050
 logging:
-  level: DEBUG
-  path: ./testlogs.log
+  level: INFO
+  path: logs/jupiter.log
+  reset_on_start: true
 performance:
   excluded_dirs:
   - node_modules
@@ -21,25 +29,11 @@ performance:
   - .venv
   - dist
   - build
-  graph_simplification: false
+  - tests
+  - docs
+  graph_simplification: true
   large_file_threshold: 1048576
   max_graph_nodes: 1000
   max_workers: null
   parallel_scan: true
   scan_timeout: 300
-plugins:
-  disabled: []
-  enabled: []
-security:
-  allow_run: true
-  allowed_commands: []
-server:
-  host: 127.0.0.1
-  port: 8000
-ui:
-  language: en
-  theme: dark
-users:
-- name: sn8k
-  role: admin
-  token: Luka2013

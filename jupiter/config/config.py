@@ -1,4 +1,8 @@
-"""Configuration loading and models for Jupiter."""
+"""
+Configuration loading and models for Jupiter.
+
+Version: 1.3.0
+"""
 
 from __future__ import annotations
 
@@ -75,10 +79,17 @@ class PluginsConfig:
 
 @dataclass
 class LoggingConfig:
-    """Configuration for logging."""
+    """Configuration for logging.
+    
+    Attributes:
+        level: Log verbosity level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+        path: Log file destination path.
+        reset_on_start: If True, delete log file on startup. If False, add separator.
+    """
 
     level: str = "INFO"
-    path: Optional[str] = None
+    path: Optional[str] = "logs/jupiter.log"  # Default log file path
+    reset_on_start: bool = True  # Clear log file on each startup
 
 
 @dataclass
@@ -184,6 +195,24 @@ class ProjectApiConfig:
 
 
 @dataclass
+class AutodiagConfig:
+    """Configuration for the autodiag dual-port architecture (Phase 3).
+    
+    Attributes:
+        enabled: Whether autodiag server is enabled.
+        port: Port for autodiag API (localhost only).
+        introspect_api: Enable API introspection endpoint.
+        validate_handlers: Enable handler validation endpoint.
+        collect_runtime_stats: Enable runtime statistics collection.
+    """
+    enabled: bool = True  # Enabled by default for self-diagnosis
+    port: int = 8081
+    introspect_api: bool = True
+    validate_handlers: bool = True
+    collect_runtime_stats: bool = False
+
+
+@dataclass
 class JupiterConfig:
     """Global configuration."""
 
@@ -199,6 +228,7 @@ class JupiterConfig:
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     backends: list[ProjectBackendConfig] = field(default_factory=list)
     project_api: Optional[ProjectApiConfig] = None
+    autodiag: AutodiagConfig = field(default_factory=AutodiagConfig)
     project_root: Path = field(default_factory=Path.cwd)
 
     @classmethod
@@ -238,9 +268,11 @@ class JupiterConfig:
         performance_data = data.get("performance", {})
         backends_data = data.get("backends", [])
         project_api_data = data.get("api") or data.get("project_api")
+        autodiag_data = data.get("autodiag", {})
 
         backends = [ProjectBackendConfig(**b) for b in backends_data]
         project_api = ProjectApiConfig(**project_api_data) if project_api_data else None
+        autodiag = AutodiagConfig(**autodiag_data) if autodiag_data else AutodiagConfig()
 
         return cls(
             server=ServerConfig(**server_data),
@@ -255,6 +287,7 @@ class JupiterConfig:
             performance=PerformanceConfig(**performance_data),
             backends=backends,
             project_api=project_api,
+            autodiag=autodiag,
         )
 
 

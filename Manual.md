@@ -68,20 +68,24 @@ Les commandes suivantes sont disponibles pour un usage avancé ou scripté :
 - Chaque `scan` lancé par la CLI, l'API ou la GUI crée par défaut un fichier dans `.jupiter/snapshots/scan-*.json` contenant le rapport complet et des métadonnées (racine, nombre de fichiers, fonctions détectées, etc.).
 
 ## Logging paramétrable (Nouveau)
-- L'onglet **Settings** expose désormais un champ **Log Level** (Debug, Info, Warning, Error, Critic) appliqué au serveur FastAPI, à Uvicorn et à la CLI.
+- L'onglet **Settings** expose désormais un champ **Log Level** (Debug, Info, Warning, Error, Critical) appliqué au serveur FastAPI, à Uvicorn et à la CLI.
+- **(v1.3.2)** Ce paramètre a été rattaché à la section **Sécurité** de la page Settings et se sauvegarde avec le bouton Save de cette section.
 - La valeur est stockée dans `logging.level` du fichier `<projet>.jupiter.yaml` (sauvegarde automatique via l'UI).
 - Le filtre de logs du tableau de bord utilise la même valeur pour rester cohérent avec la verbosité active.
 - Un champ **Chemin du fichier log** permet de définir la destination du fichier (laisser vide pour désactiver l'écriture fichier).
 - Tous les plugins embarqués respectent désormais ce niveau : en mode INFO ils résument les actions (scan, webhooks, suggestions) et en mode DEBUG ils journalisent les payloads complets pour faciliter l'investigation.
 
 ## Paramètres plugins persistants (Nouveau)
-- La page **Settings** a été réorganisée en deux colonnes : la grille principale rassemble Réseau/UI/Meeting/Performance/Sécurité/Utilisateurs tandis que la colonne latérale conserve la carte **Mise à jour** et ses actions.
+- La page **Settings** est organisée en deux colonnes :
+  - **Colonne gauche** : Réseau, Interface, Sécurité, Utilisateurs
+  - **Colonne droite** : Meeting License (dimensions réduites pour de meilleures proportions)
+- **Boutons Save par section** (v1.3.1) : Chaque section dispose de son propre bouton de sauvegarde, permettant de modifier et enregistrer uniquement les paramètres concernés.
 - Les sections dynamiques injectées par les plugins (Notifications, Code Quality, etc.) apparaissent immédiatement sous le layout principal dans des cartes dédiées (`plugin-settings-card`).
 - Chaque panneau plugin tire désormais sa configuration depuis le registre global/projet (`~/.jupiter/global_config.yaml` + `<projet>.jupiter.yaml`) et réécrit automatiquement les valeurs lors des sauvegardes.
 - Les boutons **Save** exposent un indicateur d'état (en cours, succès, erreur) pour confirmer la prise en compte de la configuration sans quitter la page.
 - Lorsque vous changez de projet, les panneaux sont vidés, rechargés et resynchronisés avec les paramètres réellement stockés afin d'éviter les résidus d'UI.
 
-## Configuration de la Sécurité
+## Gestion des Utilisateurs
 
 Jupiter supporte un mode multi-utilisateurs simple via des tokens d'accès.
 
@@ -96,15 +100,36 @@ users:
   - name: "dev"
     token: "dev-secret"
     role: "viewer"
-
-security:
-  # Token unique (Legacy - déprécié)
-  token: "mon-secret-admin"
 ```
 
 ### Rôles
 - **admin** : Accès complet (scan, run, config, update, gestion utilisateurs).
 - **viewer** : Accès en lecture seule (voir les rapports, graphiques, fichiers).
+
+### Interface Web (Settings > Utilisateurs)
+
+La section Utilisateurs permet de gérer les comptes directement depuis l'interface :
+
+- **Tableau des utilisateurs** : Affiche nom, token (masqué), rôle et actions
+- **Actions disponibles** :
+  - ✏️ **Éditer** : Passe la ligne en mode édition avec champs input
+  - 💾 **Sauvegarder** : Enregistre les modifications via `PUT /users/{name}`
+  - ❌ **Annuler** : Annule les modifications en cours
+  - 🗑️ **Supprimer** : Supprime l'utilisateur (confirmation requise)
+- **Affichage du token** : Bouton 👁️ pour afficher/masquer le token en clair
+- **Changement de rôle** : Dropdown pour basculer entre admin et viewer
+
+### Section Interface
+
+La section Interface regroupe les paramètres d'affichage et les options de sécurité :
+
+- **Thème** : Choix entre Dark et Light
+- **Langue** : Sélection dynamique parmi toutes les traductions disponibles
+  - Langues standards : Français, English
+  - Langues fun : Klingon 🖖, Sindarin/Elfique 🧝, Pirate français 🏴‍☠️
+  - Chaque traduction affiche sa version (ex: `Français (v1.0.0)`)
+  - Les fichiers de langue sont situés dans `jupiter/web/lang/*.json`
+- **Autoriser les commandes** : Active/désactive l'exécution de commandes shell (toggle déplacé depuis l'ancienne section Sécurité)
 
 ## Licence Meeting / DeviceKey Jupiter
 
@@ -200,15 +225,16 @@ La page Paramètres de l'interface web inclut une section dédiée à la gestion
   - 🟣 Violet : Erreur de configuration
 
 - **Champs de configuration** :
-  - Activer/Désactiver Meeting
   - Device Key (clé d'identification)
   - Auth Token (optionnel, si requis par l'API)
+  - Heartbeat Interval (intervalle en secondes)
+
+- **Détails de la licence** : Grille affichant les informations retournées par l'API Meeting :
+  - Type de licence, Statut, Device Key, Session ID, Expiration, Fonctionnalités
 
 - **Actions** :
-  - **Vérifier la licence** : Force une nouvelle vérification auprès de l'API Meeting
-  - **Actualiser** : Rafraîchit l'affichage du statut actuel
-
-- **Dernière réponse** : Affiche les détails bruts de la dernière réponse de l'API Meeting (status, authorized, device_type, token_count, etc.)
+  - **🔄 Vérifier** : Force une nouvelle vérification auprès de l'API Meeting
+  - **💾 Sauvegarder** : Enregistre les modifications de configuration Meeting
 
 ### Démarrage du Serveur
 
@@ -256,14 +282,18 @@ Pour les projets contenant des milliers de fichiers, Jupiter propose des options
 - **Scan parallèle** : Activé par défaut, utilise plusieurs threads pour accélérer la lecture des fichiers.
 - **Mode Performance** : Utilisez le flag `--perf` avec `scan` ou `analyze` pour afficher des métriques de temps d'exécution détaillées.
 - **Simplification du Graphe** : La Live Map simplifie automatiquement le graphe (regroupement par dossier) si le nombre de nœuds dépasse un seuil (défaut: 1000).
-- **Configuration** : Ajustez les paramètres dans `<projet>.jupiter.yaml` sous la section `performance` :
+- **Configuration UI** : Dans la page **Projets**, section "⚡ Performance" du projet actif, ajustez les paramètres directement via l'interface Web.
+- **Configuration YAML** : Ajustez les paramètres dans `<projet>.jupiter.yaml` sous la section `performance` :
   ```yaml
   performance:
     parallel_scan: true
     max_workers: 8
+    scan_timeout: 300
     graph_simplification: true
     max_graph_nodes: 1000
   ```
+
+> **Note (v1.3.1)** : Les paramètres de performance ont été déplacés de la page Settings vers la page Projets car ils sont spécifiques au projet actif.
 
 ### Intégration CI/CD
 Jupiter peut être intégré dans vos pipelines CI/CD pour garantir la qualité du code.
@@ -283,6 +313,130 @@ Commande CI :
 jupiter ci --json
 ```
 Si un seuil est dépassé, la commande retourne un code d'erreur `1`, ce qui bloquera le pipeline.
+
+## Autodiagnostic (Nouveau v1.6.0, v1.7.0)
+
+Jupiter peut s'analyser lui-même pour détecter les faux positifs dans la détection des fonctions inutilisées.
+
+### Architecture Dual-Port
+
+Lorsque activé, Jupiter lance deux serveurs :
+- **Port principal** (ex: 8000) : API publique normale
+- **Port autodiag** (ex: 8081) : API de diagnostic, accessible uniquement depuis localhost
+
+Cette séparation garantit que les endpoints d'introspection ne sont jamais exposés sur le réseau.
+
+### Configuration
+
+```yaml
+# <projet>.jupiter.yaml
+autodiag:
+  enabled: true           # Active le serveur autodiag
+  port: 8081              # Port localhost uniquement
+  introspect_api: true    # Active /diag/introspect
+  validate_handlers: true # Active /diag/validate-unused
+  collect_runtime_stats: false  # Statistiques runtime (optionnel)
+```
+
+### Commande CLI (v1.7.0)
+
+```bash
+# Lancer l'autodiagnostic complet
+python -m jupiter.cli.main autodiag
+
+# Sortie JSON pour intégration CI/CD
+python -m jupiter.cli.main autodiag --json
+
+# Sauter certains scénarios (plus rapide)
+python -m jupiter.cli.main autodiag --skip-api --skip-plugins
+
+# Avec timeout personnalisé
+python -m jupiter.cli.main autodiag --timeout 60
+```
+
+Options disponibles :
+- `--json` : Sortie au format JSON
+- `--api-url` : URL de l'API principale (défaut: http://localhost:8000)
+- `--diag-url` : URL de l'API diag (défaut: http://127.0.0.1:8081)
+- `--skip-cli` : Ignorer les tests CLI
+- `--skip-api` : Ignorer les tests API
+- `--skip-plugins` : Ignorer les tests plugins
+- `--timeout` : Timeout par scénario en secondes (défaut: 30)
+
+### Endpoints Autodiag
+
+Tous les endpoints sont préfixés par `/diag/` et accessibles sur le port autodiag :
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /diag/introspect` | Liste toutes les routes de l'API principale |
+| `GET /diag/handlers` | Agrège les handlers (API, CLI, plugins) |
+| `GET /diag/functions` | Fonctions avec scores de confiance |
+| `POST /diag/validate-unused` | Valide si des fonctions sont vraiment inutilisées |
+| `POST /diag/run` | Lance un autodiag complet (v1.7.0) |
+| `GET /diag/stats` | Statistiques runtime (uptime, mémoire) |
+| `GET /diag/health` | Health check du serveur autodiag |
+
+### Score de Confiance (v1.5.0+)
+
+Chaque fonction analysée reçoit un score de confiance (0.0 à 1.0) :
+
+| Statut | Confiance | Signification |
+|--------|-----------|---------------|
+| `USED` | 1.0 | Appelée directement dans le code |
+| `LIKELY_USED` | 0.85-0.95 | Décorateur framework, enregistrement dynamique |
+| `POSSIBLY_UNUSED` | 0.50-0.65 | Privée ou publique, avec/sans documentation |
+| `UNUSED` | 0.75 | Aucun usage détecté |
+
+### Exemple d'utilisation
+
+```bash
+# Démarrer Jupiter avec autodiag activé
+python -m jupiter.cli.main server
+
+# Depuis un autre terminal (localhost uniquement)
+curl http://127.0.0.1:8081/diag/handlers
+curl http://127.0.0.1:8081/diag/functions
+
+# Lancer un autodiag via l'API
+curl -X POST "http://127.0.0.1:8081/diag/run?skip_cli=true"
+```
+
+### Vue CI dans la WebUI (v1.2.0)
+
+L'interface web expose désormais une vue CI complète accessible via le bouton 🚦 CI dans la barre de navigation :
+
+- **Lancer un contrôle CI** : Bouton pour exécuter les quality gates avec les seuils configurés
+- **Métriques en temps réel** : Affichage de la complexité moyenne, lignes max par fonction, couverture doc et duplications
+- **Violations détaillées** : Liste des règles non respectées avec fichier et message
+- **Historique des runs** : Tableau chronologique des passages CI (pass/fail, nombre de violations)
+- **Configuration des seuils** : Panneau de configuration avec sauvegarde locale (localStorage)
+- **Export du rapport** : Export JSON complet de l'historique CI
+
+Les seuils configurés dans l'UI sont appliqués lors de l'appel à `POST /ci` (nouveau endpoint API).
+
+### Options de scan avancées (v1.2.0)
+
+Le modal de scan expose désormais des options supplémentaires :
+
+- **Skip cache** : Force un scan complet en ignorant le cache incrémental
+- **Don't save snapshot** : Désactive la création automatique de snapshot
+- **Snapshot label** : Champ texte pour nommer le snapshot (ex: "avant-refactoring")
+
+### Vue détaillée des snapshots (v1.2.0)
+
+Dans la vue Historique, chaque snapshot dispose de boutons :
+
+- **View** : Ouvre un panneau latéral avec résumé (fichiers, fonctions, lignes, timestamp, label)
+- **Export** : Télécharge le snapshot complet au format JSON
+
+### Détails de licence Meeting (v1.2.0)
+
+La page Settings > Meeting License affiche maintenant une grille complète :
+
+- Type de licence, statut (Active/Inactive), clé appareil
+- ID de session, date d'expiration, fonctionnalités activées
+- Bouton Actualiser pour rafraîchir les infos depuis l'API Meeting
 
 ## Structure actuelle
 - `jupiter/core/` : scanner, analyseur, runner, qualité, plugins.
@@ -344,6 +498,47 @@ Jupiter est extensible via des plugins.
 - **AI Helper** : Analyse le code pour suggérer des refactorings, des améliorations de documentation ou détecter des problèmes de sécurité. Les suggestions apparaissent dans l'onglet "Suggestions IA" du rapport.
   - Les alertes de duplication listent désormais précisément les fichiers et lignes concernés pour rendre le rapport actionnable (y compris dans l'export JSON des suggestions).
   - Chaque duplication inclut aussi le nom de la fonction la plus proche et un extrait du bloc concerné pour que vous sachiez immédiatement quoi refactorer.
+- **Live Map** : Graphe de dépendances interactif (D3.js) montrant les relations d'import entre fichiers.
+  - Mode simplifié : regroupe les fichiers par dossier pour les grands projets
+  - Options configurables : distance des liens, force de répulsion, nombre max de nœuds
+  - Panneau d'aide contextuel et légende des couleurs
+- **Plugin Watchdog** (v1.8.1) : Outil de développement pour le rechargement automatique des plugins.
+  - Surveille les fichiers dans `jupiter/plugins/` pour détecter les modifications
+  - Recharge automatiquement les plugins modifiés sans redémarrer Jupiter
+  - Idéal pendant le développement de plugins pour itérer rapidement
+  - Configurable dans Paramètres > Plugins > Plugin Watchdog :
+    - Activer/désactiver la surveillance
+    - Intervalle de vérification (0.5-10 secondes)
+    - Rechargement automatique ou notification seule
+  - Affiche le statut : fichiers surveillés, nombre de rechargements, dernier rechargement
+  - Désactivé par défaut (opt-in pour le développement)
+- **Plugin Bridge** (nouveau v1.8.2) : Passerelle de services centraux pour les plugins.
+  - Fournit une API stable et versionnée entre les plugins et le cœur de Jupiter
+  - Découple les plugins des modules internes pour une architecture future-proof
+  - **Services intégrés** :
+    - `events` : Émission et création d'événements Jupiter
+    - `config` : Accès à la configuration (projet, plugins)
+    - `scanner` : Opérations de scan de fichiers
+    - `cache` : Gestion du cache des rapports
+    - `history` : Gestion des snapshots et diff
+    - `logging` : Création de loggers structurés
+  - **Système de capacités** :
+    - Les services déclarent leurs capacités de manière déclarative
+    - Recherche de services par capacité
+    - Invocation générique via `bridge.invoke(capability, *args)`
+  - **Utilisation dans les plugins** :
+    ```python
+    from jupiter.plugins import get_bridge
+    
+    bridge = get_bridge()
+    if bridge:
+        scanner = bridge.get_service("scanner")
+        config = bridge.get_service("config")
+        
+        if bridge.has_capability("emit_event"):
+            bridge.invoke("emit_event", "MY_EVENT", {"data": "value"})
+    ```
+  - UI dans Paramètres > Plugins > Bridge affichant les services et capacités disponibles
 - **Refactorings internes** : les flux CLI/API et la gestion des projets côté UI réutilisent désormais des helpers partagés (options de scan, gestion d'historique, requêtes projet) pour éviter les duplications de code et réduire les risques de divergence.
 
 ## Configuration Multi-Projets

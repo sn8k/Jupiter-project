@@ -276,6 +276,7 @@ class ConfigModel(BaseModel):
     ui_language: str
     log_level: str = "INFO"
     log_path: Optional[str] = None
+    log_reset_on_start: bool = True
     plugins_enabled: List[str]
     plugins_disabled: List[str]
     # Performance
@@ -286,6 +287,36 @@ class ConfigModel(BaseModel):
     perf_max_graph_nodes: int = 1000
     # Security
     sec_allow_run: bool = True
+    # API Inspection
+    api_connector: Optional[str] = None
+    api_app_var: Optional[str] = None
+    api_path: Optional[str] = None
+
+
+class PartialConfigModel(BaseModel):
+    """Model for partial configuration updates (PATCH)."""
+    server_host: Optional[str] = None
+    server_port: Optional[int] = None
+    gui_host: Optional[str] = None
+    gui_port: Optional[int] = None
+    meeting_device_key: Optional[str] = None
+    meeting_auth_token: Optional[str] = None
+    meeting_heartbeat_interval: Optional[int] = None
+    ui_theme: Optional[str] = None
+    ui_language: Optional[str] = None
+    log_level: Optional[str] = None
+    log_path: Optional[str] = None
+    log_reset_on_start: Optional[bool] = None
+    plugins_enabled: Optional[List[str]] = None
+    plugins_disabled: Optional[List[str]] = None
+    # Performance
+    perf_parallel_scan: Optional[bool] = None
+    perf_max_workers: Optional[int] = None
+    perf_scan_timeout: Optional[int] = None
+    perf_graph_simplification: Optional[bool] = None
+    perf_max_graph_nodes: Optional[int] = None
+    # Security
+    sec_allow_run: Optional[bool] = None
     # API Inspection
     api_connector: Optional[str] = None
     api_app_var: Optional[str] = None
@@ -362,4 +393,43 @@ class SimulateResponse(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class CIRequest(BaseModel):
+    """Request model for POST /ci endpoint."""
+    fail_on_complexity: Optional[int] = Field(
+        None, description="Override max complexity threshold"
+    )
+    fail_on_duplication: Optional[int] = Field(
+        None, description="Override max duplication clusters threshold"
+    )
+    fail_on_unused: Optional[int] = Field(
+        None, description="Override max unused functions threshold"
+    )
+    backend_name: Optional[str] = Field(
+        None, description="Backend to use for analysis"
+    )
+
+
+class CIMetrics(BaseModel):
+    """Metrics collected during CI analysis."""
+    max_complexity: int = Field(description="Maximum cyclomatic complexity found")
+    duplication_clusters: int = Field(description="Number of duplication clusters found")
+    unused_functions: int = Field(description="Number of potentially unused functions")
+
+
+class CIThresholds(BaseModel):
+    """Configured thresholds for CI quality gates."""
+    max_complexity: Optional[int] = None
+    max_duplication_clusters: Optional[int] = None
+    max_unused_functions: Optional[int] = None
+
+
+class CIResponse(BaseModel):
+    """Response model for POST /ci endpoint."""
+    status: str = Field(description="'passed' or 'failed'")
+    failures: List[str] = Field(default_factory=list, description="List of threshold violations")
+    metrics: CIMetrics
+    thresholds: CIThresholds
+    summary: Optional[Dict[str, Any]] = Field(None, description="Full analysis summary")
 

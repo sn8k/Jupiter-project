@@ -13,7 +13,7 @@ def client(tmp_path):
     app.state.root_path = tmp_path
     config = load_config(tmp_path)
     app.state.project_manager = ProjectManager(config)
-    app.state.plugin_manager = JupiterPluginManager(config.plugins)
+    app.state.plugin_manager = JupiterPluginManager(config=config.plugins)
     # Initialize history manager
     app.state.history_manager = None # Reset
     

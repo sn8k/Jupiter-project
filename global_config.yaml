@@ -2,15 +2,28 @@ gui:
   host: 127.0.0.1
   port: 8050
 logging:
-  level: INFO
-  path: null
+  level: DEBUG
+  path: logs/jupiter.log
 meeting:
   auth_token: '477266'
   deviceKey: C86015A0C19686A1C7ECE6CC7C8F4874
   heartbeat_interval_seconds: 60
 plugins:
+  code_quality:
+    complexity_threshold: 200
+    duplication_chunk_size: 6
+    enabled: true
+    include_tests: false
+    max_files: 200
   disabled: []
   enabled: []
+  livemap:
+    charge_strength: -100
+    enabled: true
+    link_distance: 60
+    max_nodes: 1000
+    show_functions: true
+    simplify: false
   notifications_webhook:
     enabled: true
     events:
@@ -19,6 +32,10 @@ plugins:
     - quality_alert
     - api_connected
     url: null
+  watchdog:
+    auto_reload: true
+    check_interval: 2
+    enabled: true
 security:
   allow_run: true
   allowed_commands: []
@@ -27,7 +44,7 @@ server:
   host: 127.0.0.1
   port: 8000
 ui:
-  language: en
+  language: fr
   theme: dark
 users:
 - name: sn8k

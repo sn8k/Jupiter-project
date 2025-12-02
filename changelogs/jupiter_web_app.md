@@ -4,7 +4,16 @@
 - Exposed `launch_web_ui` helper to start the GUI with minimal boilerplate.
 - Context payload now includes `api_base_url` (configurable via `JUPITER_API_BASE`) so the frontend can target the correct API host.
 
-# Changelog – jupiter/web/app.js (2024-12-01)
+# Changelog – jupiter/web/app.js
+
+## 2025-12-03 – Plugin Restart Protection
+
+### Changed
+- Restart button in Plugins page now checks `plugin.restartable` property
+- Plugins with `restartable = false` (like Bridge) don't show restart button
+- Preserves backward compatibility: restart button shown by default for existing plugins
+
+## 2024-12-01 – Meeting License Integration
 - Added complete Meeting license management section in Settings page.
 - New functions: `refreshMeetingStatus()`, `checkMeetingLicense()`, `updateMeetingStatusUI()`.
 - Meeting status box with colored indicators (valid=green, invalid=red, network_error=orange, config_error=purple).

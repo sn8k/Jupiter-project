@@ -36,7 +36,8 @@ def test_duplication_detection(tmp_path):
     
     dups = find_duplications([f1, f2], chunk_size=5)
     assert len(dups) > 0
-    assert len(dups[0]["occurrences"]) >= 2
+    occurrences = dups[0]["occurrences"]
+    assert isinstance(occurrences, list) and len(occurrences) >= 2
 
 def test_refactoring_recommendations(tmp_path):
     """Test that analyzer produces recommendations."""

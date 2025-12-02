@@ -1,3 +1,8 @@
+"""
+System router for Jupiter API.
+
+Version: 1.6.2
+"""
 from typing import Dict, Any, List, Optional, cast
 import inspect
 import logging
@@ -24,6 +29,7 @@ from jupiter.server.models import (
     RootUpdate,
     RootUpdateResponse,
     ConfigModel,
+    PartialConfigModel,
     RawConfigModel,
     UpdateRequest,
     FSListResponse,
@@ -115,6 +121,7 @@ async def get_config(request: Request) -> ConfigModel:
         ui_language=config.ui.language,
         log_level=normalize_log_level(config.logging.level),
         log_path=config.logging.path,
+        log_reset_on_start=config.logging.reset_on_start,
         plugins_enabled=config.plugins.enabled,
         plugins_disabled=config.plugins.disabled,
         perf_parallel_scan=config.performance.parallel_scan,
@@ -147,6 +154,7 @@ async def update_config(request: Request, new_config: ConfigModel, role: str = D
     current_config.ui.language = new_config.ui_language
     current_config.logging.level = normalize_log_level(new_config.log_level)
     current_config.logging.path = new_config.log_path
+    current_config.logging.reset_on_start = new_config.log_reset_on_start
     current_config.plugins.enabled = new_config.plugins_enabled
     current_config.plugins.disabled = new_config.plugins_disabled
     
@@ -173,6 +181,77 @@ async def update_config(request: Request, new_config: ConfigModel, role: str = D
         return new_config
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save config: {e}")
+
+
+@router.patch("/config", dependencies=[Depends(require_admin)])
+async def patch_config(request: Request, partial_config: PartialConfigModel, role: str = Depends(require_admin)) -> Dict[str, Any]:
+    """Partially update configuration. Only provided fields are updated."""
+    log_action(role, "patch_config", partial_config.dict(exclude_none=True))
+    state = SystemState(request.app)
+    current_config = state.load_effective_config()
+    
+    # Apply only the fields that are not None
+    updates = partial_config.dict(exclude_none=True)
+    
+    if "server_host" in updates:
+        current_config.server.host = updates["server_host"]
+    if "server_port" in updates:
+        current_config.server.port = updates["server_port"]
+    if "gui_host" in updates:
+        current_config.gui.host = updates["gui_host"]
+    if "gui_port" in updates:
+        current_config.gui.port = updates["gui_port"]
+    if "meeting_device_key" in updates:
+        current_config.meeting.deviceKey = updates["meeting_device_key"]
+    if "meeting_auth_token" in updates:
+        current_config.meeting.auth_token = updates["meeting_auth_token"]
+    if "meeting_heartbeat_interval" in updates:
+        current_config.meeting.heartbeat_interval_seconds = updates["meeting_heartbeat_interval"]
+    if "ui_theme" in updates:
+        current_config.ui.theme = updates["ui_theme"]
+    if "ui_language" in updates:
+        current_config.ui.language = updates["ui_language"]
+    if "log_level" in updates:
+        current_config.logging.level = normalize_log_level(updates["log_level"])
+    if "log_path" in updates:
+        current_config.logging.path = updates["log_path"]
+    if "log_reset_on_start" in updates:
+        current_config.logging.reset_on_start = updates["log_reset_on_start"]
+    if "plugins_enabled" in updates:
+        current_config.plugins.enabled = updates["plugins_enabled"]
+    if "plugins_disabled" in updates:
+        current_config.plugins.disabled = updates["plugins_disabled"]
+    if "perf_parallel_scan" in updates:
+        current_config.performance.parallel_scan = updates["perf_parallel_scan"]
+    if "perf_max_workers" in updates:
+        current_config.performance.max_workers = updates["perf_max_workers"]
+    if "perf_scan_timeout" in updates:
+        current_config.performance.scan_timeout = updates["perf_scan_timeout"]
+    if "perf_graph_simplification" in updates:
+        current_config.performance.graph_simplification = updates["perf_graph_simplification"]
+    if "perf_max_graph_nodes" in updates:
+        current_config.performance.max_graph_nodes = updates["perf_max_graph_nodes"]
+    if "sec_allow_run" in updates:
+        current_config.security.allow_run = updates["sec_allow_run"]
+    
+    if not current_config.project_api:
+        current_config.project_api = ProjectApiConfig()
+    if "api_connector" in updates:
+        current_config.project_api.connector = updates["api_connector"]
+    if "api_app_var" in updates:
+        current_config.project_api.app_var = updates["api_app_var"]
+    if "api_path" in updates:
+        current_config.project_api.path = updates["api_path"]
+    
+    try:
+        state.save_effective_config(current_config)
+        state.rebuild_runtime(current_config)
+        
+        await manager.broadcast(JupiterEvent(type=CONFIG_UPDATED, payload=updates))
+        return {"status": "ok", "updated": list(updates.keys())}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save config: {e}")
+
 
 @router.get("/config/raw", response_model=RawConfigModel, dependencies=[Depends(require_admin)])
 async def get_raw_config(request: Request) -> RawConfigModel:
@@ -359,14 +438,33 @@ async def reload_plugins(request: Request, role: str = Depends(require_admin)) -
     return result
 
 @router.post("/plugins/{name}/restart", dependencies=[Depends(require_admin)])
-async def restart_plugin(request: Request, name: str, role: str = Depends(require_admin)) -> Dict[str, Any]:
+async def restart_plugin(
+    request: Request, 
+    name: str, 
+    role: str = Depends(require_admin),
+    internal: bool = False  # Set to True when called by watchdog
+) -> Dict[str, Any]:
     """Restart a specific plugin.
     
     Reloads the plugin module and re-registers the plugin.
     Preserves enabled state and configuration.
+    
+    Note: Some plugins (like 'bridge') cannot be restarted by users,
+    only by the watchdog or internal system calls.
     """
-    log_action(role, "restart_plugin", {"name": name})
     pm: PluginManager = request.app.state.plugin_manager
+    
+    # Check if plugin is restartable by user
+    plugin = pm.get_plugin(name)
+    if plugin:
+        restartable = getattr(plugin, "restartable", True)
+        if not restartable and not internal:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Plugin '{name}' cannot be restarted by user. It can only be restarted by the system or watchdog."
+            )
+    
+    log_action(role, "restart_plugin", {"name": name})
     result = pm.restart_plugin(name)
     await manager.broadcast(JupiterEvent(type=PLUGIN_TOGGLED, payload={"action": "restart", "name": name}))
     return result
@@ -406,7 +504,7 @@ async def get_plugin_config(request: Request, name: str) -> Dict[str, Any]:
     return stored_config or {}
 
 @router.post("/plugins/{name}/config")
-async def configure_plugin(request: Request, name: str, config: Dict[str, Any], role: str = Depends(require_admin)) -> Dict[str, bool]:
+async def configure_plugin(request: Request, name: str, config: Dict[str, Any] = Body(...), role: str = Depends(require_admin)) -> Dict[str, bool]:
     """Configure a plugin."""
     log_action(role, "configure_plugin", {"name": name, "config": config})
     pm: PluginManager = request.app.state.plugin_manager
@@ -501,6 +599,308 @@ async def recheck_manual_duplication_links(request: Request, payload: Optional[D
         return plugin_obj.recheck_manual_links(link_id=link_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# --- Live Map Plugin Endpoints ---
+
+@router.get("/plugins/livemap/graph", dependencies=[Depends(verify_token)])
+async def get_livemap_graph(request: Request, simplify: bool = False, max_nodes: int = 1000) -> Dict[str, Any]:
+    """Generate a dependency graph for the Live Map visualization.
+    
+    Args:
+        simplify: If True, group by directory instead of showing individual files.
+        max_nodes: Maximum number of nodes before auto-simplification.
+        
+    Returns:
+        Graph data with nodes and links for D3.js visualization.
+    """
+    from jupiter.core.cache import CacheManager
+    
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("livemap")
+    
+    if not plugin or not pm.is_enabled("livemap"):
+        raise HTTPException(status_code=404, detail="Live Map plugin not available")
+    
+    # Try cached scan first
+    root = request.app.state.root_path
+    cache_manager = CacheManager(root)
+    last_scan = cache_manager.load_last_scan()
+    
+    if not last_scan or "files" not in last_scan:
+        # Try scanning via connector
+        connector = request.app.state.project_manager.get_default_connector()
+        if not connector:
+            raise HTTPException(status_code=500, detail="No project connector available")
+        try:
+            last_scan = await connector.scan({})
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to get scan data: {str(e)}")
+    
+    plugin_obj = cast(Any, plugin)
+    try:
+        graph = plugin_obj.build_graph(last_scan["files"], simplify=simplify, max_nodes=max_nodes)
+        return graph.to_dict()
+    except Exception as e:
+        logger.error("LiveMap graph generation failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Graph generation failed: {str(e)}")
+
+
+@router.get("/plugins/livemap/config", dependencies=[Depends(verify_token)])
+async def get_livemap_config(request: Request) -> Dict[str, Any]:
+    """Get Live Map plugin configuration."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("livemap")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Live Map plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    if hasattr(plugin_obj, "get_config"):
+        return plugin_obj.get_config()
+    
+    return {
+        "enabled": pm.is_enabled("livemap"),
+        "simplify": getattr(plugin_obj, "simplify", False),
+        "max_nodes": getattr(plugin_obj, "max_nodes", 1000),
+        "show_functions": getattr(plugin_obj, "show_functions", False),
+        "link_distance": getattr(plugin_obj, "link_distance", 60),
+        "charge_strength": getattr(plugin_obj, "charge_strength", -100),
+    }
+
+
+@router.post("/plugins/livemap/config", dependencies=[Depends(verify_token)])
+async def save_livemap_config(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Save Live Map plugin configuration."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("livemap")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Live Map plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    
+    # Apply configuration
+    if hasattr(plugin_obj, "configure"):
+        plugin_obj.configure(payload)
+    
+    # Toggle enabled state
+    if "enabled" in payload:
+        if payload["enabled"]:
+            pm.enable_plugin("livemap")
+        else:
+            pm.disable_plugin("livemap")
+    
+    logger.info("LiveMap configuration updated: %s", payload)
+    return {"status": "ok", "config": plugin_obj.get_config() if hasattr(plugin_obj, "get_config") else payload}
+
+
+# --- Plugin Watchdog Endpoints ---
+
+@router.get("/plugins/watchdog/config", dependencies=[Depends(verify_token)])
+async def get_watchdog_config(request: Request) -> Dict[str, Any]:
+    """Get Plugin Watchdog configuration."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("watchdog")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Watchdog plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    if hasattr(plugin_obj, "get_config"):
+        return plugin_obj.get_config()
+    
+    return {
+        "enabled": pm.is_enabled("watchdog"),
+        "check_interval": getattr(plugin_obj, "check_interval", 2.0),
+        "auto_reload": getattr(plugin_obj, "auto_reload", True),
+    }
+
+
+@router.post("/plugins/watchdog/config", dependencies=[Depends(verify_token)])
+async def save_watchdog_config(request: Request, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Save Plugin Watchdog configuration."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("watchdog")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Watchdog plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    
+    # Inject the plugin_manager reference for reload functionality
+    config_with_manager = {
+        **payload,
+        "plugin_manager": pm,
+    }
+    
+    # Apply configuration
+    if hasattr(plugin_obj, "configure"):
+        plugin_obj.configure(config_with_manager)
+    
+    # Toggle enabled state
+    if "enabled" in payload:
+        if payload["enabled"]:
+            pm.enable_plugin("watchdog")
+        else:
+            pm.disable_plugin("watchdog")
+    
+    logger.info("Watchdog configuration updated: %s", payload)
+    return {"status": "ok", "config": plugin_obj.get_config() if hasattr(plugin_obj, "get_config") else payload}
+
+
+@router.get("/plugins/watchdog/status", dependencies=[Depends(verify_token)])
+async def get_watchdog_status(request: Request) -> Dict[str, Any]:
+    """Get Plugin Watchdog status."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("watchdog")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Watchdog plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    if hasattr(plugin_obj, "get_status"):
+        return plugin_obj.get_status()
+    
+    return {"error": "Status not available"}
+
+
+@router.post("/plugins/watchdog/check", dependencies=[Depends(verify_token)])
+async def watchdog_force_check(request: Request) -> Dict[str, Any]:
+    """Force watchdog to check for changes immediately."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("watchdog")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Watchdog plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    
+    # Ensure plugin_manager is set
+    if hasattr(plugin_obj, "_plugin_manager") and plugin_obj._plugin_manager is None:
+        plugin_obj._plugin_manager = pm
+    
+    if hasattr(plugin_obj, "force_check"):
+        return plugin_obj.force_check()
+    
+    return {"error": "Force check not available"}
+
+
+# =============================================================================
+# BRIDGE PLUGIN ENDPOINTS
+# =============================================================================
+
+@router.get("/plugins/bridge/status", dependencies=[Depends(verify_token)])
+async def get_bridge_status(request: Request) -> Dict[str, Any]:
+    """Get Plugin Bridge status and available services."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("bridge")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Bridge plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    
+    # Initialize bridge if needed
+    if hasattr(plugin_obj, "initialize") and not getattr(plugin_obj, "_initialized", False):
+        plugin_obj.initialize(
+            app_state=request.app.state,
+            plugin_manager=pm
+        )
+    
+    if hasattr(plugin_obj, "get_status"):
+        return plugin_obj.get_status()
+    
+    return {"error": "Status not available"}
+
+
+@router.post("/plugins/bridge/config", dependencies=[Depends(verify_token)])
+async def save_bridge_config(request: Request, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Save Plugin Bridge configuration."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("bridge")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Bridge plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    
+    # Apply configuration
+    if hasattr(plugin_obj, "configure"):
+        plugin_obj.configure(payload)
+    
+    logger.info("Bridge configuration updated: %s", payload)
+    return {"status": "ok"}
+
+
+@router.get("/plugins/bridge/services", dependencies=[Depends(verify_token)])
+async def get_bridge_services(request: Request) -> Dict[str, Any]:
+    """Get list of all available Bridge services."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("bridge")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Bridge plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    
+    # Get the bridge context
+    context = plugin_obj.get_context() if hasattr(plugin_obj, "get_context") else None
+    if not context:
+        return {"services": [], "message": "Bridge not initialized"}
+    
+    return {
+        "services": context.list_services(),
+        "api_version": context.api_version
+    }
+
+
+@router.get("/plugins/bridge/capabilities", dependencies=[Depends(verify_token)])
+async def get_bridge_capabilities(request: Request) -> Dict[str, Any]:
+    """Get list of all available Bridge capabilities."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("bridge")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Bridge plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    
+    context = plugin_obj.get_context() if hasattr(plugin_obj, "get_context") else None
+    if not context:
+        return {"capabilities": [], "message": "Bridge not initialized"}
+    
+    return {
+        "capabilities": context.list_capabilities(),
+        "api_version": context.api_version
+    }
+
+
+@router.get("/plugins/bridge/service/{service_name}", dependencies=[Depends(verify_token)])
+async def get_bridge_service_info(request: Request, service_name: str) -> Dict[str, Any]:
+    """Get detailed information about a specific Bridge service."""
+    pm: PluginManager = request.app.state.plugin_manager
+    plugin = pm.get_plugin("bridge")
+    
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Bridge plugin not found")
+    
+    plugin_obj = cast(Any, plugin)
+    
+    context = plugin_obj.get_context() if hasattr(plugin_obj, "get_context") else None
+    if not context:
+        raise HTTPException(status_code=503, detail="Bridge not initialized")
+    
+    if not context.has_service(service_name):
+        raise HTTPException(status_code=404, detail=f"Service '{service_name}' not found")
+    
+    # Find the descriptor
+    services = context.list_services()
+    for svc in services:
+        if svc["name"] == service_name:
+            return {"service": svc}
+    
+    return {"error": "Service descriptor not found"}
 
 
 @router.get("/plugins/sidebar", response_model=List[Dict[str, Any]], dependencies=[Depends(verify_token)])
@@ -990,5 +1390,195 @@ async def get_project_api_status(request: Request, project_id: str) -> Dict[str,
                 return {"status": "error", "message": f"API Error {resp.status_code} ({api_cfg.base_url})"}
     except Exception as e:
         return {"status": "unreachable", "message": f"API Unreachable ({api_cfg.base_url})"}
+
+
+# =============================================================================
+# PHASE 2: DIAGNOSTIC ENDPOINTS
+# =============================================================================
+
+@router.get("/diag/handlers", dependencies=[Depends(verify_token)])
+async def get_all_handlers(request: Request) -> Dict[str, Any]:
+    """
+    Get all registered handlers across CLI, API, and plugins.
+    
+    This endpoint is used for autodiag to reduce false positives
+    by providing a complete list of dynamically registered handlers.
+    
+    Returns:
+        Dict with:
+        - api_handlers: List of FastAPI route handlers
+        - cli_handlers: List of CLI command handlers
+        - plugin_handlers: List of plugin hook handlers
+        - total: Total count of all handlers
+    """
+    app = request.app
+    
+    # 1. API Handlers (FastAPI routes)
+    api_handlers = _collect_api_handlers(app)
+    
+    # 2. CLI Handlers
+    cli_handlers = _collect_cli_handlers()
+    
+    # 3. Plugin Handlers
+    plugin_handlers = _collect_plugin_handlers(app)
+    
+    return {
+        "api_handlers": api_handlers,
+        "cli_handlers": cli_handlers,
+        "plugin_handlers": plugin_handlers,
+        "total": len(api_handlers) + len(cli_handlers) + len(plugin_handlers),
+    }
+
+
+def _collect_api_handlers(app) -> List[Dict[str, Any]]:
+    """Collect all FastAPI route handlers with their function names."""
+    handlers = []
+    
+    for route in app.routes:
+        if not hasattr(route, "endpoint"):
+            continue
+        
+        endpoint = route.endpoint
+        handler_info = {
+            "type": "api",
+            "path": getattr(route, "path", None),
+            "methods": sorted(list(getattr(route, "methods", []))) if hasattr(route, "methods") else [],
+            "function_name": getattr(endpoint, "__name__", str(endpoint)),
+            "module": getattr(endpoint, "__module__", "unknown"),
+            "qualname": getattr(endpoint, "__qualname__", None),
+        }
+        handlers.append(handler_info)
+    
+    return handlers
+
+
+def _collect_cli_handlers() -> List[Dict[str, Any]]:
+    """Collect all CLI command handlers from jupiter.cli.main."""
+    handlers = []
+    
+    try:
+        from jupiter.cli.main import get_cli_handlers
+        
+        for handler in get_cli_handlers():
+            handlers.append({
+                "type": "cli",
+                "command": handler["command"],
+                "function_name": handler["function_name"],
+                "module": handler["module"],
+                "qualname": handler["qualname"],
+            })
+    except ImportError as e:
+        logger.warning("Could not import get_cli_handlers: %s", e)
+        # Fallback: try command_handlers directly
+        try:
+            from jupiter.cli import command_handlers
+            
+            for name in dir(command_handlers):
+                if name.startswith("handle_"):
+                    func = getattr(command_handlers, name)
+                    if callable(func):
+                        command_name = name.replace("handle_", "")
+                        handlers.append({
+                            "type": "cli",
+                            "command": command_name,
+                            "function_name": name,
+                            "module": "jupiter.cli.command_handlers",
+                            "qualname": getattr(func, "__qualname__", name),
+                        })
+        except ImportError:
+            pass
+    
+    return handlers
+
+
+def _collect_plugin_handlers(app) -> List[Dict[str, Any]]:
+    """Collect all plugin hook handlers from the plugin manager."""
+    handlers = []
+    
+    plugin_manager = getattr(app.state, "plugin_manager", None)
+    if not plugin_manager:
+        return handlers
+    
+    # Known plugin hooks
+    hook_names = [
+        "on_scan", "on_analyze", "on_report", 
+        "on_startup", "on_shutdown",
+        "setup", "cleanup", "configure",
+    ]
+    
+    for plugin in plugin_manager.get_enabled_plugins():
+        plugin_name = getattr(plugin, "name", type(plugin).__name__)
+        
+        for hook in hook_names:
+            if hasattr(plugin, hook) and callable(getattr(plugin, hook)):
+                method = getattr(plugin, hook)
+                handlers.append({
+                    "type": "plugin",
+                    "plugin_name": plugin_name,
+                    "hook": hook,
+                    "function_name": hook,
+                    "module": getattr(method, "__module__", "unknown"),
+                    "qualname": getattr(method, "__qualname__", f"{plugin_name}.{hook}"),
+                })
+    
+    return handlers
+
+
+@router.get("/diag/functions", dependencies=[Depends(verify_token)])
+async def get_function_usage_details(request: Request) -> Dict[str, Any]:
+    """
+    Get detailed function usage information with confidence scores.
+    
+    This endpoint provides the Phase 2 confidence-scored function
+    analysis for reducing false positives in unused detection.
+    
+    Returns:
+        Dict with:
+        - functions: List of function usage details (non-USED only)
+        - summary: Count by usage status
+        - total_analyzed: Total functions analyzed
+    """
+    from jupiter.core.cache import CacheManager
+    from jupiter.core.analyzer import ProjectAnalyzer, FunctionUsageStatus
+    from jupiter.core.scanner import ProjectScanner
+    
+    root = request.app.state.root_path
+    cache_manager = CacheManager(root)
+    last_scan = cache_manager.load_last_scan()
+    
+    if not last_scan:
+        return {
+            "functions": [],
+            "summary": {},
+            "total_analyzed": 0,
+            "error": "No scan data available. Run a scan first.",
+        }
+    
+    # Get python_summary from cached analysis or compute fresh
+    python_summary = last_scan.get("python_summary")
+    
+    if not python_summary:
+        # Compute analysis on-the-fly
+        scanner = ProjectScanner(root=root)
+        analyzer = ProjectAnalyzer(root=root, no_cache=False)
+        summary = analyzer.summarize(scanner.iter_files())
+        if summary.python_summary:
+            return {
+                "functions": summary.python_summary.function_usage_details,
+                "summary": summary.python_summary.usage_summary,
+                "total_analyzed": summary.python_summary.total_functions,
+            }
+        return {
+            "functions": [],
+            "summary": {},
+            "total_analyzed": 0,
+        }
+    
+    return {
+        "functions": python_summary.get("function_usage_details", []),
+        "summary": python_summary.get("usage_summary", {}),
+        "total_analyzed": python_summary.get("total_functions", 0),
+    }
+
 
 

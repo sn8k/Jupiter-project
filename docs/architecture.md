@@ -33,7 +33,13 @@ Jupiter is designed as a modular system with a clear separation of concerns.
 ## Web UI (`jupiter.web`)
 
 * A lightweight HTML/JS frontend that communicates with the API.
-* Supports i18n and theming.
+* Supports i18n (internationalization) with dynamic language discovery and theming.
+  - Language files are located in `jupiter/web/lang/*.json`.
+  - Each file includes a `_meta` block with `lang_code`, `lang_name`, and `version` (current: v1.0.1).
+  - At startup, the UI scans known language files and populates the selector dynamically.
+  - Built-in translations: French (`fr`), English (`en`), plus fun packs (Klingon, Sindarin/Elvish, Pirate French).
+* **Settings Page**: Each configuration section (Network, Interface, Security, Meeting) has its own Save button for granular control.
+* **Projects Page**: Performance settings (parallel scan, workers, timeout, graph options) are now located here as they are project-specific.
 * Located in `jupiter/web/` and served by the API server or a separate dev server.
 
 ## Configuration (`jupiter.config`)

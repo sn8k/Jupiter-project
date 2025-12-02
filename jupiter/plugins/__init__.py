@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Protocol, Any, runtime_checkable, Optional
+from typing import Protocol, Any, runtime_checkable, Optional, TYPE_CHECKING
 from dataclasses import dataclass, field, asdict
 from enum import Enum
+
+# Type checking imports to avoid circular dependencies
+if TYPE_CHECKING:
+    from jupiter.plugins.bridge_plugin import BridgeContext
 
 
 class PluginUIType(str, Enum):
@@ -103,4 +107,44 @@ class UIPlugin(Protocol):
     def get_settings_js(self) -> str:
         """Return JavaScript for the settings section."""
         ...
+
+
+# =============================================================================
+# BRIDGE ACCESS FUNCTIONS
+# =============================================================================
+
+def get_bridge() -> Optional["BridgeContext"]:
+    """Get the Bridge context for plugin use.
+    
+    The Bridge provides stable, versioned access to Jupiter's core
+    functionality without plugins needing to import core modules directly.
+    
+    Returns:
+        The BridgeContext if the Bridge is initialized, None otherwise.
+        
+    Example:
+        from jupiter.plugins import get_bridge
+        
+        bridge = get_bridge()
+        if bridge:
+            # Access services
+            scanner = bridge.get_service("scanner")
+            config = bridge.get_service("config")
+            
+            # Use capabilities
+            if bridge.has_capability("scan_directory"):
+                result = bridge.invoke("scan_directory", path)
+    """
+    try:
+        from jupiter.plugins.bridge_plugin import get_bridge as _get_bridge
+        return _get_bridge()
+    except ImportError:
+        return None
+
+
+def has_bridge() -> bool:
+    """Check if the Bridge is available and initialized."""
+    bridge = get_bridge()
+    return bridge is not None
+
 

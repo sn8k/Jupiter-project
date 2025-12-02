@@ -35,7 +35,7 @@ def temp_project():
     config.backends = [ProjectBackendConfig(name="local", type="local_fs", path=str(project_path))]
     
     app.state.project_manager = ProjectManager(config)
-    app.state.plugin_manager = PluginManager(PluginsConfig())
+    app.state.plugin_manager = PluginManager(config=PluginsConfig())
     app.state.meeting_adapter = MeetingAdapter(device_key=None, project_root=project_path)
     
     yield project_path

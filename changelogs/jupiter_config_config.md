@@ -1,5 +1,23 @@
 # Changelog – jupiter/config/config.py
 
+## Version 1.2.0 (2025-12-02) – Default Log Path
+- Changed `LoggingConfig.path` default from `None` to `"logs/jupiter.log"`
+  - Logging to file is now enabled by default
+  - Users can still disable file logging by clearing the path in Settings
+  - Logs directory will be created automatically if needed
+
+## Version 1.1.0 (2025-12-02) – Phase 3: Autodiag Configuration
+- Added `AutodiagConfig` dataclass with fields:
+  - `enabled`: Enable/disable autodiag server (default: false)
+  - `port`: Port for autodiag API (default: 8081)
+  - `introspect_api`: Enable API introspection endpoint
+  - `validate_handlers`: Enable handler validation endpoint
+  - `collect_runtime_stats`: Enable runtime statistics collection
+- Added `autodiag` field to `JupiterConfig`
+- Updated `from_dict` to parse `autodiag` configuration section
+- Added version docstring header
+
+## Previous Changes
 - Added `project_root` field to `JupiterConfig` dataclass to fix `TypeError` in `load_config`.
 - Added `PluginsConfig` dataclass.
 - Added `ProjectBackendConfig` dataclass for defining project backends.

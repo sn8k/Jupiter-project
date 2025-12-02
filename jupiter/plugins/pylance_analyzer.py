@@ -405,8 +405,19 @@ class PylanceAnalyzerPlugin:
                 summary["quality"]["pylance_errors"] = self._last_summary.total_errors
                 summary["quality"]["pylance_warnings"] = self._last_summary.total_warnings
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Plugin API Methods
+    # These methods are part of the plugin public interface and may be called
+    # dynamically via getattr() by the PluginManager or external integrations.
+    # Static analysis may incorrectly flag them as unused.
+    # ─────────────────────────────────────────────────────────────────────────
+
     def get_diagnostics_for_file(self, file_path: str) -> list[PylanceDiagnostic]:
-        """Get diagnostics for a specific file from the last analysis."""
+        """Get diagnostics for a specific file from the last analysis.
+        
+        This is a public API method for external access to per-file diagnostics.
+        Can be called by UI components displaying file-specific type errors.
+        """
         if not self._last_summary:
             logger.debug("No cached Pylance summary; returning empty diagnostics for %s", file_path)
             return []
@@ -424,7 +435,11 @@ class PylanceAnalyzerPlugin:
         return []
 
     def get_summary(self) -> Optional[PylanceSummary]:
-        """Get the summary from the last analysis."""
+        """Get the summary from the last analysis.
+        
+        This is a public API method for external access to Pylance analysis results.
+        Can be called by UI components or integrations needing the latest summary.
+        """
         return self._last_summary
 
     # ─────────────────────────────────────────────────────────────────────────

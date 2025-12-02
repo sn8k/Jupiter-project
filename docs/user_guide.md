@@ -97,13 +97,16 @@ When you select this backend (or create a project with this configuration), Jupi
 
 ## Performance Tuning
 
-For large projects (monorepos, legacy codebases), you can tune Jupiter's performance in `<project>.jupiter.yaml`:
+For large projects (monorepos, legacy codebases), you can tune Jupiter's performance. These settings are now configured per-project in the **Projects** view (active project section) or in `<project>.jupiter.yaml`:
 
 *   **`performance.parallel_scan`**: Enable multi-threaded scanning (default: true).
-*   **`performance.max_workers`**: Limit the number of threads (default: CPU count).
+*   **`performance.max_workers`**: Limit the number of threads (default: CPU count, 0 = auto).
+*   **`performance.scan_timeout`**: Maximum time in seconds for a scan operation (default: 300).
 *   **`performance.large_file_threshold`**: Files larger than this (in bytes) will be skipped by the language analyzer to avoid memory spikes (default: 10MB).
 *   **`performance.graph_simplification`**: If true, the Live Map will group nodes by directory to reduce visual clutter.
 *   **`performance.max_graph_nodes`**: Automatically enable simplification if the node count exceeds this limit (default: 1000).
+
+> **UI Location**: In the Web UI, these settings are accessible in the **Projects** view under "⚡ Performance" within the active project section.
 
 ## Web Interface
 The Web Interface is the primary way to interact with Jupiter. It provides a visual dashboard and access to all features.
@@ -135,11 +138,16 @@ Click **Watch** to enable real-time monitoring. File changes will appear in the 
 
 #### Settings
 The **Settings** view allows you to configure your `<project>.jupiter.yaml` directly (log level and optional log file destination included):
-- **Server/GUI Host & Port**: Network configuration.
-- **Meeting**: Enable/Disable and set Device Key.
-- **Theme & Language**: Customize the UI appearance.
+- **Network** (Réseau): Server and GUI host/port configuration. Each section has its own Save button.
+- **Interface**: Theme and language customization.
+  - **Available Languages**: The selector auto-discovers all translations under `lang/*.json`. Each language file exposes its version via `_meta` metadata, displayed in the selector (e.g., `Français (v1.0.1)`). Out of the box: French, English, Klingon 🖖, Sindarin/Elvish 🧝, and Pirate French 🏴‍☠️.
+  - **Adding a Language**: Copy an existing `lang/*.json`, translate strings, set a new `_meta.lang_code`, `_meta.lang_name`, and `_meta.version`, and restart the server—the new language appears automatically.
+- **Security** (Sécurité): Allow/disallow shell command execution via the Run modal.
+- **Meeting License**: Device key, auth token, and heartbeat interval for Meeting integration.
+- **Users**: Manage user accounts and roles (admin/editor/viewer).
 - **Update**: Trigger a self-update from a ZIP file or Git URL.
-  - Le panneau affiche également la version actuelle lue côté serveur, juste au-dessus du formulaire d'upload.
+
+> **Note**: Performance settings (parallel scan, workers, timeout, graph options) are now located in the **Projects** view under the active project section, as they are project-specific.
 
 #### History
 The **History** view lists every stored snapshot (newest first) with their labels, timestamps, file counts, and size deltas. Select any two snapshots to render a diff showing:
@@ -285,6 +293,44 @@ Jupiter can trace function calls during execution.
 The `analyze` command (and the Web UI) reports on code quality metrics:
 - **Complexity**: Cyclomatic complexity estimation for Python files.
 - **Duplication**: Detection of duplicated code blocks (clusters).
+
+### Unused Function Detection (v1.4.0+)
+
+Jupiter uses improved heuristics to accurately detect truly unused functions while minimizing false positives:
+
+#### Automatically Excluded from "Unused"
+- **Framework Handlers**: Functions decorated with `@router.get`, `@click.command`, `@pytest.fixture`, etc.
+- **Magic Methods**: All dunder methods (`__init__`, `__str__`, `__enter__`, etc.)
+- **Serialization Methods**: `to_dict`, `from_json`, `serialize`, etc.
+- **Plugin Hooks**: `on_scan`, `on_analyze`, `setup`, `teardown`, etc.
+- **Dynamically Registered**: Functions passed to `set_defaults(func=...)`, `add_command()`, etc.
+
+#### How It Works
+The Python analyzer examines:
+1. **Decorators**: Recognizes 60+ framework decorators (FastAPI, Flask, Click, pytest, Django, Celery, Pydantic)
+2. **Known Patterns**: 120+ method names that are implicitly used by conventions
+3. **Dynamic Registration**: Tracks functions passed to registration methods like `argparse.set_defaults()`
+
+This reduces false positives by approximately 60-80% compared to simple static analysis.
+
+#### Confidence Scoring (v1.5.0+)
+
+Instead of a binary "used/unused" classification, Jupiter now provides a **confidence score** (0.0 to 1.0):
+
+| Status | Confidence | Description |
+|--------|------------|-------------|
+| `USED` | 1.0 | Directly called or referenced |
+| `LIKELY_USED` | 0.85-0.95 | Framework decorator, dynamic registration, or known pattern |
+| `POSSIBLY_UNUSED` | 0.50-0.65 | Private function or has docstring |
+| `UNUSED` | 0.70-0.75 | No usage signals found |
+
+Higher confidence means the detection is more reliable. Use the `/diag/functions` API endpoint to get detailed scoring.
+
+#### Viewing Results
+- **CLI**: Run `python -m jupiter.cli.main analyze --json` and check `python_summary.total_potentially_unused_functions`
+- **Web UI**: The **Functions** view shows unused functions with a warning badge
+- **Export for AI**: Click "🤖 Export for AI" in the Functions view to generate a report for AI analysis
+- **API**: `GET /diag/functions` returns detailed usage info with confidence scores
 
 ### Plugins
 

@@ -1,5 +1,20 @@
 # Changelog - jupiter/core/plugin_manager.py
 
+## [1.8.1] - 2025-12-03
+
+### Added
+- `restartable` field in `get_plugins_info()` output
+- Returns `getattr(p, "restartable", True)` to indicate if plugin can be restarted by users
+- Default is `True` for backward compatibility with existing plugins
+- Plugins can set `restartable = False` to prevent user-initiated restarts
+
+## [1.8.0] - 2025-12-15
+
+### Added
+- `get_enabled_plugins()`: Returns list of all enabled plugin instances.
+  - Used by system/autodiag routers to enumerate active plugins and their hooks.
+  - Fixes AttributeError in `/diag/handlers` and `/system/handlers` endpoints.
+
 ## [Unreleased]
 
 ### Added

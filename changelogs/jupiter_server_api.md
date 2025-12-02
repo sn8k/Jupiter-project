@@ -1,5 +1,17 @@
 # Changelog – jupiter/server/api.py
 
+## Version 1.1.0 (2025-12-02) – Phase 3: Dual-Port Architecture
+- Added dual-port server support for autodiag
+  - Main API server runs on configured host:port
+  - Autodiag server runs on 127.0.0.1:autodiag_port (localhost only)
+- Added `_create_diag_app()` method to create separate FastAPI app for autodiag
+- Added `_run_dual_servers()` async method for concurrent server startup
+- Added `app.state.start_time` for uptime tracking
+- Imported `autodiag` router from `jupiter.server.routers`
+- Added `time` import for timestamp tracking
+- When `autodiag.enabled` is true, both servers run concurrently via `asyncio.gather()`
+- Added version docstring header
+
 ## 2025-12-01 – Version metadata alignment
 
 ### Changed

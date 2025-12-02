@@ -8,7 +8,7 @@ L’objectif est que l’agent produise un code **cohérent**, **maintenable**, 
 
 ## 1. Rôle de l’agent
 
-L’agent GPT-5 / Codex est :
+L’agent est :
 
 * un **assistant de développement** pour Jupiter ;
 * spécialisé sur :
@@ -17,10 +17,8 @@ L’agent GPT-5 / Codex est :
   * la **CLI**,
   * l’API serveur,
   * les scripts de scan / analyse,
-  * et, dans une moindre mesure, le frontend web (JS/TS).
+  * frontend web (JS/TS).
 
-L’agent **ne déploie pas**, **ne supprime rien** et **n’exécute pas réellement** le code :
-il **propose**, **explique**, **structure** et **corrige**.
 
 L’agent doit toujours :
 
@@ -118,7 +116,7 @@ def detect_unused_functions(file_ast: ast.AST) -> list[str]:
 
 ---
 
-## 4. Structure des modules Jupiter
+## 4. Structure originelles des modules Jupiter (soumi a modifications)
 
 L’agent doit respecter et renforcer la structure suivante :
 
@@ -216,6 +214,7 @@ Le frontend :
 * permet de lancer des scans, updates, watch,
 * gère le multi-langue,
 * respecte le **thème dark par défaut**, avec possibilité de passer en light.
+* doit etre en developpement synchrone avec le reste du projet. Si c'est dans la CLI, ca doit etre sur le frontend, et inversement.
 
 ### 7.2. Style
 
@@ -249,6 +248,8 @@ jupiter/
        ├── security/
        └── notify_webhook/
 ```
+
+**A TERME, LA PLUPART DES FONCTIONS DE JUPITER DEVRONT MIGRER VERS DES PLUGINS**
 
 ### 8.2. IA en option
 
@@ -362,3 +363,12 @@ L’agent doit y revenir mentalement pour vérifier :
 * la structure globale,
 
 avant de générer du code ou des modifications.
+
+
+Note finale du patron : 
+**IMPERATIF : A CHAQUE FICHIER MODIFIé, MEME POUR UN FIX, IL FAUT :
+
+- mettre a jour VERSION
+- mettre a jour le changelog du fichier (dans le dossier changelogs)
+- mettre a jour les versions des fichiers modifiés. en cas d'absence, en ajouter un en docstring.
+- mettre a jour les documentations du dossier docs (si necessaire) et README.MD**

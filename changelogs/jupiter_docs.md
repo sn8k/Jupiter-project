@@ -1,5 +1,15 @@
 # Changelog – Documentation
 
+## [2025-12-02] – Autodiag Phase 1 & Unused Detection
+
+- Created `docs/autodiag.md`: comprehensive analysis of false positive issues and implementation plan (Phase 1 now complete).
+- Updated `docs/user_guide.md`: added "Unused Function Detection (v1.4.0+)" section explaining improved heuristics.
+- Updated `docs/dev_guide.md`: added "Python Analyzer Features (v1.1.0+)" section with decorator detection, known patterns, and dynamic registration tracking.
+
+---
+
+## Previous Updates
+
 - Updated `docs/user_guide.md` with sections on Incremental Scan, Dynamic Analysis, Code Quality, Plugins, and Meeting Integration.
 - Updated `docs/api.md` with `/run` and `/meeting/status` details.
 - Created `docs/dev_guide.md` detailing core modules (Scanner, Analyzer, Runner, Quality) and Plugin system.

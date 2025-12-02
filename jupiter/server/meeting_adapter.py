@@ -397,8 +397,19 @@ class MeetingAdapter:
                 details={"remaining": 0, "code": "LICENSE_EXPIRED"}
             )
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Meeting Protocol API Methods
+    # These methods are part of the Meeting integration protocol and may be
+    # called when Meeting service is available. Static analysis may incorrectly
+    # flag them as unused when Meeting integration is not active.
+    # ─────────────────────────────────────────────────────────────────────────
+
     def last_seen_payload(self) -> dict[str, object]:
-        """Return a minimal status payload for Meeting."""
+        """Return a minimal status payload for Meeting.
+        
+        This method provides a snapshot of the current Jupiter state that can be
+        sent to the Meeting service for monitoring and device tracking purposes.
+        """
         return {
             "deviceKey": self.device_key,
             "projectRoot": str(self.project_root),
@@ -408,6 +419,10 @@ class MeetingAdapter:
 
     def notify_online(self) -> bool:
         """Notify Meeting service that Jupiter device is online.
+        
+        This method is called when Jupiter starts up or when a license check
+        succeeds, to inform the Meeting service of device presence. It can also
+        be called periodically as a heartbeat.
         
         Returns:
             True if notification was sent successfully, False otherwise.

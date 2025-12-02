@@ -1,4 +1,7 @@
-"""Plugin manager for Jupiter."""
+"""Plugin manager for Jupiter.
+
+Version: 1.8.1
+"""
 
 from __future__ import annotations
 
@@ -90,6 +93,14 @@ class PluginManager:
 
     def is_enabled(self, plugin_name: str) -> bool:
         return self.plugin_status.get(plugin_name, False)
+
+    def get_enabled_plugins(self) -> List["Plugin"]:
+        """Return list of all enabled plugin instances.
+        
+        This method is used by system/autodiag routers to enumerate
+        active plugins and their hooks for handler introspection.
+        """
+        return [p for p in self.plugins if self.is_enabled(p.name)]
 
     def enable_plugin(self, plugin_name: str) -> None:
         if any(p.name == plugin_name for p in self.plugins):
@@ -261,6 +272,7 @@ class PluginManager:
                 "trust_level": getattr(p, "trust_level", "experimental"),
                 "config": getattr(p, "config", {}),
                 "is_core": p.name in self.CORE_PLUGINS,
+                "restartable": getattr(p, "restartable", True),  # Default True, Bridge sets False
             }
             
             # Add UI config if present

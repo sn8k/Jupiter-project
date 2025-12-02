@@ -223,8 +223,18 @@ async def record_function_calls(calls: Dict[str, int]) -> None:
     logger.debug("Recorded %d function call entries, total events: %d", len(calls), _watch_state.total_events)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Watch Event Broadcast Functions
+# These functions are designed to be called by file watchers and scan progress
+# handlers. They may appear unused if those features are not yet fully wired.
+# ─────────────────────────────────────────────────────────────────────────────
+
 async def broadcast_file_change(file_path: str, change_type: str) -> None:
     """Broadcast a file change event.
+    
+    This function is designed to be called by a file watcher when files are
+    created, modified, or deleted in the project. The file watcher feature
+    may not be fully implemented, so this function may appear unused.
     
     Args:
         file_path: Path to the changed file.

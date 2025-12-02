@@ -1,4 +1,8 @@
-"""Lightweight API server using FastAPI."""
+"""
+Lightweight API server using FastAPI.
+
+Version: 1.1.0 - Phase 3: Dual-port architecture for autodiag
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import sys
 import asyncio
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -24,7 +29,7 @@ from jupiter.config import JupiterConfig, PluginsConfig
 from jupiter.server.manager import ProjectManager
 from jupiter.server.ws import websocket_endpoint
 from jupiter.server.meeting_adapter import MeetingAdapter
-from jupiter.server.routers import auth, scan, system, analyze, watch
+from jupiter.server.routers import auth, scan, system, analyze, watch, autodiag
 from jupiter.core.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -192,7 +197,7 @@ async def ws_endpoint_route(websocket: WebSocket, token: Optional[str] = None):
 
 @dataclass
 class JupiterAPIServer:
-    """Server that runs the Jupiter FastAPI application."""
+    """Server that runs the Jupiter FastAPI application with optional autodiag server."""
 
     root: Path
     host: str = "127.0.0.1"
@@ -202,10 +207,36 @@ class JupiterAPIServer:
     config: Optional[JupiterConfig] = None
     install_path: Optional[Path] = None
 
+    def _create_diag_app(self) -> FastAPI:
+        """Create the autodiag FastAPI app (localhost only, no auth required)."""
+        diag_app = FastAPI(
+            title="Jupiter Autodiag",
+            description="Internal diagnostic API for Jupiter self-analysis.",
+            version=__version__,
+        )
+        
+        # Include autodiag router
+        diag_app.include_router(autodiag.router)
+        
+        # Store reference to main app for introspection
+        diag_app.state.main_app = app
+        diag_app.state.start_time = time.time()
+        
+        # Add CORS for local tools
+        diag_app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        
+        return diag_app
+
     def start(self) -> None:
-        """Start the API server using uvicorn."""
+        """Start the API server using uvicorn, with optional autodiag server."""
         app.state.root_path = self.root
         app.state.install_path = self.install_path or self.root
+        app.state.start_time = time.time()
         save_last_root(self.root)
         
         # Initialize MeetingAdapter with config parameters
@@ -242,19 +273,64 @@ class JupiterAPIServer:
         active_logging = getattr(active_config, "logging", None)
         active_level = getattr(active_logging, "level", None)
         active_path = getattr(active_logging, "path", None)
-        active_log_level = configure_logging(active_level, log_file=active_path)
+        active_reset = getattr(active_logging, "reset_on_start", True)
+        active_log_level = configure_logging(active_level, log_file=active_path, reset_on_start=active_reset)
         logger.info("Configured logging at %s", active_log_level)
 
-        logger.info("Starting Jupiter API server on %s:%s for root %s", self.host, self.port, self.root)
+        # Check if autodiag is enabled
+        autodiag_config = getattr(self.config, "autodiag", None) if self.config else None
+        autodiag_enabled = autodiag_config is not None and autodiag_config.enabled
+        
+        if autodiag_enabled and autodiag_config is not None:
+            # Run both servers concurrently
+            diag_port = autodiag_config.port
+            logger.info(
+                "Starting Jupiter API server on %s:%s and Autodiag on 127.0.0.1:%s for root %s",
+                self.host, self.port, diag_port, self.root
+            )
+            asyncio.run(self._run_dual_servers(active_log_level, diag_port))
+        else:
+            # Run only main server
+            logger.info("Starting Jupiter API server on %s:%s for root %s", self.host, self.port, self.root)
+            try:
+                uvicorn.run(
+                    app,
+                    host=self.host,
+                    port=self.port,
+                    log_level=active_log_level.lower(),
+                )
+            except Exception as e:
+                logger.error("Server crashed: %s", e)
+                raise
+
+    async def _run_dual_servers(self, log_level: str, autodiag_port: int) -> None:
+        """Run both main API and autodiag servers concurrently."""
+        diag_app = self._create_diag_app()
+        
+        main_config = uvicorn.Config(
+            app,
+            host=self.host,
+            port=self.port,
+            log_level=log_level.lower(),
+        )
+        
+        diag_config = uvicorn.Config(
+            diag_app,
+            host="127.0.0.1",  # Localhost only for security
+            port=autodiag_port,
+            log_level=log_level.lower(),
+        )
+        
+        main_server = uvicorn.Server(main_config)
+        diag_server = uvicorn.Server(diag_config)
+        
         try:
-            uvicorn.run(
-                app,
-                host=self.host,
-                port=self.port,
-                log_level=active_log_level.lower(),
+            await asyncio.gather(
+                main_server.serve(),
+                diag_server.serve(),
             )
         except Exception as e:
-            logger.error("Server crashed: %s", e)
+            logger.error("Dual-server crashed: %s", e)
             raise
 
     def stop(self) -> None:

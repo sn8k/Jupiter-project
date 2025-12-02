@@ -6,6 +6,7 @@ pydantic
 httpx
 pyright
 requests
+psutil
 # Notifications webhook keeps using httpx for outbound posts while now falling back to in-app alerts when no URL is set.
 python-multipart
 # Standard library only for now; GUI (http.server + static assets) does not add third-party needs yet.

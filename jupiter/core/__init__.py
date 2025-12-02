@@ -3,6 +3,13 @@
 from .scanner import ProjectScanner, FileMetadata
 from .analyzer import ProjectAnalyzer, AnalysisSummary
 from .report import ScanReport
+from .callgraph import (
+    CallGraphBuilder,
+    CallGraphResult,
+    CallGraphService,
+    FunctionInfo,
+    build_call_graph,
+)
 
 __all__ = [
     "ProjectScanner",
@@ -10,4 +17,9 @@ __all__ = [
     "ProjectAnalyzer",
     "AnalysisSummary",
     "ScanReport",
+    "CallGraphBuilder",
+    "CallGraphResult",
+    "CallGraphService",
+    "FunctionInfo",
+    "build_call_graph",
 ]

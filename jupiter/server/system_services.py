@@ -71,7 +71,11 @@ class SystemState:
         else:
             self.app.state.project_manager = ProjectManager(config)
 
-        configure_logging(config.logging.level, log_file=config.logging.path)
+        configure_logging(
+            config.logging.level,
+            log_file=config.logging.path,
+            reset_on_start=config.logging.reset_on_start,
+        )
 
         plugin_manager = PluginManager(config=config.plugins)
         plugin_manager.discover_and_load()

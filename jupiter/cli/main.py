@@ -1,10 +1,15 @@
-"""Command line entrypoint for Jupiter."""
+"""
+Command line entrypoint for Jupiter.
+
+Version: 1.1.0
+"""
 
 from __future__ import annotations
 
 import argparse
 import logging
 from pathlib import Path
+from typing import Dict, List, Any
 
 from jupiter import __version__
 from jupiter.config import load_config
@@ -26,10 +31,57 @@ from jupiter.cli.command_handlers import (
     handle_snapshot_diff,
     handle_simulate_remove,
     handle_meeting_check_license,
+    handle_autodiag,
 )
 
 configure_logging("INFO")
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# CLI HANDLER REGISTRY (Phase 2 - for autodiag introspection)
+# =============================================================================
+
+# Map of command names to their handler functions
+CLI_HANDLERS: Dict[str, Any] = {
+    "scan": handle_scan,
+    "analyze": handle_analyze,
+    "ci": handle_ci,
+    "server": handle_server,
+    "gui": handle_gui,
+    "watch": handle_watch,
+    "run": handle_run,
+    "app": handle_app,
+    "update": handle_update,
+    "snapshots_list": handle_snapshot_list,
+    "snapshots_show": handle_snapshot_show,
+    "snapshots_diff": handle_snapshot_diff,
+    "simulate_remove": handle_simulate_remove,
+    "meeting_check_license": handle_meeting_check_license,
+    "autodiag": handle_autodiag,
+}
+
+
+def get_cli_handlers() -> List[Dict[str, Any]]:
+    """
+    Get list of all CLI handlers for autodiag introspection.
+    
+    Returns:
+        List of handler info dicts with:
+        - command: Command name
+        - function_name: Handler function name
+        - module: Module path
+        - qualname: Qualified name
+    """
+    handlers = []
+    for command, func in CLI_HANDLERS.items():
+        handlers.append({
+            "command": command,
+            "function_name": getattr(func, "__name__", str(func)),
+            "module": getattr(func, "__module__", "unknown"),
+            "qualname": getattr(func, "__qualname__", getattr(func, "__name__", str(func))),
+        })
+    return handlers
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,6 +200,17 @@ def build_parser() -> argparse.ArgumentParser:
     meeting_check.add_argument("root", type=Path, nargs="?", default=None, help="Project root")
     meeting_check.add_argument("--json", action="store_true", help="Output as JSON")
 
+    # Autodiag subcommand (Phase 4)
+    autodiag_parser = subcommands.add_parser("autodiag", help="Run autodiagnostic to validate unused function detection")
+    autodiag_parser.add_argument("root", type=Path, nargs="?", default=None, help="Project root to analyze")
+    autodiag_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    autodiag_parser.add_argument("--api-url", help="Main API base URL (default: http://localhost:8000)")
+    autodiag_parser.add_argument("--diag-url", help="Diag API base URL (default: http://127.0.0.1:8081)")
+    autodiag_parser.add_argument("--skip-cli", action="store_true", help="Skip CLI scenario tests")
+    autodiag_parser.add_argument("--skip-api", action="store_true", help="Skip API scenario tests")
+    autodiag_parser.add_argument("--skip-plugins", action="store_true", help="Skip plugin hook tests")
+    autodiag_parser.add_argument("--timeout", type=float, default=30.0, help="Timeout per scenario (seconds)")
+
     return parser
 def main() -> None:
     """Entrypoint for the CLI."""
@@ -164,7 +227,11 @@ def main() -> None:
     root = resolve_root_argument(getattr(args, "root", None))
     save_last_root(root)
     config = load_config(root)
-    active_level = configure_logging(config.logging.level, log_file=config.logging.path)
+    active_level = configure_logging(
+        config.logging.level,
+        log_file=config.logging.path,
+        reset_on_start=config.logging.reset_on_start,
+    )
     logger.info("Log level set to %s", active_level)
 
     default_backend_name = config.backends[0].name if config.backends else "local"
@@ -238,6 +305,20 @@ def main() -> None:
             raise SystemExit(exit_code)
         else:
             raise ValueError(f"Unhandled meeting command {args.meeting_command}")
+    elif args.command == "autodiag":
+        autodiag_root = resolve_root_argument(getattr(args, "root", None))
+        save_last_root(autodiag_root)
+        exit_code = handle_autodiag(
+            root=autodiag_root,
+            as_json=args.json,
+            api_url=args.api_url,
+            diag_url=args.diag_url,
+            skip_cli=args.skip_cli,
+            skip_api=args.skip_api,
+            skip_plugins=args.skip_plugins,
+            timeout=args.timeout,
+        )
+        raise SystemExit(exit_code)
     elif args.command == "update":
         handle_update(args.source, args.force)
     elif args.command == "ci":

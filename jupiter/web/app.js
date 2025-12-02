@@ -141,6 +141,86 @@ function setText(id, value) {
 
 // --- I18n & Theming ---
 
+// Available languages cache
+const availableLanguages = [];
+
+/**
+ * Discover available languages from lang/*.json files
+ * Each file must have a _meta object with lang_code, lang_name, and version
+ */
+async function discoverLanguages() {
+  // Known language files to check (we can't list directory contents from browser)
+  // This list should be extended when adding new language files
+  const knownLangFiles = ['fr', 'en', 'klingon', 'elvish', 'pirate'];
+  
+  availableLanguages.length = 0; // Clear existing
+  
+  for (const langCode of knownLangFiles) {
+    try {
+      const response = await fetch(`./lang/${langCode}.json`);
+      if (!response.ok) continue;
+      const data = await response.json();
+      if (data._meta && data._meta.lang_code && data._meta.lang_name) {
+        availableLanguages.push({
+          code: data._meta.lang_code,
+          name: data._meta.lang_name,
+          version: data._meta.version || '0.0.0'
+        });
+      }
+    } catch (e) {
+      // Language file doesn't exist or is invalid, skip
+    }
+  }
+  
+  // Sort: fr and en first, then others alphabetically
+  availableLanguages.sort((a, b) => {
+    const priority = { fr: 0, en: 1 };
+    const aPrio = priority[a.code] ?? 99;
+    const bPrio = priority[b.code] ?? 99;
+    if (aPrio !== bPrio) return aPrio - bPrio;
+    return a.name.localeCompare(b.name);
+  });
+  
+  return availableLanguages;
+}
+
+/**
+ * Populate the language selector with discovered languages
+ */
+function populateLanguageSelector() {
+  const select = document.getElementById('conf-ui-lang');
+  const versionInfo = document.getElementById('lang-version-info');
+  if (!select) return;
+  
+  select.innerHTML = '';
+  
+  for (const lang of availableLanguages) {
+    const option = document.createElement('option');
+    option.value = lang.code;
+    option.textContent = `${lang.name} (v${lang.version})`;
+    select.appendChild(option);
+  }
+  
+  // Set current language
+  select.value = state.i18n.lang;
+  
+  // Update version info
+  updateLanguageVersionInfo();
+}
+
+/**
+ * Update the version info display for current language
+ */
+function updateLanguageVersionInfo() {
+  const versionInfo = document.getElementById('lang-version-info');
+  if (!versionInfo) return;
+  
+  const currentLang = availableLanguages.find(l => l.code === state.i18n.lang);
+  if (currentLang) {
+    versionInfo.textContent = `${currentLang.name} v${currentLang.version}`;
+  }
+}
+
 async function setLanguage(lang) {
   if (state.i18n.lang === lang && Object.keys(state.i18n.translations).length) return;
   
@@ -152,11 +232,18 @@ async function setLanguage(lang) {
     localStorage.setItem("jupiter-lang", lang);
     document.documentElement.lang = lang;
     translateUI();
+    
+    // Update language display with meta info
+    const currentLang = availableLanguages.find(l => l.code === lang);
     const languageValue = document.getElementById("language-value");
-    if (languageValue) {
-      languageValue.textContent = lang === "fr" ? "Français" : "English";
+    if (languageValue && currentLang) {
+      languageValue.textContent = currentLang.name;
     }
-    addLog(`Language changed to ${lang.toUpperCase()}`);
+    
+    // Update version info
+    updateLanguageVersionInfo();
+    
+    addLog(`Language changed to ${currentLang?.name || lang.toUpperCase()} (v${currentLang?.version || '?'})`);
   } catch (error) {
     console.error("Failed to load language:", error);
     addLog(`Error loading language ${lang}`, "ERROR");
@@ -573,6 +660,18 @@ function handleAction(action, data) {
     case "save-project-api":
       saveProjectApiConfig();
       break;
+    case "save-project-perf":
+      saveProjectPerformanceSettings();
+      break;
+    case "save-network-settings":
+      saveNetworkSettings();
+      break;
+    case "save-ui-settings":
+      saveUISettings();
+      break;
+    case "save-security-settings":
+      saveSecuritySettings();
+      break;
     case "refresh-root-entries":
       loadProjectRootEntries();
       break;
@@ -595,14 +694,15 @@ function handleAction(action, data) {
     case "refresh-snapshots":
       loadSnapshots(true);
       break;
-    case "refresh-graph":
-      renderGraph();
-      break;
+    // refresh-graph removed - now handled by livemap plugin
     case "refresh-suggestions":
       refreshSuggestions();
       break;
     case "check-meeting-license":
       checkMeetingLicense();
+      break;
+    case "save-meeting-settings":
+      saveMeetingSettings();
       break;
     case "refresh-meeting-status":
       refreshMeetingStatus();
@@ -712,6 +812,33 @@ function handleAction(action, data) {
     case "reload-plugins":
       reloadAllPlugins();
       break;
+    // CI actions
+    case "run-ci-check":
+      runCICheck();
+      break;
+    case "configure-thresholds":
+      openThresholdsConfig();
+      break;
+    case "save-thresholds":
+      saveThresholds();
+      break;
+    case "export-ci-report":
+      exportCIReport();
+      break;
+    // Snapshot actions
+    case "view-snapshot-detail":
+      viewSnapshotDetail(data.id);
+      break;
+    case "export-snapshot":
+      exportSnapshot(data.id);
+      break;
+    case "close-snapshot-detail":
+      closeSnapshotDetail();
+      break;
+    // License actions
+    case "refresh-license":
+      refreshLicenseDetails();
+      break;
     default:
       console.warn(`Unknown action: ${action}`);
       break;
@@ -731,20 +858,35 @@ function closeModal(id) {
 async function startScanWithOptions() {
   const hiddenInput = document.getElementById("scan-show-hidden");
   const incrementalInput = document.getElementById("scan-incremental");
+  const noCacheInput = document.getElementById("scan-no-cache");
+  const noSnapshotInput = document.getElementById("scan-no-snapshot");
+  const snapshotLabelInput = document.getElementById("scan-snapshot-label");
   const ignoreInput = document.getElementById("scan-ignore");
 
   const showHidden = hiddenInput ? hiddenInput.checked : false;
   const incremental = incrementalInput ? incrementalInput.checked : false;
+  const noCache = noCacheInput ? noCacheInput.checked : false;
+  const noSnapshot = noSnapshotInput ? noSnapshotInput.checked : false;
+  const snapshotLabel = snapshotLabelInput ? snapshotLabelInput.value.trim() : "";
   const ignoreStr = ignoreInput ? ignoreInput.value : "";
   const ignoreGlobs = ignoreStr ? ignoreStr.split(",").map(s => s.trim()).filter(s => s) : [];
 
   localStorage.setItem("jupiter_scan_hidden", showHidden ? "true" : "false");
   localStorage.setItem("jupiter_scan_incremental", incremental ? "true" : "false");
+  localStorage.setItem("jupiter_scan_no_cache", noCache ? "true" : "false");
+  localStorage.setItem("jupiter_scan_no_snapshot", noSnapshot ? "true" : "false");
+  localStorage.setItem("jupiter_scan_snapshot_label", snapshotLabel);
   localStorage.setItem("jupiter_scan_ignore", ignoreStr);
 
   closeModal("scan-modal");
 
-  await startScan({ show_hidden: showHidden, incremental, ignore_globs: ignoreGlobs });
+  await startScan({ 
+    show_hidden: showHidden, 
+    incremental, 
+    ignore_globs: ignoreGlobs,
+    capture_snapshot: !noSnapshot,
+    snapshot_label: snapshotLabel || null
+  });
 }
 
 async function runCommand() {
@@ -1053,7 +1195,8 @@ async function loadSettings() {
             if (document.getElementById("conf-ui-lang")) document.getElementById("conf-ui-lang").value = config.ui_language || "fr";
             const effectiveLogLevel = normalizeLogLevel(config.log_level || "INFO");
             if (document.getElementById("conf-log-level")) document.getElementById("conf-log-level").value = effectiveLogLevel;
-            if (document.getElementById("conf-log-path")) document.getElementById("conf-log-path").value = config.log_path || "";
+            if (document.getElementById("conf-log-path")) document.getElementById("conf-log-path").value = config.log_path || "logs/jupiter.log";
+            if (document.getElementById("conf-log-reset")) document.getElementById("conf-log-reset").checked = config.log_reset_on_start !== false;
             applyLogLevel(effectiveLogLevel);
             
             // Performance
@@ -1099,17 +1242,8 @@ async function saveSettings(e) {
         ui_language: formData.get("ui_language"),
         log_level: formData.get("log_level") || "INFO",
         log_path: (formData.get("log_path") || "").trim() || null,
-        plugins_enabled: [], // TODO: Handle plugins list
+        plugins_enabled: [],
         plugins_disabled: [],
-        
-        // Performance
-        perf_parallel_scan: formData.get("perf_parallel_scan") === "on",
-        perf_max_workers: parseInt(formData.get("perf_max_workers")) || null,
-        perf_scan_timeout: parseInt(formData.get("perf_scan_timeout")) || 300,
-        perf_graph_simplification: formData.get("perf_graph_simplification") === "on",
-        perf_max_graph_nodes: parseInt(formData.get("perf_max_graph_nodes")) || 1000,
-        
-        // Security
         sec_allow_run: formData.get("sec_allow_run") === "on",
     };
     
@@ -1133,6 +1267,154 @@ async function saveSettings(e) {
         alert("Error saving settings: " + e.message);
     }
 }
+
+// --- Individual Section Save Functions ---
+
+function setSettingsStatus(statusId, text, variant = null) {
+    const el = document.getElementById(statusId);
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'setting-result';
+    if (variant === 'error') el.classList.add('error');
+    else if (variant === 'success') el.classList.add('ok');
+    else if (variant === 'busy') el.classList.add('busy');
+}
+
+async function saveNetworkSettings() {
+    if (!state.apiBaseUrl) return;
+    
+    const config = {
+        server_host: document.getElementById("conf-server-host")?.value || "127.0.0.1",
+        server_port: parseInt(document.getElementById("conf-server-port")?.value) || 8000,
+        gui_host: document.getElementById("conf-gui-host")?.value || "127.0.0.1",
+        gui_port: parseInt(document.getElementById("conf-gui-port")?.value) || 8050,
+    };
+    
+    setSettingsStatus("network-settings-status", "...", "busy");
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/config`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        if (response.ok) {
+            setSettingsStatus("network-settings-status", "✓", "success");
+            addLog("Network settings saved.");
+        } else {
+            setSettingsStatus("network-settings-status", "✗", "error");
+        }
+    } catch (e) {
+        setSettingsStatus("network-settings-status", "✗", "error");
+        console.error("Error saving network settings:", e);
+    }
+}
+
+async function saveUISettings() {
+    if (!state.apiBaseUrl) return;
+    
+    const theme = document.getElementById("conf-ui-theme")?.value || "dark";
+    const lang = document.getElementById("conf-ui-lang")?.value || "fr";
+    
+    const config = {
+        ui_theme: theme,
+        ui_language: lang,
+    };
+    
+    setSettingsStatus("ui-settings-status", "...", "busy");
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/config`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        if (response.ok) {
+            setSettingsStatus("ui-settings-status", "✓", "success");
+            setTheme(theme);
+            setLanguage(lang);
+            addLog("UI settings saved.");
+        } else {
+            setSettingsStatus("ui-settings-status", "✗", "error");
+        }
+    } catch (e) {
+        setSettingsStatus("ui-settings-status", "✗", "error");
+        console.error("Error saving UI settings:", e);
+    }
+}
+
+async function saveSecuritySettings() {
+    if (!state.apiBaseUrl) return;
+    
+    const logLevel = document.getElementById("conf-log-level")?.value || "INFO";
+    const logPath = document.getElementById("conf-log-path")?.value?.trim() || null;
+    const logResetOnStart = document.getElementById("conf-log-reset")?.checked ?? true;
+    const config = {
+        sec_allow_run: document.getElementById("conf-sec-allow-run")?.checked || false,
+        log_level: logLevel,
+        log_path: logPath,
+        log_reset_on_start: logResetOnStart,
+    };
+    
+    setSettingsStatus("security-settings-status", "...", "busy");
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/config`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        if (response.ok) {
+            setSettingsStatus("security-settings-status", "✓", "success");
+            addLog("Security settings saved.");
+            applyLogLevel(logLevel);
+        } else {
+            setSettingsStatus("security-settings-status", "✗", "error");
+        }
+    } catch (e) {
+        setSettingsStatus("security-settings-status", "✗", "error");
+        console.error("Error saving security settings:", e);
+    }
+}
+
+async function saveProjectPerformanceSettings() {
+    if (!state.apiBaseUrl || !state.activeProjectId) {
+        alert(t("no_active_project") || "Aucun projet actif");
+        return;
+    }
+    
+    const config = {
+        perf_parallel_scan: document.getElementById("conf-perf-parallel")?.checked || false,
+        perf_max_workers: parseInt(document.getElementById("conf-perf-workers")?.value) || 0,
+        perf_scan_timeout: parseInt(document.getElementById("conf-perf-timeout")?.value) || 300,
+        perf_graph_simplification: document.getElementById("conf-perf-graph-simple")?.checked || false,
+        perf_max_graph_nodes: parseInt(document.getElementById("conf-perf-graph-nodes")?.value) || 1000,
+    };
+    
+    setSettingsStatus("project-perf-status", "...", "busy");
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/config`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        if (response.ok) {
+            setSettingsStatus("project-perf-status", "✓", "success");
+            addLog("Performance settings saved.");
+        } else {
+            setSettingsStatus("project-perf-status", "✗", "error");
+        }
+    } catch (e) {
+        setSettingsStatus("project-perf-status", "✗", "error");
+        console.error("Error saving performance settings:", e);
+    }
+}
+
 
 // --- Meeting License Functions ---
 
@@ -1178,6 +1460,54 @@ async function refreshMeetingStatus() {
     }
 }
 
+async function saveMeetingSettings() {
+    if (!state.apiBaseUrl) {
+        alert(t("meeting_no_api") || "API non configurée");
+        return;
+    }
+    
+    const deviceKey = document.getElementById("conf-meeting-key")?.value?.trim() || "";
+    const authToken = document.getElementById("conf-meeting-token")?.value?.trim() || "";
+    const heartbeatInterval = parseInt(document.getElementById("conf-meeting-heartbeat")?.value) || 60;
+    
+    const saveBtn = document.querySelector('[data-action="save-meeting-settings"]');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = t("saving") || "Enregistrement...";
+    }
+    
+    try {
+        // Save meeting settings via config endpoint
+        const response = await apiFetch(`${state.apiBaseUrl}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                meeting: {
+                    deviceKey: deviceKey,
+                    auth_token: authToken,
+                    heartbeat_interval: heartbeatInterval
+                }
+            })
+        });
+        
+        if (response.ok) {
+            addLog(t("meeting_settings_saved") || "Meeting settings saved", "INFO");
+            // Optionally check the license after saving
+            await checkMeetingLicense();
+        } else {
+            const err = await response.json().catch(() => ({}));
+            addLog(`${t("meeting_save_failed") || "Failed to save Meeting settings"}: ${err.detail || response.status}`, "ERROR");
+        }
+    } catch (e) {
+        addLog(`${t("meeting_save_error") || "Error saving Meeting settings"}: ${e.message}`, "ERROR");
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = t("meeting_save_btn") || "💾 Enregistrer";
+        }
+    }
+}
+
 async function checkMeetingLicense() {
     if (!state.apiBaseUrl) {
         alert(t("meeting_no_api") || "API non configurée");
@@ -1207,27 +1537,21 @@ async function checkMeetingLicense() {
                 lastCheckedAt: new Date().toISOString()
             };
             updateMeetingStatusUI(licenseData);
-            addLog(`Meeting license verified: ${licenseData.status}`, "INFO");
-            
-            if (licenseData.status === "valid") {
-                alert(t("meeting_license_valid") || "✅ Licence Meeting valide !");
-            } else {
-                alert(`${t("meeting_license_invalid") || "❌ Licence non valide"}: ${licenseData.message}`);
-            }
+            addLog(`Meeting license verified: ${licenseData.status}`, licenseData.status === "valid" ? "INFO" : "WARN");
         } else {
             const err = await response.json().catch(() => ({}));
             updateMeetingStatusUI({
                 status: "network_error",
                 message: err.detail || `HTTP ${response.status}`
             });
-            alert(`${t("meeting_check_failed") || "Échec de la vérification"}: ${err.detail || response.status}`);
+            addLog(`${t("meeting_check_failed") || "Échec de la vérification"}: ${err.detail || response.status}`, "ERROR");
         }
     } catch (e) {
         updateMeetingStatusUI({
             status: "network_error",
             message: e.message
         });
-        alert(`${t("meeting_check_error") || "Erreur"}: ${e.message}`);
+        addLog(`${t("meeting_check_error") || "Erreur"}: ${e.message}`, "ERROR");
     } finally {
         const refreshBtn = document.querySelector('[data-action="check-meeting-license"]');
         if (refreshBtn) {
@@ -1238,53 +1562,44 @@ async function checkMeetingLicense() {
 }
 
 function updateMeetingStatusUI(licenseData) {
-    // Update Settings page Meeting section elements
-    const lastCheckEl = document.getElementById("meeting-last-check");
-    const lastResponseEl = document.getElementById("meeting-last-response");
-    
     // Set status based on license data
     const status = licenseData.status || "unknown";
     let statusText = t("meeting_status_unknown") || "Statut inconnu";
+    let statusIcon = "❓";
     
     switch (status) {
         case "valid":
-            statusText = "✅ " + (t("meeting_status_valid") || "Licence valide");
+            statusText = t("meeting_status_valid") || "Licence valide";
+            statusIcon = "✅";
             break;
         case "invalid":
-            statusText = "❌ " + (t("meeting_status_invalid") || "Licence non valide");
+            statusText = t("meeting_status_invalid") || "Licence non valide";
+            statusIcon = "❌";
             break;
         case "network_error":
-            statusText = "⚠️ " + (t("meeting_status_network_error") || "Erreur réseau");
+            statusText = t("meeting_status_network_error") || "Erreur réseau";
+            statusIcon = "⚠️";
             break;
         case "config_error":
-            statusText = "⚙️ " + (t("meeting_status_config_error") || "Erreur de configuration");
+            statusText = t("meeting_status_config_error") || "Erreur de configuration";
+            statusIcon = "⚙️";
             break;
-        default:
-            statusText = "❓ " + (t("meeting_status_unknown") || "Statut inconnu");
     }
     
-    // Update last check time
-    if (lastCheckEl) {
-        const checkedAt = licenseData.checked_at || state.meeting?.lastCheckedAt;
-        if (checkedAt) {
-            lastCheckEl.textContent = `${statusText} — ${t("meeting_last_check") || "Dernière vérification"}: ${formatDateISO(checkedAt)}`;
-        } else {
-            lastCheckEl.textContent = statusText;
-        }
-    }
+    // Update License Details grid
+    const setDetail = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value ?? "—";
+    };
     
-    // Update last response JSON display
-    if (lastResponseEl && licenseData) {
-        const displayData = {
-            status: licenseData.status,
-            message: licenseData.message,
-            device_key: licenseData.device_key ? `${licenseData.device_key.substring(0, 8)}...` : null,
-            authorized: licenseData.authorized,
-            device_type: licenseData.device_type,
-            checked_at: licenseData.checked_at
-        };
-        lastResponseEl.textContent = JSON.stringify(displayData, null, 2);
-    }
+    setDetail("license-detail-status", `${statusIcon} ${statusText}`);
+    setDetail("license-detail-authorized", licenseData.authorized ? "✅ Oui" : "❌ Non");
+    setDetail("license-detail-device-type", licenseData.device_type);
+    setDetail("license-detail-token-count", licenseData.token_count);
+    setDetail("license-detail-checked-at", formatDateISO(licenseData.checked_at));
+    setDetail("license-detail-http-status", licenseData.http_status);
+    setDetail("license-detail-meeting-url", licenseData.meeting_base_url);
+    setDetail("license-detail-message", licenseData.message);
     
     // Update dashboard badge
     renderStatusBadges(state.report);
@@ -2800,9 +3115,11 @@ function renderPluginList(plugins) {
             <span class="plugin-status ${statusClass}">● ${statusText}</span>
         </div>
         <div class="plugin-actions">
+          ${plugin.restartable !== false ? `
           <button class="ghost small" data-action="restart-plugin" data-plugin-name="${plugin.name}" title="${t('plugin_restart_tooltip') || 'Restart plugin'}">
               🔄
           </button>
+          ` : ''}
           <button class="${plugin.enabled ? 'secondary' : 'primary'} small" data-action="toggle-plugin" data-plugin-name="${plugin.name}" data-plugin-state="${!plugin.enabled}">
               ${plugin.enabled ? t('plugin_disable') || "Disable" : t('plugin_enable') || "Enable"}
           </button>
@@ -3501,6 +3818,7 @@ async function loadProjects() {
             }
             if (state.activeProjectId) {
                 await loadProjectApiConfig(state.activeProjectId);
+                await loadProjectPerformanceConfig();
                 await loadProjectRootEntries();
             }
         } else {
@@ -3530,6 +3848,34 @@ async function loadProjectApiConfig(projectId) {
         if (pathInput) pathInput.value = data.path || "";
     } catch (e) {
         console.error("Failed to load project API config", e);
+    }
+}
+
+async function loadProjectPerformanceConfig() {
+    if (!state.apiBaseUrl) return;
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/config`);
+        if (!response.ok) return;
+        const config = await response.json();
+        
+        // Load performance settings into the Projects view
+        if (document.getElementById("conf-perf-parallel")) {
+            document.getElementById("conf-perf-parallel").checked = config.perf_parallel_scan !== false;
+        }
+        if (document.getElementById("conf-perf-workers")) {
+            document.getElementById("conf-perf-workers").value = config.perf_max_workers || 0;
+        }
+        if (document.getElementById("conf-perf-timeout")) {
+            document.getElementById("conf-perf-timeout").value = config.perf_scan_timeout || 300;
+        }
+        if (document.getElementById("conf-perf-graph-simple")) {
+            document.getElementById("conf-perf-graph-simple").checked = config.perf_graph_simplification || false;
+        }
+        if (document.getElementById("conf-perf-graph-nodes")) {
+            document.getElementById("conf-perf-graph-nodes").value = config.perf_max_graph_nodes || 1000;
+        }
+    } catch (e) {
+        console.error("Failed to load project performance config", e);
     }
 }
 
@@ -4542,6 +4888,8 @@ function setView(view) {
   } else if (view === "settings") {
     // Load plugin settings when opening settings view
     loadPluginSettings();
+  } else if (view === "ci") {
+    loadCIView();
   } else if (view.startsWith("plugin-")) {
     // Plugin view - handled by loadPluginViewContent in bindPluginNavigation
     const pluginSection = document.querySelector(`section.view[data-view="${view}"]`);
@@ -5471,8 +5819,14 @@ function renderBackendSelector() {
 
 // --- Initialization ---
 async function init() {
+  // Discover available languages first
+  await discoverLanguages();
+  
   const savedLang = localStorage.getItem("jupiter-lang") || "fr";
   await setLanguage(savedLang);
+  
+  // Populate language selector after discovery
+  populateLanguageSelector();
   
   const savedTheme = localStorage.getItem("jupiter-theme") || "dark";
   setTheme(savedTheme);
@@ -5861,7 +6215,12 @@ function renderSimulationResult(result) {
     content.innerHTML = html;
 }
 
+/**
+ * @deprecated Use livemap plugin instead. This function is kept for backwards compatibility.
+ * The Live Map functionality has been migrated to the livemap plugin.
+ */
 async function renderGraph() {
+  console.warn('renderGraph() is deprecated. Use livemap plugin instead.');
   const container = document.getElementById("graph-container");
   if (!container) return;
   
@@ -6024,6 +6383,7 @@ async function loadUsers() {
         const response = await apiFetch(`${state.apiBaseUrl}/users`);
         if (response.ok) {
             const users = await response.json();
+            state.users = users;
             renderUsers(users);
         }
     } catch (e) {
@@ -6038,24 +6398,137 @@ function renderUsers(users) {
     
     users.forEach(user => {
         const row = document.createElement("tr");
+        row.dataset.userName = user.name;
         row.innerHTML = `
-            <td>${user.name}</td>
-            <td>${user.role}</td>
             <td>
-                <button class="btn-icon" onclick="handleAction('delete-user', {name: '${user.name}'})" title="Delete">🗑️</button>
+                <span class="user-name-display">${escapeHtml(user.name)}</span>
+                <input type="text" class="user-name-edit hidden" value="${escapeHtml(user.name)}" style="width: 100%;" />
+            </td>
+            <td>
+                <span class="user-token-display">${user.token ? '••••••••' : '—'}</span>
+                <input type="text" class="user-token-edit hidden" placeholder="Nouveau token" style="width: 100%;" />
+            </td>
+            <td>
+                <span class="user-role-display">${escapeHtml(user.role)}</span>
+                <select class="user-role-edit hidden" style="width: 100%;">
+                    <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                    <option value="editor" ${user.role === 'editor' ? 'selected' : ''}>Editor</option>
+                    <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+                </select>
+            </td>
+            <td class="user-actions">
+                <button class="btn-icon user-action-edit" data-user="${escapeHtml(user.name)}" title="Modifier">✏️</button>
+                <button class="btn-icon user-action-save hidden" data-user="${escapeHtml(user.name)}" title="Enregistrer">💾</button>
+                <button class="btn-icon user-action-cancel hidden" data-user="${escapeHtml(user.name)}" title="Annuler">❌</button>
+                <button class="btn-icon user-action-delete" data-user="${escapeHtml(user.name)}" title="Supprimer">🗑️</button>
             </td>
         `;
         tbody.appendChild(row);
     });
+    
+    // Attach event listeners
+    tbody.querySelectorAll('.user-action-edit').forEach(btn => {
+        btn.addEventListener('click', () => startEditUser(btn.dataset.user));
+    });
+    tbody.querySelectorAll('.user-action-save').forEach(btn => {
+        btn.addEventListener('click', () => saveEditUser(btn.dataset.user));
+    });
+    tbody.querySelectorAll('.user-action-cancel').forEach(btn => {
+        btn.addEventListener('click', () => cancelEditUser(btn.dataset.user));
+    });
+    tbody.querySelectorAll('.user-action-delete').forEach(btn => {
+        btn.addEventListener('click', () => deleteUser(btn.dataset.user));
+    });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function startEditUser(userName) {
+    const row = document.querySelector(`tr[data-user-name="${userName}"]`);
+    if (!row) return;
+    
+    // Show edit fields, hide display
+    row.querySelectorAll('.user-name-display, .user-token-display, .user-role-display').forEach(el => el.classList.add('hidden'));
+    row.querySelectorAll('.user-name-edit, .user-token-edit, .user-role-edit').forEach(el => el.classList.remove('hidden'));
+    
+    // Toggle buttons
+    row.querySelector('.user-action-edit').classList.add('hidden');
+    row.querySelector('.user-action-delete').classList.add('hidden');
+    row.querySelector('.user-action-save').classList.remove('hidden');
+    row.querySelector('.user-action-cancel').classList.remove('hidden');
+}
+
+function cancelEditUser(userName) {
+    const row = document.querySelector(`tr[data-user-name="${userName}"]`);
+    if (!row) return;
+    
+    // Show display, hide edit fields
+    row.querySelectorAll('.user-name-display, .user-token-display, .user-role-display').forEach(el => el.classList.remove('hidden'));
+    row.querySelectorAll('.user-name-edit, .user-token-edit, .user-role-edit').forEach(el => el.classList.add('hidden'));
+    
+    // Toggle buttons
+    row.querySelector('.user-action-edit').classList.remove('hidden');
+    row.querySelector('.user-action-delete').classList.remove('hidden');
+    row.querySelector('.user-action-save').classList.add('hidden');
+    row.querySelector('.user-action-cancel').classList.add('hidden');
+    
+    // Reset values
+    const originalUser = state.users?.find(u => u.name === userName);
+    if (originalUser) {
+        row.querySelector('.user-name-edit').value = originalUser.name;
+        row.querySelector('.user-role-edit').value = originalUser.role;
+        row.querySelector('.user-token-edit').value = '';
+    }
+}
+
+async function saveEditUser(originalName) {
+    const row = document.querySelector(`tr[data-user-name="${originalName}"]`);
+    if (!row) return;
+    
+    const newName = row.querySelector('.user-name-edit').value.trim();
+    const newToken = row.querySelector('.user-token-edit').value.trim();
+    const newRole = row.querySelector('.user-role-edit').value;
+    
+    if (!newName) {
+        alert(t("user_name_required") || "Le nom est requis");
+        return;
+    }
+    
+    try {
+        const response = await apiFetch(`${state.apiBaseUrl}/users/${originalName}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                name: newName, 
+                token: newToken || undefined,  // Only send if changed
+                role: newRole 
+            })
+        });
+        
+        if (response.ok) {
+            const users = await response.json();
+            state.users = users;
+            renderUsers(users);
+            addLog(`User ${originalName} updated`);
+        } else {
+            const err = await response.json().catch(() => ({}));
+            alert((t("user_update_failed") || "Échec de la mise à jour") + ": " + (err.detail || response.status));
+        }
+    } catch (e) {
+        alert((t("user_update_error") || "Erreur") + ": " + e.message);
+    }
 }
 
 async function addUser() {
-    const name = document.getElementById("new-user-name").value;
-    const token = document.getElementById("new-user-token").value;
+    const name = document.getElementById("new-user-name").value.trim();
+    const token = document.getElementById("new-user-token").value.trim();
     const role = document.getElementById("new-user-role").value;
     
     if (!name || !token) {
-        alert("Name and Token are required");
+        alert(t("user_name_token_required") || "Name and Token are required");
         return;
     }
     
@@ -6068,20 +6541,22 @@ async function addUser() {
         
         if (response.ok) {
             const users = await response.json();
+            state.users = users;
             renderUsers(users);
             document.getElementById("new-user-name").value = "";
             document.getElementById("new-user-token").value = "";
             addLog(`User ${name} added`);
         } else {
-            alert("Failed to add user");
+            const err = await response.json().catch(() => ({}));
+            alert((t("user_add_failed") || "Failed to add user") + ": " + (err.detail || ""));
         }
     } catch (e) {
-        alert("Error adding user: " + e.message);
+        alert((t("user_add_error") || "Error adding user") + ": " + e.message);
     }
 }
 
 async function deleteUser(name) {
-    if (!confirm(`Delete user ${name}?`)) return;
+    if (!confirm((t("user_delete_confirm") || `Supprimer l'utilisateur ${name} ?`).replace('{name}', name))) return;
     
     try {
         const response = await apiFetch(`${state.apiBaseUrl}/users/${name}`, {
@@ -6090,13 +6565,14 @@ async function deleteUser(name) {
         
         if (response.ok) {
             const users = await response.json();
+            state.users = users;
             renderUsers(users);
             addLog(`User ${name} deleted`);
         } else {
-            alert("Failed to delete user");
+            alert(t("user_delete_failed") || "Failed to delete user");
         }
     } catch (e) {
-        alert("Error deleting user: " + e.message);
+        alert((t("user_delete_error") || "Error deleting user") + ": " + e.message);
     }
 }
 
@@ -6142,4 +6618,358 @@ function exportData(data, filename) {
   URL.revokeObjectURL(url);
   addLog((t('export_success') || 'Export successful') + ': ' + filename);
 }
+
+// ============================================
+// CI / Quality Gates Functions
+// ============================================
+
+async function loadCIView() {
+  // Load last CI result if available
+  const historyBody = document.getElementById("ci-history-body");
+  if (historyBody && state.ciHistory && state.ciHistory.length > 0) {
+    renderCIHistory();
+  }
+  
+  // Load thresholds from localStorage or defaults
+  const thresholds = getCIThresholds();
+  populateThresholdInputs(thresholds);
+}
+
+function getCIThresholds() {
+  const saved = localStorage.getItem("jupiter_ci_thresholds");
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed to parse CI thresholds from localStorage", e);
+    }
+  }
+  // Default thresholds
+  return {
+    max_complexity: 10,
+    max_lines_per_function: 100,
+    min_doc_coverage: 0.5,
+    max_duplications: 5
+  };
+}
+
+function populateThresholdInputs(thresholds) {
+  const fields = {
+    "ci-max-complexity": thresholds.max_complexity,
+    "ci-max-lines": thresholds.max_lines_per_function,
+    "ci-min-doc-coverage": thresholds.min_doc_coverage,
+    "ci-max-duplications": thresholds.max_duplications
+  };
+  for (const [id, value] of Object.entries(fields)) {
+    const input = document.getElementById(id);
+    if (input) input.value = value;
+  }
+}
+
+function openThresholdsConfig() {
+  // Toggle visibility of thresholds config section
+  const section = document.getElementById("ci-thresholds-config");
+  if (section) {
+    section.classList.toggle("hidden");
+  }
+}
+
+function saveThresholds() {
+  const thresholds = {
+    max_complexity: parseFloat(document.getElementById("ci-max-complexity")?.value) || 10,
+    max_lines_per_function: parseInt(document.getElementById("ci-max-lines")?.value) || 100,
+    min_doc_coverage: parseFloat(document.getElementById("ci-min-doc-coverage")?.value) || 0.5,
+    max_duplications: parseInt(document.getElementById("ci-max-duplications")?.value) || 5
+  };
+  localStorage.setItem("jupiter_ci_thresholds", JSON.stringify(thresholds));
+  addLog(t("ci_thresholds_saved") || "CI thresholds saved.");
+  
+  // Hide config section
+  const section = document.getElementById("ci-thresholds-config");
+  if (section) section.classList.add("hidden");
+}
+
+async function runCICheck() {
+  const apiBase = state.apiBaseUrl || inferApiBaseUrl();
+  if (!apiBase) {
+    alert(t("error_fetch") || "Missing API base URL.");
+    return;
+  }
+  
+  const thresholds = getCIThresholds();
+  const statusEl = document.getElementById("ci-status");
+  const metricsEl = document.getElementById("ci-metrics-grid");
+  const violationsEl = document.getElementById("ci-violations-list");
+  
+  if (statusEl) {
+    statusEl.innerHTML = `<span class="status-badge pending">${t("ci_running") || "Running..."}</span>`;
+  }
+  
+  try {
+    const params = new URLSearchParams();
+    if (state.currentBackend) {
+      params.set("backend_name", state.currentBackend);
+    }
+    
+    const response = await apiFetch(`${apiBase}/ci?${params.toString()}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thresholds })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status} – ${errorText}`);
+    }
+    
+    const result = await response.json();
+    renderCIResult(result, statusEl, metricsEl, violationsEl);
+    
+    // Save to history
+    if (!state.ciHistory) state.ciHistory = [];
+    state.ciHistory.unshift({
+      timestamp: new Date().toISOString(),
+      passed: result.passed,
+      violations_count: result.violations?.length || 0
+    });
+    state.ciHistory = state.ciHistory.slice(0, 20); // Keep last 20
+    renderCIHistory();
+    
+    addLog(result.passed ? 
+      (t("ci_passed") || "CI check passed!") : 
+      (t("ci_failed") || "CI check failed with violations."));
+    
+  } catch (error) {
+    console.error("CI check failed", error);
+    if (statusEl) {
+      statusEl.innerHTML = `<span class="status-badge error">${t("ci_error") || "Error"}</span>`;
+    }
+    addLog(`${t("ci_error") || "CI check error"}: ${error.message}`, "ERROR");
+  }
+}
+
+function renderCIResult(result, statusEl, metricsEl, violationsEl) {
+  // Status
+  if (statusEl) {
+    const badge = result.passed ? 
+      `<span class="status-badge success">${t("ci_status_passed") || "PASSED"}</span>` :
+      `<span class="status-badge error">${t("ci_status_failed") || "FAILED"}</span>`;
+    statusEl.innerHTML = badge;
+  }
+  
+  // Metrics
+  if (metricsEl && result.metrics) {
+    const m = result.metrics;
+    metricsEl.innerHTML = `
+      <div class="metric-card">
+        <div class="metric-label">${t("ci_metric_complexity") || "Avg Complexity"}</div>
+        <div class="metric-value">${m.avg_complexity?.toFixed(2) || "N/A"}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">${t("ci_metric_max_lines") || "Max Lines/Function"}</div>
+        <div class="metric-value">${m.max_lines_per_function || "N/A"}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">${t("ci_metric_doc_coverage") || "Doc Coverage"}</div>
+        <div class="metric-value">${m.doc_coverage ? (m.doc_coverage * 100).toFixed(1) + "%" : "N/A"}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">${t("ci_metric_duplications") || "Duplications"}</div>
+        <div class="metric-value">${m.duplications_count ?? "N/A"}</div>
+      </div>
+    `;
+  }
+  
+  // Violations
+  if (violationsEl) {
+    if (!result.violations || result.violations.length === 0) {
+      violationsEl.innerHTML = `<p class="no-violations">${t("ci_no_violations") || "No violations found."}</p>`;
+    } else {
+      violationsEl.innerHTML = result.violations.map(v => `
+        <div class="violation-item">
+          <span class="violation-type">${v.type || "violation"}</span>
+          <span class="violation-message">${v.message || ""}</span>
+          ${v.file ? `<span class="violation-file">${v.file}</span>` : ""}
+        </div>
+      `).join("");
+    }
+  }
+}
+
+function renderCIHistory() {
+  const tbody = document.getElementById("ci-history-body");
+  if (!tbody || !state.ciHistory) return;
+  
+  tbody.innerHTML = state.ciHistory.map(entry => `
+    <tr>
+      <td>${new Date(entry.timestamp).toLocaleString()}</td>
+      <td>
+        <span class="status-badge ${entry.passed ? 'success' : 'error'}">
+          ${entry.passed ? (t("ci_passed_short") || "PASS") : (t("ci_failed_short") || "FAIL")}
+        </span>
+      </td>
+      <td>${entry.violations_count}</td>
+    </tr>
+  `).join("");
+}
+
+function exportCIReport() {
+  if (!state.ciHistory || state.ciHistory.length === 0) {
+    alert(t("no_data_to_export") || "No data to export.");
+    return;
+  }
+  
+  const data = {
+    context: {
+      project_root: state.report?.root || "unknown",
+      export_timestamp: new Date().toISOString(),
+      type: "ci_history"
+    },
+    thresholds: getCIThresholds(),
+    history: state.ciHistory
+  };
+  
+  exportData(data, "jupiter-ci-report.json");
+}
+
+// ============================================
+// Snapshot Detail Functions
+// ============================================
+
+async function viewSnapshotDetail(snapshotId) {
+  const apiBase = state.apiBaseUrl || inferApiBaseUrl();
+  if (!apiBase) {
+    alert(t("error_fetch") || "Missing API base URL.");
+    return;
+  }
+  
+  try {
+    const params = new URLSearchParams();
+    if (state.currentBackend) {
+      params.set("backend_name", state.currentBackend);
+    }
+    
+    const response = await apiFetch(`${apiBase}/snapshots/${snapshotId}?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const snapshot = await response.json();
+    renderSnapshotDetail(snapshot, snapshotId);
+    
+    // Show detail panel
+    const panel = document.getElementById("snapshot-detail-panel");
+    if (panel) panel.classList.remove("hidden");
+    
+  } catch (error) {
+    console.error("Failed to load snapshot detail", error);
+    addLog(`${t("snapshot_load_error") || "Failed to load snapshot"}: ${error.message}`, "ERROR");
+  }
+}
+
+function renderSnapshotDetail(snapshot, snapshotId) {
+  const titleEl = document.getElementById("snapshot-detail-title");
+  const contentEl = document.getElementById("snapshot-detail-content");
+  
+  if (titleEl) {
+    titleEl.textContent = `${t("snapshot_detail_title") || "Snapshot"}: ${snapshotId}`;
+  }
+  
+  if (contentEl && snapshot) {
+    const summary = snapshot.summary || {};
+    contentEl.innerHTML = `
+      <div class="snapshot-summary">
+        <h4>${t("snapshot_summary") || "Summary"}</h4>
+        <div class="summary-grid">
+          <div><strong>${t("total_files") || "Files"}:</strong> ${summary.total_files || 0}</div>
+          <div><strong>${t("total_functions") || "Functions"}:</strong> ${summary.total_functions || 0}</div>
+          <div><strong>${t("total_lines") || "Lines"}:</strong> ${summary.total_lines || 0}</div>
+          <div><strong>${t("timestamp") || "Timestamp"}:</strong> ${snapshot.timestamp || "N/A"}</div>
+        </div>
+      </div>
+      ${snapshot.label ? `<p><strong>${t("label") || "Label"}:</strong> ${snapshot.label}</p>` : ""}
+      <div class="snapshot-actions">
+        <button class="btn secondary" data-action="export-snapshot" data-id="${snapshotId}">
+          ${t("export") || "Export"}
+        </button>
+      </div>
+    `;
+  }
+}
+
+function closeSnapshotDetail() {
+  const panel = document.getElementById("snapshot-detail-panel");
+  if (panel) panel.classList.add("hidden");
+}
+
+async function exportSnapshot(snapshotId) {
+  const apiBase = state.apiBaseUrl || inferApiBaseUrl();
+  if (!apiBase) {
+    alert(t("error_fetch") || "Missing API base URL.");
+    return;
+  }
+  
+  try {
+    const params = new URLSearchParams();
+    if (state.currentBackend) {
+      params.set("backend_name", state.currentBackend);
+    }
+    
+    const response = await apiFetch(`${apiBase}/snapshots/${snapshotId}?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const snapshot = await response.json();
+    exportData(snapshot, `jupiter-snapshot-${snapshotId}.json`);
+    
+  } catch (error) {
+    console.error("Failed to export snapshot", error);
+    addLog(`${t("snapshot_export_error") || "Failed to export snapshot"}: ${error.message}`, "ERROR");
+  }
+}
+
+// ============================================
+// License / Meeting Details Functions
+// ============================================
+
+async function refreshLicenseDetails() {
+  const apiBase = state.apiBaseUrl || inferApiBaseUrl();
+  if (!apiBase) {
+    alert(t("error_fetch") || "Missing API base URL.");
+    return;
+  }
+  
+  try {
+    const response = await apiFetch(`${apiBase}/meeting/status`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const status = await response.json();
+    renderLicenseDetails(status);
+    addLog(t("license_refreshed") || "License details refreshed.");
+    
+  } catch (error) {
+    console.error("Failed to refresh license details", error);
+    addLog(`${t("license_refresh_error") || "Failed to refresh license"}: ${error.message}`, "ERROR");
+  }
+}
+
+function renderLicenseDetails(status) {
+  const fields = {
+    "license-type": status.license_type || "unknown",
+    "license-status": status.connected ? (t("license_active") || "Active") : (t("license_inactive") || "Inactive"),
+    "license-device": status.device_key || "N/A",
+    "license-session": status.session_id || "N/A",
+    "license-expiry": status.expiry || "N/A",
+    "license-features": status.features?.join(", ") || "N/A"
+  };
+  
+  for (const [id, value] of Object.entries(fields)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+}
+
 

@@ -11,7 +11,11 @@ from jupiter.core.logging_utils import configure_logging
 def start():
     root = Path("C:/Dev_VSCode/Jupiter-project")
     config = load_config(root)
-    active_level = configure_logging(config.logging.level, log_file=config.logging.path)
+    active_level = configure_logging(
+        config.logging.level,
+        log_file=config.logging.path,
+        reset_on_start=config.logging.reset_on_start,
+    )
     app.state.root_path = root
     app.state.install_path = root
     app.state.meeting_adapter = MeetingAdapter(device_key=None, project_root=root)

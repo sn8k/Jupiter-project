@@ -205,7 +205,7 @@ class ProjectScanner:
                 else:
                     try:
                         source = path.read_text(encoding="utf-8")
-                        metadata.language_analysis = analyze_python_source(source)
+                        metadata.language_analysis = analyze_python_source(source, str(path))
                         # Emit event for analyzed functions
                         if self.progress_callback and metadata.language_analysis:
                             # Python analyzer returns 'defined_functions' as a set

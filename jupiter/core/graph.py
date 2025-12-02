@@ -1,4 +1,19 @@
-"""Dependency graph generation for the Live Map."""
+"""Dependency graph generation for the Live Map.
+
+DEPRECATED as of v1.8.0: This module has been migrated to the Live Map plugin.
+Use `jupiter.plugins.livemap` instead. This file is kept for backwards
+compatibility and will be removed in a future version.
+
+See: jupiter/plugins/livemap.py
+"""
+
+import warnings
+
+warnings.warn(
+    "jupiter.core.graph is deprecated. Use jupiter.plugins.livemap instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 from typing import Any, Dict, List, Set, Optional
 from dataclasses import dataclass, asdict

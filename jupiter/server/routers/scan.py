@@ -1,5 +1,10 @@
+"""
+Scan router for Jupiter API.
+
+Version: 1.1.0
+"""
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from jupiter.server.models import ScanRequest, ScanReport, FileAnalysis
 from jupiter.server.routers.auth import verify_token
@@ -126,25 +131,68 @@ async def post_scan(request: Request, options: ScanRequest) -> ScanReport:
 
 @router.get("/api/endpoints", dependencies=[Depends(verify_token)])
 async def get_api_endpoints(request: Request) -> Dict[str, Any]:
-    """Fetch API endpoints from the configured connector without a full scan."""
+    """
+    Fetch API endpoints from the configured connector without a full scan.
+    
+    Phase 2 enhancement: Also includes handler function names and modules
+    for autodiag introspection.
+    """
     app = request.app
     pm = getattr(app.state, "project_manager", None)
     if not pm:
-        return {"endpoints": [], "config": None}
+        return {"endpoints": [], "config": None, "handlers": []}
     
     connector = pm.get_connector("local")
     if not connector:
-        return {"endpoints": [], "config": None}
+        return {"endpoints": [], "config": None, "handlers": []}
+    
+    result: Dict[str, Any] = {"endpoints": [], "config": None, "handlers": []}
     
     if hasattr(connector, "get_api_info"):
         try:
             api_info = await connector.get_api_info()
-            return api_info or {"endpoints": [], "config": None}
+            if api_info:
+                result["endpoints"] = api_info.get("endpoints", [])
+                result["config"] = api_info.get("config")
         except Exception as e:
             logger.warning("Failed to fetch API endpoints: %s", e)
-            return {"endpoints": [], "config": None, "error": str(e)}
+            result["error"] = str(e)
     
-    return {"endpoints": [], "config": None}
+    # Phase 2: Add handler introspection for Jupiter's own API
+    result["handlers"] = get_registered_handlers(app)
+    
+    return result
+
+
+def get_registered_handlers(app) -> List[Dict[str, Any]]:
+    """
+    Extract all registered route handlers from the FastAPI app.
+    
+    Returns a list of handler info including:
+    - path: The route path
+    - methods: HTTP methods
+    - handler_name: Function name
+    - handler_module: Module where handler is defined
+    - handler_qualname: Qualified name (includes class if method)
+    """
+    handlers: List[Dict[str, Any]] = []
+    
+    for route in app.routes:
+        if not hasattr(route, "endpoint"):
+            continue
+        
+        endpoint = route.endpoint
+        handler_info = {
+            "path": getattr(route, "path", None),
+            "name": getattr(route, "name", None),
+            "methods": sorted(list(getattr(route, "methods", []))) if hasattr(route, "methods") else [],
+            "handler_name": getattr(endpoint, "__name__", str(endpoint)),
+            "handler_module": getattr(endpoint, "__module__", "unknown"),
+            "handler_qualname": getattr(endpoint, "__qualname__", getattr(endpoint, "__name__", str(endpoint))),
+        }
+        handlers.append(handler_info)
+    
+    return handlers
 
 
 @router.get("/reports/last", response_model=ScanReport, dependencies=[Depends(verify_token)])

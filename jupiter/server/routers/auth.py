@@ -138,6 +138,33 @@ async def delete_user(request: Request, name: str, role: str = Depends(require_a
     save_global_settings(config, install_path)
     return [UserModel(name=u.name, token=u.token, role=u.role) for u in config.users]
 
+
+@router.put("/users/{name}", response_model=List[UserModel], dependencies=[Depends(require_admin)])
+async def update_user(request: Request, name: str, user: UserModel, role: str = Depends(require_admin)) -> List[UserModel]:
+    """Update an existing user (name, token, role)."""
+    log_action(role, "update_user", {"original_name": name, "new_data": user.dict()})
+    root = request.app.state.root_path
+    install_path = getattr(request.app.state, "install_path", root)
+    from jupiter.config.config import load_merged_config, save_global_settings, UserConfig
+    
+    config = load_merged_config(install_path, root)
+    
+    # Find existing user
+    existing = next((u for u in config.users if u.name == name), None)
+    if not existing:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"User '{name}' not found")
+    
+    # Update fields
+    existing.name = user.name if user.name else existing.name
+    if user.token:  # Only update token if provided
+        existing.token = user.token
+    existing.role = user.role if user.role else existing.role
+    
+    save_global_settings(config, install_path)
+    return [UserModel(name=u.name, token=u.token, role=u.role) for u in config.users]
+
+
 @router.get("/me", dependencies=[Depends(verify_token)])
 async def get_me(role: str = Depends(verify_token)):
     """Return current user information."""

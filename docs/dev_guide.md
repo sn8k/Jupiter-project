@@ -28,8 +28,62 @@ The `ProjectAnalyzer` class consumes the `ScanReport` and produces higher-level 
 
 Jupiter supports multiple languages via dedicated analyzers.
 
-*   **Python (`python.py`)**: Uses `ast` module for robust parsing.
+*   **Python (`python.py`)**: Uses `ast` module for robust parsing with improved heuristics.
 *   **JS/TS (`js_ts.py`)**: Uses regex heuristics for lightweight analysis of `.js`, `.ts`, `.jsx`, `.tsx` files.
+
+#### Python Analyzer Features (v1.1.0+)
+
+The Python analyzer includes advanced heuristics to reduce false positives in unused function detection:
+
+1. **Framework Decorator Detection**: Recognizes ~50 decorators from FastAPI, Flask, Click, pytest, Django, Celery, Pydantic, etc. Functions with these decorators are automatically marked as "used".
+
+2. **Known Patterns Whitelist**: ~80 method names that are implicitly used:
+   - Dunder methods (`__init__`, `__str__`, `__enter__`, etc.)
+   - Serialization (`to_dict`, `from_json`, `serialize`, etc.)
+   - Plugin hooks (`on_scan`, `on_analyze`, `setup`, etc.)
+
+3. **Dynamic Registration Tracking**: Detects functions passed to registration methods:
+   - `parser.set_defaults(func=handler)` (argparse)
+   - `app.add_command(cmd)` (CLI frameworks)
+   - `emitter.on("event", callback)` (event systems)
+
+The `analyze_python_source()` function returns additional fields:
+- `decorated_functions`: Functions with framework decorators
+- `dynamically_registered`: Functions registered via dynamic methods
+
+#### Confidence Scoring (v1.5.0+)
+
+The analyzer now computes a **confidence score** for function usage detection:
+
+```python
+from jupiter.core.analyzer import FunctionUsageStatus, compute_function_confidence
+
+status, confidence, reasons = compute_function_confidence(
+    func_name="my_handler",
+    is_called=False,
+    is_decorated=True,  # Has framework decorator
+    is_dynamically_registered=False,
+    is_known_pattern=False,
+)
+# Returns: (FunctionUsageStatus.LIKELY_USED, 0.95, ["has_framework_decorator"])
+```
+
+**Scoring logic:**
+| Condition | Status | Confidence |
+|-----------|--------|------------|
+| Directly called | USED | 1.0 |
+| Framework decorator | LIKELY_USED | 0.95 |
+| Dynamically registered | LIKELY_USED | 0.90 |
+| Known pattern | LIKELY_USED | 0.85 |
+| Private, no docstring | POSSIBLY_UNUSED | 0.65 |
+| Public, no usage | UNUSED | 0.75 |
+
+#### Diagnostic Endpoints (v1.5.0+)
+
+New API endpoints for autodiag introspection:
+
+- `GET /diag/handlers`: Lists all registered handlers (API, CLI, plugins)
+- `GET /diag/functions`: Returns function usage details with confidence scores
 
 **Adding a new language:**
 1.  Create `jupiter/core/language/<lang>.py`.
@@ -149,9 +203,10 @@ The Web UI is a single-page application (SPA) served by a lightweight Python HTT
     *   `app.js`: Logic for state management, API calls, and DOM rendering.
     *   `styles.css`: Theming and layout.
 *   **Key Concepts**:
-    *   **Views**: Dashboard, Analysis, Settings, etc., toggled via `data-view`.
+    *   **Views**: Dashboard, Analysis, Projects, Settings, etc., toggled via `data-view`.
     *   **Modals**: For complex interactions (Scan options, Run command).
     *   **State**: Centralized `state` object in `app.js`.
+    *   **Settings Architecture**: Each settings section (Network, Interface, Security, Meeting) has its own Save button and dedicated save function. Performance settings are located in the Projects view as they are project-specific.
 
 ## Plugin System (`jupiter.plugins`)
 

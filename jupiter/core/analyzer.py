@@ -1,4 +1,8 @@
-"Project analysis routines built on scan results."
+"""
+Project analysis routines built on scan results.
+
+Version: 1.1.0
+"""
 
 from __future__ import annotations
 
@@ -6,6 +10,7 @@ import logging
 import time
 from collections import Counter
 from dataclasses import dataclass, field, asdict
+from enum import Enum
 from itertools import islice
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, cast
@@ -18,6 +23,113 @@ from .quality.duplication import find_duplications
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# FUNCTION USAGE STATUS AND CONFIDENCE SCORING
+# =============================================================================
+
+class FunctionUsageStatus(str, Enum):
+    """Status of function usage detection."""
+    USED = "used"  # Directly called or referenced
+    LIKELY_USED = "likely_used"  # Framework decorator, known pattern, or dynamically registered
+    POSSIBLY_UNUSED = "possibly_unused"  # Low confidence unused (might be false positive)
+    UNUSED = "unused"  # High confidence unused
+
+
+@dataclass(slots=True)
+class FunctionUsageInfo:
+    """
+    Detailed information about a function's usage status with confidence score.
+    
+    Attributes:
+        name: Function name
+        file_path: Path to the file containing the function
+        status: Usage status (used, likely_used, possibly_unused, unused)
+        confidence: Confidence score (0.0 = no confidence, 1.0 = high confidence)
+        reasons: List of reasons explaining the status
+    """
+    name: str
+    file_path: str
+    status: FunctionUsageStatus
+    confidence: float  # 0.0 to 1.0
+    reasons: List[str] = field(default_factory=list)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-serializable representation."""
+        return {
+            "name": self.name,
+            "file_path": self.file_path,
+            "status": self.status.value,
+            "confidence": round(self.confidence, 2),
+            "reasons": self.reasons,
+        }
+
+
+def compute_function_confidence(
+    func_name: str,
+    is_called: bool,
+    is_decorated: bool,
+    is_dynamically_registered: bool,
+    is_known_pattern: bool,
+    has_docstring: bool = False,
+    is_public: bool = True,
+) -> tuple[FunctionUsageStatus, float, List[str]]:
+    """
+    Compute usage status and confidence score for a function.
+    
+    Scoring logic:
+    - Directly called: USED, confidence 1.0
+    - Framework decorator: LIKELY_USED, confidence 0.95
+    - Dynamically registered: LIKELY_USED, confidence 0.90
+    - Known pattern (dunder, serialization): LIKELY_USED, confidence 0.85
+    - Private function (_prefix): POSSIBLY_UNUSED, confidence 0.60
+    - Public function, no calls: UNUSED, confidence 0.75
+    - Public function with docstring: POSSIBLY_UNUSED, confidence 0.50
+    
+    Returns:
+        Tuple of (status, confidence, reasons)
+    """
+    reasons: List[str] = []
+    
+    # Direct call - highest confidence
+    if is_called:
+        reasons.append("directly_called")
+        return FunctionUsageStatus.USED, 1.0, reasons
+    
+    # Framework decorator - very high confidence
+    if is_decorated:
+        reasons.append("has_framework_decorator")
+        return FunctionUsageStatus.LIKELY_USED, 0.95, reasons
+    
+    # Dynamic registration - high confidence
+    if is_dynamically_registered:
+        reasons.append("dynamically_registered")
+        return FunctionUsageStatus.LIKELY_USED, 0.90, reasons
+    
+    # Known patterns (dunder, hooks, etc.)
+    if is_known_pattern:
+        reasons.append("matches_known_pattern")
+        return FunctionUsageStatus.LIKELY_USED, 0.85, reasons
+    
+    # Private function (starts with _)
+    if func_name.startswith("_") and not func_name.startswith("__"):
+        reasons.append("private_function")
+        if has_docstring:
+            reasons.append("has_docstring")
+            return FunctionUsageStatus.POSSIBLY_UNUSED, 0.55, reasons
+        return FunctionUsageStatus.POSSIBLY_UNUSED, 0.65, reasons
+    
+    # Public function without any usage signals
+    if is_public:
+        if has_docstring:
+            reasons.append("public_with_docstring")
+            return FunctionUsageStatus.POSSIBLY_UNUSED, 0.50, reasons
+        reasons.append("no_usage_found")
+        return FunctionUsageStatus.UNUSED, 0.75, reasons
+    
+    reasons.append("no_usage_found")
+    return FunctionUsageStatus.UNUSED, 0.70, reasons
+
+
 @dataclass(slots=True)
 class PythonProjectSummary:
     """Aggregated information about Python code in a project."""
@@ -27,6 +139,9 @@ class PythonProjectSummary:
     total_potentially_unused_functions: int = 0
     avg_functions_per_file: float = 0.0
     quality_score: Optional[float] = None
+    # Phase 2: Detailed function usage with confidence scores
+    function_usage_details: List[Dict[str, Any]] = field(default_factory=list)
+    usage_summary: Dict[str, int] = field(default_factory=dict)  # Count per status
 
 
 @dataclass(slots=True)
@@ -149,10 +264,17 @@ class AnalysisSummary:
 class ProjectAnalyzer:
     """Aggregate scanner outputs into a concise summary."""
 
-    def __init__(self, root: Path, no_cache: bool = False, perf_mode: bool = False) -> None:
+    def __init__(
+        self, 
+        root: Path, 
+        no_cache: bool = False, 
+        perf_mode: bool = False,
+        use_callgraph: bool = True,  # Use global call graph for unused detection
+    ) -> None:
         self.root = root
         self.no_cache = no_cache
         self.perf_mode = perf_mode
+        self.use_callgraph = use_callgraph
         self.cache_manager = CacheManager(root)
         self.last_scan = self.cache_manager.load_last_scan()
         self.analysis_cache = {}
@@ -167,6 +289,26 @@ class ProjectAnalyzer:
                  self.dynamic_calls = dynamic_data["calls"]
              elif isinstance(dynamic_data, dict):
                  self.dynamic_calls = dynamic_data
+
+    def _build_callgraph_unused_set(self, python_files: List[FileMetadata]) -> set[str]:
+        """
+        Build a set of unused function keys using the global call graph.
+        
+        Returns set of "file_path::func_name" keys that are unused.
+        """
+        from .callgraph import build_call_graph
+        
+        # Get file paths
+        file_paths = [m.path for m in python_files]
+        
+        # Build call graph
+        result = build_call_graph(self.root, file_paths)
+        
+        # Return the unused set using simple_key format (file::func without class)
+        return {
+            result.all_functions[key].simple_key 
+            for key in result.unused_functions
+        }
 
     def summarize(self, files: Iterable[FileMetadata], top_n: int = 5) -> AnalysisSummary:
         """Compute aggregate metrics for ``files`` collection."""
@@ -199,42 +341,103 @@ class ProjectAnalyzer:
                 for m in python_files[:top_n]
             ]
 
-        # Python summary
+        # Python summary with call graph analysis
         python_summary = None
         if python_files:
             py_file_count = len(python_files)
             py_total_functions = sum(len((m.language_analysis or {}).get("defined_functions", [])) for m in python_files)
             
-            # Calculate unused functions considering dynamic analysis
+            # Calculate unused functions
             py_total_unused = 0
+            function_usage_details: List[Dict[str, Any]] = []
+            usage_counts: Dict[str, int] = {
+                FunctionUsageStatus.USED.value: 0,
+                FunctionUsageStatus.LIKELY_USED.value: 0,
+                FunctionUsageStatus.POSSIBLY_UNUSED.value: 0,
+                FunctionUsageStatus.UNUSED.value: 0,
+            }
+            
+            # Build call graph for accurate unused detection
+            callgraph_unused: set[str] = set()
+            if self.use_callgraph:
+                try:
+                    callgraph_unused = self._build_callgraph_unused_set(python_files)
+                    logger.debug(f"Call graph detected {len(callgraph_unused)} unused functions")
+                except Exception as e:
+                    logger.warning(f"Call graph analysis failed, falling back to per-file: {e}")
+                    self.use_callgraph = False
+            
             for m in python_files:
                 la = m.language_analysis or {}
-                unused_funcs = la.get("potentially_unused_functions", [])
-                if not unused_funcs:
-                    continue
+                defined_funcs = la.get("defined_functions", [])
+                function_calls = set(la.get("function_calls", []))
+                decorated_funcs = set(la.get("decorated_functions", []))
+                dynamically_registered = set(la.get("dynamically_registered", []))
                 
                 try:
                     rel_path = m.path.relative_to(self.root)
-                    rel_path_str = str(rel_path)
-                    rel_path_posix = rel_path.as_posix()
+                    rel_path_str = rel_path.as_posix()
                 except ValueError:
                     rel_path_str = str(m.path)
-                    rel_path_posix = str(m.path)
-
-                for func in unused_funcs:
-                    # Check if function was called dynamically
-                    # We check both OS-specific path and POSIX path just in case
+                
+                for func in defined_funcs:
                     key = f"{rel_path_str}::{func}"
-                    key_posix = f"{rel_path_posix}::{func}"
                     
-                    if self.dynamic_calls.get(key, 0) == 0 and self.dynamic_calls.get(key_posix, 0) == 0:
-                        py_total_unused += 1
+                    # Check dynamic calls from runtime analysis
+                    dynamically_called = self.dynamic_calls.get(key, 0) > 0
+                    
+                    # Use call graph for unused detection
+                    if self.use_callgraph:
+                        # Call graph gives us definitive unused status
+                        if key in callgraph_unused and not dynamically_called:
+                            status = FunctionUsageStatus.UNUSED
+                            confidence = 0.95  # High confidence from call graph
+                            reasons = ["not_referenced_in_callgraph"]
+                        else:
+                            status = FunctionUsageStatus.USED
+                            confidence = 1.0
+                            reasons = ["referenced_in_callgraph"]
+                            if dynamically_called:
+                                reasons.append("called_at_runtime")
+                    else:
+                        # Fallback to old per-file analysis
+                        from .language.python import is_likely_used
+                        status, confidence, reasons = compute_function_confidence(
+                            func_name=func,
+                            is_called=func in function_calls or dynamically_called,
+                            is_decorated=func in decorated_funcs,
+                            is_dynamically_registered=func in dynamically_registered,
+                            is_known_pattern=is_likely_used(func),
+                            has_docstring=False,
+                            is_public=not func.startswith("_"),
+                        )
+                    
+                    usage_counts[status.value] += 1
+                    
+                    # Only include non-USED functions in details
+                    if status != FunctionUsageStatus.USED:
+                        usage_info = FunctionUsageInfo(
+                            name=func,
+                            file_path=rel_path_str,
+                            status=status,
+                            confidence=confidence,
+                            reasons=reasons,
+                        )
+                        function_usage_details.append(usage_info.to_dict())
+                        
+                        if status == FunctionUsageStatus.UNUSED:
+                            py_total_unused += 1
+
+            # Sort by confidence descending
+            function_usage_details.sort(key=lambda x: (-x["confidence"], x["status"], x["name"]))
 
             python_summary = PythonProjectSummary(
                 total_files=py_file_count,
                 total_functions=py_total_functions,
                 total_potentially_unused_functions=py_total_unused,
                 avg_functions_per_file=py_total_functions / py_file_count if py_file_count else 0.0,
+                function_usage_details=function_usage_details,
+                usage_summary=usage_counts,
             )
 
         # JS/TS summary

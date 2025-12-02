@@ -797,8 +797,19 @@ class CodeQualityPlugin:
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("CodeQualityPlugin summary payload=%s", summary["code_quality"])
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Plugin API Methods
+    # These methods are part of the plugin public interface and may be called
+    # dynamically via getattr() by the PluginManager or external integrations.
+    # Static analysis may incorrectly flag them as unused.
+    # ─────────────────────────────────────────────────────────────────────────
+
     def get_last_summary(self) -> Optional[QualitySummary]:
-        """Get the last computed quality summary."""
+        """Get the last computed quality summary.
+        
+        This is a public API method for external access to quality analysis results.
+        Can be called by UI components or integrations needing the latest summary.
+        """
         return self._last_summary
 
     # === Manual duplication linking helpers ===
@@ -2114,7 +2125,24 @@ window.code_qualityView = {
     </footer>
 </section>
 
-<script>
+<style>
+#code-quality-settings .code-quality-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+#code-quality-settings .setting-item {
+    border: 1px solid var(--border);
+    background: var(--panel-contrast);
+}
+#code-quality-settings .setting-result {
+    min-width: 2rem;
+    text-align: center;
+}
+</style>
+"""
+
+    def get_settings_js(self) -> str:
+        """Return JavaScript for the settings section."""
+        return """
 (function() {
     const codeQualitySettings = {
         getApiBaseUrl() {
@@ -2244,19 +2272,4 @@ window.code_qualityView = {
         codeQualitySettings.init();
     }
 })();
-</script>
-
-<style>
-#code-quality-settings .code-quality-grid {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-#code-quality-settings .setting-item {
-    border: 1px solid var(--border);
-    background: var(--panel-contrast);
-}
-#code-quality-settings .setting-result {
-    min-width: 2rem;
-    text-align: center;
-}
-</style>
 """

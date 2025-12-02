@@ -671,3 +671,144 @@ def handle_meeting_check_license(root: Path, as_json: bool) -> int:
         return 2
     else:  # NETWORK_ERROR
         return 3
+
+
+# =============================================================================
+# AUTODIAG HANDLER (Phase 4)
+# =============================================================================
+
+def handle_autodiag(
+    root: Path,
+    as_json: bool = False,
+    api_url: str | None = None,
+    diag_url: str | None = None,
+    skip_cli: bool = False,
+    skip_api: bool = False,
+    skip_plugins: bool = False,
+    timeout: float = 30.0,
+) -> int:
+    """
+    Run autodiagnostic to validate unused function detection.
+    
+    Args:
+        root: Project root path
+        as_json: Output as JSON
+        api_url: Main API base URL
+        diag_url: Diag API base URL
+        skip_cli: Skip CLI scenarios
+        skip_api: Skip API scenarios
+        skip_plugins: Skip plugin scenarios
+        timeout: Timeout per scenario in seconds
+        
+    Returns:
+        Exit code (0=success, 1=issues found, 2=errors)
+    """
+    from jupiter.core.autodiag import run_autodiag_sync, AutodiagStatus
+    
+    print(f"🔍 Running autodiag on {root}...")
+    
+    try:
+        report = run_autodiag_sync(
+            project_root=root,
+            api_base_url=api_url,
+            diag_base_url=diag_url,
+            skip_cli=skip_cli,
+            skip_api=skip_api,
+            skip_plugins=skip_plugins,
+            timeout_seconds=timeout,
+        )
+        
+        if as_json:
+            print(json.dumps(report.to_dict(), indent=2))
+        else:
+            # Print human-readable summary
+            print()
+            print("=" * 60)
+            print("AUTODIAG REPORT")
+            print("=" * 60)
+            print()
+            
+            # Status
+            status_icons = {
+                AutodiagStatus.SUCCESS: "✅",
+                AutodiagStatus.PARTIAL: "⚠️",
+                AutodiagStatus.FAILED: "❌",
+                AutodiagStatus.SKIPPED: "⏭️",
+            }
+            print(f"Status: {status_icons.get(report.status, '❓')} {report.status.value.upper()}")
+            print(f"Duration: {report.duration_seconds:.2f}s")
+            print()
+            
+            # Static analysis summary
+            print("📊 Static Analysis:")
+            print(f"   Total functions: {report.static_total_functions}")
+            print(f"   Likely used: {report.static_likely_used_count}")
+            print(f"   Possibly unused: {report.static_possibly_unused_count}")
+            print(f"   Unused: {report.static_unused_count}")
+            print()
+            
+            # Dynamic validation summary
+            print("🔄 Dynamic Validation:")
+            print(f"   Scenarios run: {report.scenarios_run}")
+            print(f"   Passed: {report.scenarios_passed}")
+            print(f"   Failed: {report.scenarios_failed}")
+            print()
+            
+            # False positive detection
+            print("🎯 False Positive Detection:")
+            print(f"   False positives: {report.false_positive_count}")
+            print(f"   True unused: {report.true_unused_count}")
+            print(f"   False positive rate: {report.false_positive_rate:.1f}%")
+            print()
+            
+            # Scenario details
+            if report.scenario_results:
+                print("📋 Scenario Results:")
+                for scenario in report.scenario_results:
+                    icon = "✅" if scenario.status == "passed" else "❌" if scenario.status == "failed" else "⏭️"
+                    print(f"   {icon} {scenario.name}: {scenario.status} ({scenario.duration_seconds:.2f}s)")
+                print()
+            
+            # False positives list
+            if report.false_positives:
+                print("🔴 False Positives Detected:")
+                for i, fp in enumerate(report.false_positives[:10], 1):
+                    print(f"   {i}. {fp.function_name} ({fp.file_path})")
+                    print(f"      Triggered by: {fp.scenario}")
+                if len(report.false_positives) > 10:
+                    print(f"   ... and {len(report.false_positives) - 10} more")
+                print()
+            
+            # True unused functions
+            if report.true_unused:
+                print("🟢 Truly Unused Functions:")
+                for i, func in enumerate(report.true_unused[:10], 1):
+                    print(f"   {i}. {func}")
+                if len(report.true_unused) > 10:
+                    print(f"   ... and {len(report.true_unused) - 10} more")
+                print()
+            
+            # Recommendations
+            if report.recommendations:
+                print("💡 Recommendations:")
+                for rec in report.recommendations:
+                    print(f"   • {rec}")
+                print()
+            
+            print("=" * 60)
+        
+        # Return exit code based on status
+        if report.status == AutodiagStatus.SUCCESS:
+            return 0
+        elif report.status == AutodiagStatus.PARTIAL:
+            return 1
+        else:
+            return 2
+            
+    except Exception as e:
+        logger.error("Autodiag failed: %s", e)
+        if as_json:
+            print(json.dumps({"error": str(e), "status": "failed"}, indent=2))
+        else:
+            print(f"❌ Autodiag failed: {e}")
+        return 2
