@@ -1,461 +1,289 @@
-# Jupiter API Reference
+# Jupiter API Reference (v1.8.5)
 
-The Jupiter API is a RESTful interface built with FastAPI.
+This document describes the HTTP API exposed by Jupiter. The same API powers the Web UI and can be called directly from scripts or CI.
 
-## Base URL
+All responses are JSON unless otherwise noted.
 
-By default: `http://127.0.0.1:8000`
+## Base URL & Auth
 
-## Authentication
+- **Default base URL**: `http://127.0.0.1:8000`
+- **Authentication**: token-based.
+  - Either define a single `security.token`.
+  - Or declare named users with roles in `<project>.jupiter.yaml`.
+- **Roles**:
+  - `admin`: full access (configuration, run, update, plugins).
+  - `viewer`: read-only access (scan/analyze, snapshots, metrics, browsing).
+- **WebSocket**: `/ws` accepts the token as a query parameter when security is enabled.
 
-Jupiter supports token-based authentication with roles. Tokens are configured in `<project>.jupiter.yaml` (under `security.tokens`).
+## Core Endpoints
 
-**Header:**
-`Authorization: Bearer <your-token>`
+### Health & Metrics
 
-**Roles:**
-* **Admin**: Full access.
-* **Viewer**: Read-only access.
+- `GET /health` → returns the basic status of the server:
+  ```json
+  {
+    "status": "ok",
+    "root": "/path/to/current/project"
+  }
+  ```
+- `GET /metrics` (auth) → returns aggregate scan/plugin/system metrics used by the dashboard.
 
-**Protected Endpoints:**
+### Scan & Analyze
 
-*   **Admin Only**:
-    *   `POST /run`
-    *   `POST /update`
-    *   `POST /config`
-    *   `POST /config/root`
-    *   `POST /plugins/{name}/toggle`
-    *   `POST /plugins/{name}/config`
+- `POST /scan` (auth)  
+  Runs a filesystem scan on the current project root.
 
-*   **Authenticated (Admin or Viewer)**:
-    *   `POST /scan`
-    *   `GET /snapshots`
-    *   `GET /snapshots/{id}`
-    *   `GET /snapshots/diff`
-    *   `GET /graph`
-    *   `GET /analyze`
-    *   `GET /config`
-    *   `GET /fs/list`
-    *   `GET /reports/last`
-    *   `GET /plugins`
-    *   `GET /backends`
-    *   `WS /ws` (via query parameter `token`)
-    *   `GET /projects`
+  **Request body (JSON)**:
+  ```json
+  {
+    "show_hidden": false,
+    "ignore_globs": ["*.log"],
+    "incremental": true,
+    "capture_snapshot": true,
+    "snapshot_label": "pre-release",
+    "backend_name": "local"
+  }
+  ```
 
-### Backends
+  **Behavior**:
+  - Returns a full `ScanReport` (files, quality, plugins, pylance, refactoring).
+  - Saves `.jupiter/cache/last_scan.json`.
+  - Persists a snapshot unless `capture_snapshot` is explicitly set to `false`.
 
-Manage project backends (local, remote Jupiter, or generic API).
+- `GET /analyze` (auth)  
+  Performs a scan + analysis and returns a summary.
 
-* `GET /backends`: List configured backends for the current project.
-  * Returns: `[{ "name": "local", "type": "local_fs", "path": "..." }, { "name": "remote", "type": "remote_jupiter_api", "api_url": "..." }, { "name": "api", "type": "openapi", "api_url": "..." }]`
+  **Query parameters**:
+  - `top`: number of largest files to include in the summary (default: 5).
+  - `show_hidden`: include hidden files (`true`/`false`).
+  - `ignore_globs`: can be repeated to exclude patterns.
+  - `backend_name`: override the default backend.
 
-## Endpoints
+  **Response**:
+  - Aggregated stats (file counts, sizes, by extension).
+  - Hotspots (complexity, duplication).
+  - Optional `python_summary` (total functions, potentially unused functions).
+  - Plugin-provided sections (Code Quality, AI Helper, etc.).
 
-### Projects
+- `POST /ci` (auth)  
+  Runs analysis in “quality gate” mode.
 
-Manage registered projects and the active context.
+  **Request body (JSON)**:
+  ```json
+  {
+    "fail_on_complexity": 20,
+    "fail_on_duplication": 5,
+    "fail_on_unused": 50
+  }
+  ```
 
-* `GET /projects` (auth): list `{id, name, path, config_file, is_active}` entries. `is_active` marks the current project.
-* `POST /projects` (admin): body `{ "path": "/abs/path", "name": "My Project" }` registers a project and sets it as default.
-* `POST /projects/{id}/activate` (admin): switches the active project, reloads config/plugins/history, and returns `{ "status": "ok", "project_id": "<id>" }`.
-* `DELETE /projects/{id}` (admin): removes a project entry (files are untouched). If the active project is deleted, the server falls back to the next available one.
+  **Response**:
+  - `CIResponse` structure with:
+    - aggregated metrics,
+    - which thresholds have been exceeded,
+    - a boolean flag used by CI to decide pass/fail.
 
-### `GET /health`
+- `GET /reports/last` (auth)  
+  Returns the last cached scan report (`.jupiter/cache/last_scan.json`), normalized to the public schema.
 
-Returns the health status of the server.
+- `GET /api/endpoints` (auth)  
+  Returns the list of exposed routes. Used by autodiag and debugging tools.
 
-**Response:**
+### Snapshots
+
+- `GET /snapshots` (auth)  
+  Returns a list of snapshot metadata (newest first).
+
+- `GET /snapshots/{id}` (auth)  
+  Returns:
+  ```json
+  {
+    "metadata": { "...": "..." },
+    "report": { "...": "..." }
+  }
+  ```
+
+- `GET /snapshots/diff` (auth)  
+  **Query parameters**:
+  - `id_a`: base snapshot ID.
+  - `id_b`: comparison snapshot ID.
+
+  **Response**:
+  - Metrics deltas (file count, size, functions, unused functions).
+  - Lists of added/removed/modified files.
+  - Function-level additions/removals where available.
+
+### Simulation
+
+- `POST /simulate/remove`  
+  Simulates the impact of removing a file or function without touching the filesystem.
+
+  **Request body (JSON)**:
+  ```json
+  {
+    "target_type": "file",
+    "path": "jupiter/core/scanner.py",
+    "function_name": null
+  }
+  ```
+  or:
+  ```json
+  {
+    "target_type": "function",
+    "path": "jupiter/core/scanner.py",
+    "function_name": "ProjectScanner.scan"
+  }
+  ```
+
+  **Response**:
+  - A risk score (low/medium/high).
+  - A list of impacted files/functions and the reason (broken import, missing symbol, etc.).
+
+### Run (shell)
+
+- `POST /run` (auth, **admin**)  
+  Executes a shell command in the project context and optionally wraps it in dynamic analysis.
+
+  **Request body (JSON)**:
+  ```json
+  {
+    "command": ["python", "script.py", "--flag"],
+    "with_dynamic": true
+  }
+  ```
+
+  **Response**:
+  ```json
+  {
+    "stdout": "...",
+    "stderr": "...",
+    "returncode": 0,
+    "dynamic_analysis": {
+      "calls": {"module.func": 12},
+      "times": {"module.func": 0.123}
+    }
+  }
+  ```
+
+  This endpoint is governed by `security.allow_run` and `security.allowed_commands` and should only be exposed on trusted networks.
+
+## Projects, Backends, Config
+
+- `GET /projects` (auth) → list of registered projects with `is_active`.
+- `POST /projects` (admin) → register and activate a project.  
+  Body: `{ "path": "/abs/path", "name": "Optional label" }`.
+- `POST /projects/{id}/activate` (admin) → switch active project, reload config/plugins/history.
+- `DELETE /projects/{id}` (admin) → remove from registry (does not delete files on disk).
+- `POST /projects/{id}/ignore` (admin) → persist ignore globs for the project.
+- `GET /projects/{id}/api_config` / `POST /projects/{id}/api_config` (admin) → manage remote API connector settings.
+- `GET /projects/{id}/api_status` (auth) → status of the configured remote API.
+- `POST /init` → initialize a new Jupiter project with a default `<project>.jupiter.yaml`.
+
+- `GET /backends` (auth) → available connectors (local filesystem, remote Jupiter API, OpenAPI).
+- `GET /project/root-entries` (auth) → directory listing helper for the currently active root.
+
+- `GET /config` (auth) → resolved config (global + project), including plugin sections.
+- `POST /config` (admin) → replace configuration.
+- `PATCH /config` (admin) → partial update (used by Settings Save buttons).
+- `GET /config/raw` (admin) / `POST /config/raw` (admin) → raw YAML blobs for advanced editing.
+- `POST /config/root` (admin) → change active root; rebuilds runtime and resets history for the new project.
+
+## Auth & Users
+
+- `POST /login` → `{token}` for UI and API clients. Validates against configured users/tokens.
+- `GET /users` (admin) → list users.
+- `POST /users` (admin) → create a new user.
+- `PUT /users/{name}` (admin) → update an existing user.
+- `DELETE /users/{name}` (admin) → delete a user.
+- `GET /me` (auth) → information about the current user.
+
+## Plugins
+
+- `GET /plugins` (auth) → list loaded plugins and their status.
+- `POST /plugins/{name}/toggle` (**admin**) → enable/disable a plugin.
+- `GET /plugins/{name}/config` (auth) / `POST /plugins/{name}/config` (**admin**) → get/set plugin configuration.
+- `POST /plugins/{name}/test` (**admin**) → plugin-provided self-test.
+- `POST /plugins/reload` (**admin**) / `POST /plugins/{name}/restart` (**admin**) → reload plugin code at runtime.
+- `POST /plugins/install` / `POST /plugins/install/upload` (**admin**) → install a plugin from URL or uploaded archive.
+- `DELETE /plugins/{name}/uninstall` (**admin**) → uninstall a plugin.
+- `GET /plugins/settings` / `GET /plugins/sidebar` (auth) → descriptors for plugin Settings cards and sidebar entries.
+- `GET /plugins/{name}/ui` (auth) → HTML/JS snippet for a plugin’s main UI.
+- `GET /plugins/{name}/settings-ui` (auth) → HTML/JS snippet for the plugin Settings panel.
+
+### Code Quality (duplication/complexity)
+
+- `POST /plugins/code_quality/manual-links` (**admin**) → merge detector clusters with a label and persist to `.jupiter/manual_duplication_links.json`.
+- `DELETE /plugins/code_quality/manual-links/{link_id}` (**admin**) → remove a manual link.
+- `POST /plugins/code_quality/manual-links/recheck` (**admin**) → re-verify links (optional `link_id` filter).
+
+### Live Map
+
+- `GET /plugins/livemap/graph` (auth) → dependency graph nodes/links for the Live Map.
+- `GET /plugins/livemap/config` / `POST /plugins/livemap/config` (auth) → retrieve/update Live Map configuration.
+
+### Watchdog
+
+- `GET /plugins/watchdog/config` / `POST /plugins/watchdog/config` (auth) → check interval and enable flags.
+- `GET /plugins/watchdog/status` (auth) → watch status and reload counts.
+- `POST /plugins/watchdog/check` (auth) → force an immediate check.
+
+### Bridge (core services gateway)
+
+- `GET /plugins/bridge/status` (auth) → plugin health and version.
+- `POST /plugins/bridge/config` (auth) → endpoints/settings for Bridge.
+- `GET /plugins/bridge/services` / `GET /plugins/bridge/capabilities` (auth) → catalog of exposed services and capabilities.
+- `GET /plugins/bridge/service/{service_name}` (auth) → detailed information about a specific service.
+
+### Settings Update (helper)
+
+- `GET /plugins/settings_update/version` → version metadata for the updater.
+- `POST /plugins/settings_update/apply` (**admin**) → apply an uploaded settings package.
+- `POST /plugins/settings_update/upload` (**admin**) → upload the package to be applied.
+
+## Meeting & Licensing
+
+- `GET /license/status` → current license state (`authorized`, `device_type`, `token_count`, message).
+- `POST /license/refresh` (auth) → force a license re-check against the Meeting backend.
+- `GET /meeting/status` → deprecated alias; still returns `MeetingStatus`.
+
+## Watch & Live Events
+
+- `POST /watch/start` (auth) → begin watching the project and enable dynamic progress callbacks.
+- `POST /watch/stop` (auth) → stop watching.
+- `GET /watch/status` (auth) → current watch state.
+- `GET /watch/calls` (auth) → aggregated dynamic call counts for watched runs.
+- `POST /watch/calls/reset` (auth) → reset collected call data.
+- `WS /ws` (auth token in query when configured) → broadcast channel for scan/run/config/plugin events consumed by the Web UI.
+
+## File System Helpers
+
+- `GET /fs/list` (auth) → filesystem listing helper for the active project (used by the Files view in the Web UI).
+
+## Update Utility
+
+- `POST /update` (**admin**) → update Jupiter from a URL/path (ZIP or git) as configured.
+- `POST /update/upload` (**admin**) → upload an archive to be applied as an update.
+
+## Autodiag (internal diagnostics)
+
+- `GET /diag/handlers` (auth) → inventory of CLI handlers and their modules.
+- `GET /diag/functions` (auth) → function usage details with confidence scores.
+- `GET /api/endpoints` (auth) → list of routes (same as above, provided explicitly for tools).
+
+## Error Model
+
+Errors are returned with a consistent envelope:
+
 ```json
 {
-  "status": "ok"
-}
-```
-
-### `POST /scan`
-
-Runs a filesystem scan on the configured project root.
-
-**Body:**
-```json
-{
-  "show_hidden": false,
-  "ignore_globs": ["*.tmp"],
-  "incremental": true,
-  "capture_snapshot": true,
-  "snapshot_label": "pre-release"
-}
-```
-
-- `capture_snapshot` (default `true`): Persist the resulting report under `.jupiter/snapshots/`.
-- `snapshot_label` (optional): Override the default timestamp label for the stored snapshot.
-
-**Response:**
-Returns a full JSON scan report (see Report Schema).
-
-**Note:** This endpoint triggers the `on_scan` hook for all active plugins.
-
-### `GET /analyze`
-
-Runs a scan and returns a summary analysis.
-
-**Query Parameters:**
-* `top`: Number of largest files to return (default: 5)
-* `show_hidden`: Boolean
-* `ignore_globs`: List of strings
-
-**Response:**
-Returns a JSON summary object.
-
-**Note:** This endpoint triggers the `on_analyze` hook for all active plugins.
-
-### `POST /run`
-
-Executes a shell command within the project context.
-
-**Body:**
-```json
-{
-  "command": ["python", "script.py", "--arg"],
-  "with_dynamic": true
-}
-```
-
-**Response:**
-```json
-{
-  "stdout": "...",
-  "stderr": "...",
-  "returncode": 0,
-  "dynamic_analysis": {
-    "calls": {"module.func": 12},
-    "times": {"module.func": 0.123},
-    "call_graph": {"module.func": {"other.func": 3}}
+  "error": {
+    "code": "string",
+    "message": "human-readable explanation",
+    "details": {}
   }
 }
 ```
 
-**Security notes:**
-
-* This endpoint is protected by Bearer token authentication (`security.token`).
-* Execution can be globally disabled via `security.allow_run = false` in `<project>.jupiter.yaml`.
-* When `security.allowed_commands` is non‑empty, only commands or executables listed there are accepted.
-
-### `GET /meeting/status`
-
-Returns the current licensing and session status.
-
-**Response:**
-```json
-{
-  "device_key": "...",
-  "is_licensed": true,
-  "session_active": true,
-  "status": "active",
-  "message": "License valid."
-}
-```
-
-### `GET /snapshots`
-
-Returns the list of stored scan snapshots (newest first).
-
-**Response:**
-```json
-{
-  "snapshots": [
-    {
-      "id": "scan-1700000000000",
-      "timestamp": 1700000000.0,
-      "label": "pre-release",
-      "jupiter_version": "0.1.5",
-      "backend_name": null,
-      "project_root": "/repo",
-      "project_name": "repo",
-      "file_count": 523,
-      "total_size_bytes": 1234567,
-      "function_count": 812,
-      "unused_function_count": 37
-    }
-  ]
-}
-```
-
-### `GET /snapshots/{snapshot_id}`
-
-Returns the metadata and full report for a single snapshot.
-
-**Response:**
-```json
-{
-  "metadata": { "id": "scan-1700000000000", "label": "pre-release", "file_count": 523, "total_size_bytes": 1234567, "function_count": 812, "unused_function_count": 37, "timestamp": 1700000000.0, "jupiter_version": "0.1.5", "backend_name": null, "project_root": "/repo", "project_name": "repo" },
-  "report": { "root": "/repo", "files": [ ... ] }
-}
-```
-
-### `GET /snapshots/diff`
-
-Computes a diff between two snapshots.
-
-**Query Parameters:**
-- `id_a`: Snapshot identifier considered the "before" reference.
-- `id_b`: Snapshot identifier considered the "after" reference.
-
-**Response:**
-```json
-{
-  "snapshot_a": { "id": "scan-old", "label": "baseline", ... },
-  "snapshot_b": { "id": "scan-new", "label": "post-upgrade", ... },
-  "diff": {
-    "metrics_delta": {
-      "file_count": 12,
-      "total_size_bytes": 42000,
-      "function_count": 37,
-      "unused_function_count": -5
-    },
-    "files_added": [{ "path": "src/new.py", "size_after": 1337 }],
-    "files_removed": [{ "path": "legacy/tmp.py", "size_before": 512 }],
-    "files_modified": [{ "path": "core/app.py", "size_before": 2048, "size_after": 2300 }],
-    "functions_added": [{ "path": "core/app.py", "function": "upgrade_service", "change_type": "added" }],
-    "functions_removed": []
-  }
-}
-```
-
-### `POST /simulate/remove`
-
-Simulates the impact of removing a file or function.
-
-**Body:**
-```json
-{
-  "target_type": "file",  // or "function"
-  "path": "jupiter/core/scanner.py",
-  "function_name": null   // required if target_type is "function"
-}
-```
-
-**Response:**
-```json
-{
-  "target": "Remove file jupiter/core/scanner.py",
-  "risk_score": "high",
-  "impacts": [
-    {
-      "target": "jupiter/core/analyzer.py",
-      "impact_type": "broken_import",
-      "details": "Imports removed module 'jupiter.core.scanner'",
-      "severity": "high"
-    }
-  ]
-}
-```
-
-### `GET /graph`
-
-Returns a dependency graph of the project for visualization.
-
-**Query Parameters:**
-- `backend_name`: (Optional) Name of the backend to use.
-
-**Response:**
-```json
-{
-  "nodes": [
-    {
-      "id": "jupiter/core/scanner.py",
-      "type": "file",
-      "label": "scanner.py",
-      "size": 18456,
-      "group": "file"
-    },
-    {
-      "id": "jupiter/core/scanner.py::ProjectScanner",
-      "type": "function",
-      "label": "ProjectScanner",
-      "group": "function"
-    }
-  ],
-  "links": [
-    {
-      "source": "jupiter/core/scanner.py",
-      "target": "jupiter/core/scanner.py::ProjectScanner",
-      "type": "contains"
-    }
-  ]
-}
-```
-
-### `GET /metrics`
-
-Returns system metrics and statistics.
-
-**Response:**
-```json
-{
-  "scans": {
-    "total": 42,
-    "avg_files": 150.5,
-    "avg_size_bytes": 1024000,
-    "avg_functions": 45.2
-  },
-  "plugins": {
-    "total": 5,
-    "active_count": 3,
-    "active_list": ["notifications_webhook", "code_quality"]
-  },
-  "system": {
-    "version": "1.0.1"
-  }
-}
-```
-
-### `WS /ws`
-
-WebSocket endpoint for real-time events.
-
-**Events:**
-
-*   `SCAN_STARTED`: `{"type": "SCAN_STARTED", "payload": {"root": "...", "options": {...}}}`
-*   `SCAN_FINISHED`: `{"type": "SCAN_FINISHED", "payload": {"file_count": 123}}`
-*   `RUN_STARTED`: `{"type": "RUN_STARTED", "payload": {"command": ["ls", "-la"]}}`
-*   `RUN_FINISHED`: `{"type": "RUN_FINISHED", "payload": {"returncode": 0}}`
-*   `CONFIG_UPDATED`: `{"type": "CONFIG_UPDATED", "payload": {...}}`
-*   `PLUGIN_TOGGLED`: `{"type": "PLUGIN_TOGGLED", "payload": {"name": "...", "enabled": true}}`
-
-### `GET /backends`
-
-Lists configured project backends.
-
-**Response:**
-```json
-[
-  {"name": "local", "type": "local_fs", "path": "."},
-  {"name": "remote-prod", "type": "remote_jupiter_api", "api_url": "http://prod:8000"}
-]
-```
-
-### `GET /plugins`
-
-Returns the list of loaded plugins and their status.
-
-**Response:**
-```json
-[
-  {"name": "notifications_webhook", "version": "1.0.1", "description": "Sends notifications to a webhook URL.", "enabled": true,
-   "config": {"url": "https://httpbin.org/post", "events": ["scan_complete"]}}
-]
-```
-
-### `POST /plugins/{name}/toggle`
-
-Enable or disable a plugin. Protected by token.
-
-**Response:**
-```json
-{"success": true, "enabled": true}
-```
-
-### `GET /plugins/{name}/config`
-
-Return the persisted configuration for the specified plugin (requires an authenticated token).
-
-**Response:**
-```json
-{
-  "enabled": true,
-  "url": "https://hooks.example.com/jupiter",
-  "events": ["scan_complete", "api_connected"]
-}
-```
-
-### `POST /plugins/{name}/config`
-
-Update a plugin configuration (for example, the webhook URL). Protected by token.
-
-**Body (example for `notifications_webhook`):**
-```json
-{"url": "https://my-service/hooks/jupiter", "events": ["scan_complete"]}
-```
-
-**Response:**
-```json
-{"success": true}
-```
-
-### `POST /plugins/{name}/test`
-
-Trigger a plugin-provided self-test (for example, to send a sample webhook). Requires admin token.
-
-**Response:**
-```json
-{"status": "ok", "result": {"event": "test_notification", "transport": "webhook"}}
-```
-
-### `POST /plugins/code_quality/manual-links`
-
-Create a manual duplication link by merging two or more detector clusters selected in the UI. Requires admin token.
-
-**Body:**
-```json
-{
-  "hashes": ["92e4cc1...", "6bd02f4..."],
-  "label": "CLI scan/analyze options"
-}
-```
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "cluster": {
-    "hash": "manual::cli-scan-options",
-    "manual_link_id": "cli-scan-options",
-    "manual_label": "CLI scan/analyze options",
-    "source": "manual",
-    "verification": {"status": "verified", "checked_at": "2025-12-01T09:30:00Z"},
-    "occurrences": [
-      {"path": ".../command_handlers.py", "line": 71, "end_line": 77}
-    ]
-  }
-}
-```
-
-Linked blocks are stored in `.jupiter/manual_duplication_links.json` so they survive restarts and appear in `/analyze` responses.
-
-### `DELETE /plugins/code_quality/manual-links/{link_id}`
-
-Remove a manual duplication link created from the UI or API. Only links persisted on disk (`manual_origin == "file"`) can be deleted via this endpoint. Requires admin token.
-
-**Response:**
-```json
-{"status": "ok"}
-```
-
-### `POST /plugins/code_quality/manual-links/recheck`
-
-Force a verification pass on all manual duplication links or a specific link. Useful after editing `.jupiter/manual_duplication_links.json` or when a linked block drifts.
-
-**Body (optional):**
-```json
-{"link_id": "cli-scan-options"}
-```
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "links": [
-    {
-      "manual_link_id": "cli-scan-options",
-      "verification": {"status": "diverged", "issues": ["Path missing: ..."]},
-      "occurrences": [...]
-    }
-  ]
-}
-```
-
-## WebSockets
-
-### `/ws`
-
-Real-time event stream (logs, file changes).
+- Request/validation errors use standard HTTP 4xx codes.
+- Internal failures (scan/analyze/run) use 500.
+- Meeting-specific errors use 503 with explicit codes.

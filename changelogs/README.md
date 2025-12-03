@@ -1,4 +1,13 @@
 # Changelog – README.md
+
+## 2025-12-03: CLI Commands Documentation Harmonization
+- Updated CLI Commands section with complete, accurate syntax for all 12 Jupiter commands
+- Added notation: `(*)` `--ignore` can be specified multiple times
+- Separated compound commands (`server|gui` → individual `server`, `gui`, `run`, `watch`, `update`)
+- Added `--perf` flag to `scan` and `analyze` options
+- Added `--output` to `scan` options
+- Now reflects actual parser implementation (bug fix: `--snapshot-label` and `--no-snapshot` placement)
+
 - Added quickstart instructions for the new CLI scanner and analyzer.
 - Documented early server stub and Meeting adapter placeholders.
 - Documented ignore patterns, `.jupiterignore` usage, and richer scan/analyze options.
@@ -19,3 +28,8 @@
 - Ajouté une note de version 1.1.11 décrivant la migration de la vue Qualité vers l'onglet Dashboard du plugin Code Quality et son panneau de paramètres remanié.
 - Documenté la persistance des paramètres plugins et la nouvelle mise en page Settings (grille deux colonnes + carte Mise à jour dédiée) dans la section Features.
 - Ajouté la release note 1.1.12 retraçant la refonte des panneaux Settings/plugins et la sauvegarde unifiée des préférences.
+- Rafraîchi le README pour mettre en avant le flux GUI-first, la matrice CLI complète (scan/analyze/ci/snapshots/simulate/meeting/autodiag) et un aperçu API aligné sur les routes actuelles.
+
+## 2025-12-03 (v1.8.6) : Polish rédactionnel
+- Amélioré les formulations de l’intro et de la section CLI (mention explicite des usages SSH/CI et du partage de pipeline entre scan/analyze/ci).
+- Ajouté une référence claire à `docs/api.md` pour les schémas complets et des exemples `curl` copy-paste.

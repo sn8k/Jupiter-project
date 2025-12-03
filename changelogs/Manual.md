@@ -1,4 +1,14 @@
 # Changelog – Manual.md
+
+## 2025-12-03: CLI Commands Harmonization
+- Synchronized French CLI command examples with README.md and user_guide.md
+- Updated all command syntax to match actual parser implementation
+- Added `--perf` option to scan and analyze commands
+- Separated compound commands into individual commands: `server`, `gui`, `run`, `watch`, `update`
+- Added notation: `(*) `--ignore` peut être spécifié plusieurs fois`
+- Removed deprecated `server|gui` compound format
+- Ensured consistency of French terminology across all CLI documentation
+
 - Replaced placeholder with user guide covering setup, commands, and extensions.
 - Added documentation for ignore patterns, `.jupiterignore`, and new CLI flags (JSON export, top N, output path).
 - Documented GUI launch command and détaillé la nouvelle interface web (multi-vues Dashboard/Analyse/Fichiers/Paramètres/Plugins, placeholders d’actions et de licences).
@@ -18,3 +28,8 @@
 - Nouvel encart "Versionnage visible" décrivant le badge de version global, le rappel dans Settings > Mise à jour, et l'affichage des versions propres aux plugins.
 - Mentionné que la vue Qualité vit maintenant dans l'onglet Dashboard du plugin Code Quality (avec export, complexité et duplication).
 - Ajouté une section "Paramètres plugins persistants" détaillant la grille deux colonnes des Settings, les cartes dédiées pour Notifications/Code Quality et la synchronisation automatique avec le registre global/projet.
+- Mise à jour du manuel (v1.8.5) : installation GUI par défaut, registre multi-projets, pipeline CLI unifié (scan/analyze/ci), snapshots/simulation, sécurité (tokens, run restreint, WS), Meeting et panorama des plugins (Code Quality, Live Map, Watchdog, Bridge, Settings Update).
+
+## 2025-12-03 (v1.8.6) : Polish rédactionnel
+- Correction des problèmes d’encodage (accents) et reformulation de plusieurs phrases pour une lecture plus fluide.
+- Harmonisation du résumé API en fin de document avec `docs/api.md` (endpoints, rôles, exemples d’usage).

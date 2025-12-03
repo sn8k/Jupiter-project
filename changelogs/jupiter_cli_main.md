@@ -1,5 +1,10 @@
 # Changelog – jupiter/cli/main.py
 
+## Version 1.1.1 (2025-12-03) – CLI Parser Fix
+- **Bug Fix**: Fixed argument parser where `--no-snapshot` and `--snapshot-label` were incorrectly attached to `scan_parser` after `analyze_parser` definition
+- **Impact**: `scan` command now correctly accepts `--no-snapshot` and `--snapshot-label` flags
+- **Test**: `python -m jupiter.cli.main scan --snapshot-label "test" --no-snapshot` now works
+
 ## Version 1.2.0 (2025-12-02) – Phase 4: Autodiag Command
 - Added `autodiag` command to CLI with full argument support:
   - `--json`: Output as JSON

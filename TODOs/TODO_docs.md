@@ -1,5 +1,3 @@
-## TODO - documentation complete
-
 Tu es un·e expert·e en documentation technique et en reverse-engineering de code. 
 Tu as un accès complet au dépôt du projet **Jupiter** (code source, tests, fichiers de configuration, scripts, WebUI, etc.).
 
@@ -207,3 +205,18 @@ En résumé :
 - **Lis le code, les tests et la WebUI avant de croire les docs existantes.**
 - **Mets à jour toutes les docs pour qu’elles reflètent précisément l’état actuel du projet.**
 - **Fais en sorte que quelqu’un qui ne connaît pas Jupiter puisse s’en sortir uniquement avec cette documentation.**
+
+---
+
+## Status (2025-12-03)
+
+✅ **Completed**:
+- **Audit**: Codebase analyzed (CLI v1.1.1, Server v1.8.5).
+- **README.md**: Updated and verified.
+- **Manual.md**: Updated and verified.
+- **docs/api.md**: Updated with missing endpoints (`/init`, plugin UI).
+- **docs/user_guide.md**: Verified.
+- **docs/architecture.md**: Verified.
+- **Validation**: Cross-checked CLI commands and API routes against implementation.
+
+See `changelogs/docs_validation_20251203.md` for the final validation report.

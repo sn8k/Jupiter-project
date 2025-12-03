@@ -1,7 +1,7 @@
 """
 Command line entrypoint for Jupiter.
 
-Version: 1.1.0
+Version: 1.1.1
 """
 
 from __future__ import annotations
@@ -115,14 +115,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan_parser.add_argument("--incremental", action="store_true", help="Use incremental scanning")
     scan_parser.add_argument("--no-cache", action="store_true", help="Force scan without using cache")
+    scan_parser.add_argument("--no-snapshot", action="store_true", help="Skip automatic snapshot creation")
+    scan_parser.add_argument("--snapshot-label", help="Override the generated snapshot label")
     scan_parser.add_argument("--perf", action="store_true", help="Enable performance profiling")
 
     analyze_parser = subcommands.add_parser("analyze", help="Analyze a project directory")
     analyze_parser.add_argument("root", type=Path, nargs="?", default=None, help="Root folder to analyze")
     analyze_parser.add_argument("--json", action="store_true", help="Emit the summary as JSON")
     analyze_parser.add_argument("--perf", action="store_true", help="Enable performance profiling")
-    scan_parser.add_argument("--no-snapshot", action="store_true", help="Skip automatic snapshot creation")
-    scan_parser.add_argument("--snapshot-label", help="Override the generated snapshot label")
     analyze_parser.add_argument(
         "--top",
         type=int,
