@@ -354,7 +354,7 @@ Exemple de réponse idéale :
 
 ---
 
-Ce fichier `agents.md` sert de **référence opérationnelle** pour tout agent GPT-5 / Codex amené à travailler sur Jupiter.
+Ce fichier `agents.md` sert de **référence opérationnelle** pour tout agent amené à travailler sur Jupiter.
 L’agent doit y revenir mentalement pour vérifier :
 
 * le style,
@@ -369,6 +369,9 @@ Note finale du patron :
 **IMPERATIF : A CHAQUE FICHIER MODIFIé, MEME POUR UN FIX, IL FAUT :
 
 - mettre a jour VERSION
-- mettre a jour le changelog du fichier (dans le dossier changelogs)
-- mettre a jour les versions des fichiers modifiés. en cas d'absence, en ajouter un en docstring.
-- mettre a jour les documentations du dossier docs (si necessaire) et README.MD**
+- mettre a jour SANS METTRE DE DATES le changelog du fichier (dans le dossier changelogs)  !!
+- mettre a jour SANS METTRE DE DATES les versions des fichiers modifiés. en cas d'absence, en ajouter un en docstring.
+- mettre a jour SANS METTRE DE DATES les documentations du dossier docs (si necessaire) et README.MD
+- requirements*.txt doivent TOUJOURS ETRE A JOUR, AJOUTER SYSTEMATIQUEMENT LES REQUIREMENTS NECESSAIRES !!!!!!!!!
+- ne jamais contourner un probleme, le corriger à la source
+- jupiter doit toujours etre en mesure de s'autodiagnostiquer, si besoin, utiliser l'auto-diagnostic pour etre certain que jupiter soit parfaitement propre**

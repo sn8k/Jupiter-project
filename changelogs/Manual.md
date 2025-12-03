@@ -1,5 +1,13 @@
 # Changelog – Manual.md
 
+## v1.8.21: Note migration SQL
+- Mise à jour de l'en-tête du manuel vers la version 1.8.21.
+- Ajout d'un encart indiquant la roadmap de transition vers un stockage SQL automatisé tout en conservant le mode fichier durant la migration.
+
+## 2025-12-03: v1.8.7 cache navigateur desactive
+- Mise a jour de l'en-tete du manuel vers la version 1.8.7.
+- Ajout d'une note expliquant que la Web UI est servie avec `Cache-Control: no-store` / `Pragma: no-cache` pour empecher tout cache navigateur ou proxy.
+
 ## 2025-12-03: CLI Commands Harmonization
 - Synchronized French CLI command examples with README.md and user_guide.md
 - Updated all command syntax to match actual parser implementation

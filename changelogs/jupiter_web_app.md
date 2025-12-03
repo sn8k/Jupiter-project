@@ -4,7 +4,16 @@
 - Exposed `launch_web_ui` helper to start the GUI with minimal boilerplate.
 - Context payload now includes `api_base_url` (configurable via `JUPITER_API_BASE`) so the frontend can target the correct API host.
 
+## 2025-12-03 - Cache hardening
+- Enforced HTTP/1.1 responses with `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` plus `Pragma`/`Expires`/`Surrogate-Control` on every asset.
+- Stripped `If-Modified-Since` and `If-None-Match` headers from incoming requests to avoid 304 responses and force fresh payloads.
+- Added a version note (1.1.1) in the module docstring for traceability.
+
 # Changelog – jupiter/web/app.js
+
+## 2025-12-03 - No-store browser requests
+- Wrapped `window.fetch` to inject `cache: "no-store"` and cache-busting headers on every request while preserving auth headers.
+- `apiFetch` now normalizes headers via `Headers` and forces `cache: "no-store"` for all API calls.
 
 ## 2025-12-03 – Plugin Restart Protection
 

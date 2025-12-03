@@ -1,5 +1,13 @@
 # Changelog – README.md
 
+## v1.8.21: Roadmap SQL
+- Ajout d'un bandeau de version (1.8.21) en tête de document.
+- Référence explicite aux roadmaps `TODOs/`, notamment la migration SQL gérée automatiquement.
+
+## 2025-12-03: v1.8.7 cache navigateur desactive
+
+- Ajout d'une note explicitant le `Cache-Control: no-store` / `Pragma: no-cache` de la Web UI et la recommandation de desactiver tout cache proxy en amont.
+
 ## 2025-12-03: CLI Commands Documentation Harmonization
 - Updated CLI Commands section with complete, accurate syntax for all 12 Jupiter commands
 - Added notation: `(*)` `--ignore` can be specified multiple times

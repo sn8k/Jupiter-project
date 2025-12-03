@@ -1,0 +1,132 @@
+# Plugin Manifest v2 – Modèle de référence
+# Ce fichier décrit les métadonnées et les contributions d'un plugin Jupiter.
+# Conforme à plugins_architecture.md v0.4.0
+
+id: example_plugin           # Identifiant unique (snake_case)
+type: tool                    # system | tool (les plugins core n'ont pas de manifest)
+version: 0.3.0                # semver
+
+# Métadonnées affichées
+name:
+  en: Example Plugin
+  fr: Plugin Exemple
+description:
+  en: A reference plugin demonstrating the v2 architecture.
+  fr: Un plugin de référence démontrant l'architecture v2.
+author: Jupiter Team
+license: MIT
+homepage: https://github.com/sn8k/Jupiter-project
+
+# Compatibilité Jupiter (obligatoire)
+jupiter:
+  version: ">=1.9.0,<3.0.0"
+
+# Schéma de configuration (pour migrations et Auto-UI §3.4.3)
+config_schema:
+  version: 1
+  format: yaml
+  # JSON Schema pour génération automatique de formulaires dans Settings
+  schema:
+    type: object
+    properties:
+      verbose:
+        type: boolean
+        title: "Verbose mode"
+        description: "Enable detailed logging"
+        default: false
+      debug_mode:
+        type: boolean
+        title: "Debug mode"
+        description: "Extended logging for troubleshooting (auto-disables after 30min)"
+        default: false
+      notifications:
+        type: boolean
+        title: "Notifications"
+        description: "Show desktop notifications for important events"
+        default: true
+      api_endpoint:
+        type: string
+        title: "Custom API endpoint"
+        description: "Override the default API endpoint (leave empty for default)"
+        format: uri
+
+# Permissions demandées (Bridge validera) - §3.6
+permissions:
+  fs_read: false         # Lecture du système de fichiers projet
+  fs_write: false        # Écriture sur le FS
+  run_commands: false    # Exécution via runner
+  network_outbound: false # Appels réseau externes
+  access_meeting: false   # Accès au service Meeting
+
+# Entrypoints explicites (évite l'exécution de code arbitraire) - §3.4.2
+entrypoints:
+  init: "jupiter.plugins.example_plugin:init"
+  health: "jupiter.plugins.example_plugin:health"
+  metrics: "jupiter.plugins.example_plugin:metrics"
+  server: "jupiter.plugins.example_plugin.server.api:register_api_contribution"
+  cli: "jupiter.plugins.example_plugin.cli.commands:register_cli_contribution"
+
+# Capacités déclarées - §3.4.2
+capabilities:
+  cli:
+    commands:
+      - name: example
+        help:
+          en: Run example action
+          fr: Exécuter l'action exemple
+  api:
+    routes:
+      - path: /example
+        methods: [GET, POST]
+      - path: /example/health
+        methods: [GET]
+      - path: /example/logs
+        methods: [GET]       # endpoint pour télécharger les logs
+      - path: /example/logs/stream
+        methods: [GET]       # WebSocket pour logs temps réel
+      - path: /example/jobs
+        methods: [GET, POST, DELETE]  # gestion des jobs async
+  ui:
+    panels:
+      - id: main
+        mount_point: main_area
+        route: /plugins/example_plugin
+        title_key: plugin.example_plugin.title
+    widgets: []  # optionnel: widgets dashboard
+    settings_frame: true     # auto-ajout dans Settings via Bridge
+  metrics:
+    enabled: true
+    export_format: json      # prometheus | json
+  # Capacités pour tâches longues (§10.6)
+  jobs:
+    default_timeout: 300     # secondes
+    max_concurrent: 2
+
+# Fichiers i18n fournis (fusionnés au runtime)
+i18n:
+  - web/lang/en.json
+  - web/lang/fr.json
+
+# Dépendances éventuelles (autres plugins) - §3.8
+dependencies:
+  # - id: core_utils
+  #   version: ">=1.0.0"
+  # - id: ai_helper
+  #   version: ">=0.5.0"
+  #   optional: true  # fonctionnalité enrichie si présent
+
+# Mode "extension" : si ce plugin enrichit un autre plugin
+# extends:
+#   - id: ai_helper
+
+# Healthcheck (optionnel pour tool, obligatoire pour system) - §3.5
+healthcheck:
+  enabled: true
+  endpoint: /example/health
+  interval_seconds: 60
+  timeout_seconds: 5
+
+# Signature (générée par `jupiter plugins sign`) - §3.9
+# signature:
+#   file: plugin.sig
+#   trust_level: community  # official | verified | community

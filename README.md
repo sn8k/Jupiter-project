@@ -1,5 +1,6 @@
 # Jupiter
 
+Version : 1.8.21  
 **Project Inspection & Observability Tool**
 
 Jupiter scans, analyzes, and observes software projects through a unified pipeline used by the CLI, API, and Web UI. It blends static analysis, optional dynamic traces, snapshots, and plugins to help you understand what your codebase does and how it evolves.
@@ -14,6 +15,7 @@ Jupiter scans, analyzes, and observes software projects through a unified pipeli
 - Multi-project registry with activation from Web UI or API; connectors for local FS, remote Jupiter, or OpenAPI projects.
 - Meeting license checks (optional) with refresh endpoint and restricted fallback when unlicensed.
 - Dynamic i18n Web UI, Settings-driven logging (including file path), and token-based access control for API/WS.
+- Roadmaps suivies dans `TODOs/` dont la migration SQL (stockage snapshots/configs/états) gérée automatiquement par Jupiter.
 
 ## Quick Start (GUI-first)
 
@@ -61,6 +63,7 @@ python -m jupiter.cli.main update <source> [--force]
 ## API & Web UI Overview
 
 - Base API: `http://127.0.0.1:8000` (default). Token protection uses `security.token` or per-user tokens declared in `<project>.jupiter.yaml`.
+- Web UI assets are served with `Cache-Control: no-store` / `Pragma: no-cache` so browsers always reload the latest HTML/CSS/JS; disable any proxy cache if you front the UI.
 - Core endpoints: `/scan`, `/analyze`, `/ci`, `/snapshots`, `/snapshots/{id}`, `/snapshots/diff`, `/simulate/remove`, `/reports/last`, `/metrics`, `/health`.
 - Project & config: `/projects` CRUD + activate, `/config`, `/config/root`, `/config/raw`, `/project/root-entries`, `/backends`.
 - Plugins: `/plugins`, `/plugins/{name}/toggle|config|test`, `/plugins/code_quality/manual-links`, `/plugins/livemap/*`, `/plugins/watchdog/*`, `/plugins/bridge/*`, `/plugins/settings_update/*`.

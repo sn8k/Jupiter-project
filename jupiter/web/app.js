@@ -1,3 +1,5 @@
+// Version: 1.5.1 - Enforce no-store fetch and disable browser caching for the Web UI.
+
 const state = {
   isScanning: false,
   isRefreshingSuggestions: false,
@@ -46,6 +48,29 @@ const state = {
   activeProjectId: null,
   projects: []
 };
+
+// Force all requests to bypass browser caches to avoid serving stale UI assets.
+const originalFetch = window.fetch ? window.fetch.bind(window) : null;
+if (originalFetch) {
+  window.fetch = (input, init) => {
+    const finalInit = init ? { ...init } : {};
+    const headers = new Headers();
+
+    if (input instanceof Request) {
+      input.headers.forEach((value, key) => headers.append(key, value));
+    }
+
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+    }
+
+    headers.set("Cache-Control", "no-store");
+    headers.set("Pragma", "no-cache");
+    finalInit.headers = headers;
+    finalInit.cache = "no-store";
+    return originalFetch(input, finalInit);
+  };
+}
 
 const sampleReport = {
   root: "~/projets/jupiter-demo",
@@ -5923,10 +5948,15 @@ window.closeUnusedFunctionsExportModal = closeUnusedFunctionsExportModal;
 // --- Authentication ---
 
 async function apiFetch(url, options = {}) {
-    if (!options.headers) options.headers = {};
+    const headers = new Headers(options.headers || {});
     if (state.token) {
-        options.headers['Authorization'] = `Bearer ${state.token}`;
+        headers.set("Authorization", `Bearer ${state.token}`);
     }
+    headers.set("Cache-Control", "no-store");
+    headers.set("Pragma", "no-cache");
+    
+    options.headers = headers;
+    options.cache = "no-store";
     
     const response = await fetch(url, options);
     

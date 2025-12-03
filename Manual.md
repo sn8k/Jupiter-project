@@ -1,6 +1,8 @@
-# Manuel utilisateur — Jupiter (v1.8.5)
+# Manuel utilisateur — Jupiter (v1.8.21)
 
 Ce manuel explique comment installer, configurer et utiliser Jupiter via l’interface Web et la CLI. Il reflète l’état actuel du code (CLI, API FastAPI, Web UI et plugins).
+
+> Note roadmap : la transition vers un stockage SQL géré automatiquement (init/migrations/backup) est planifiée dans `TODOs/sql_migration_roadmap.md`. Les workflows actuels restent supportés en mode fichier pendant la migration.
 
 ## Prérequis
 - Python 3.10+
@@ -40,6 +42,8 @@ python -m jupiter.cli.main             # lance l’API + l’UI et ouvre le navi
    - Sécurité : token(s) API, restrictions d’exécution.
    - Plugins : cartes dédiées (Notifications webhook, Code Quality, Live Map, Watchdog, Bridge, Settings Update).
    - Meeting : état de licence, bouton de rafraîchissement.
+
+> Cache navigateur : la Web UI est servie avec `Cache-Control: no-store` / `Pragma: no-cache`. Aucun rafraîchissement forcé n'est requis ; désactivez le cache d'un proxy en amont si vous en utilisez un.
 
 ## Commandes CLI principales
 

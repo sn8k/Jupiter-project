@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.7 - Web UI cache hardening
+
+### Changed
+- Jupiter Web UI HTTP handler now strips conditional headers and enforces `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` (plus `Pragma`/`Expires`/`Surrogate-Control`) on every response to avoid stale assets.
+- The frontend wraps `window.fetch` and `apiFetch` with `cache: "no-store"` and no-cache headers so every request bypasses the browser cache.
+- Added cache-control meta tags to `index.html` to align client-side caching with the server policy.
+
+### Documentation
+- README and Manual mention that the Web UI disables browser/proxy caching.
+
 ## 1.8.6 — Documentation polish (language, examples, roles)
 
 ### Updated

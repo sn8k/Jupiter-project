@@ -1,0 +1,71 @@
+/**
+ * web/assets/style.css – Styles spécifiques au plugin Example.
+ * Version: 0.1.0
+ *
+ * Ces styles sont chargés par la WebUI lors du montage du panneau.
+ */
+
+.example-plugin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.example-plugin .plugin-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.example-plugin .plugin-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.example-plugin .plugin-main {
+  flex: 2;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.example-plugin .plugin-help {
+  flex: 1;
+  padding: 1rem;
+  background: var(--bg-secondary, #1e1e1e);
+  border-left: 1px solid var(--border-color, #333);
+  overflow-y: auto;
+}
+
+.example-plugin .control-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.example-plugin .status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.example-plugin .status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-success, #4caf50);
+}
+
+.example-plugin .results-section pre {
+  background: var(--bg-tertiary, #2d2d2d);
+  padding: 1rem;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.example-plugin .export-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+}

@@ -1,4 +1,7 @@
-"""Lightweight static server for the Jupiter web UI."""
+"""Lightweight static server for the Jupiter web UI.
+
+Version: 1.1.1 - Cache hardening and explicit no-store headers.
+"""
 
 from __future__ import annotations
 
@@ -69,11 +72,22 @@ class JupiterWebUI:
         }
 
         class _Handler(SimpleHTTPRequestHandler):  # type: ignore[misc]
+            protocol_version = "HTTP/1.1"
+
             def end_headers(self) -> None:
-                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+                self.send_header("Surrogate-Control", "no-store")
                 self.send_header("Pragma", "no-cache")
                 self.send_header("Expires", "0")
                 super().end_headers()
+
+            def send_head(self):
+                # Strip conditional headers to avoid 304 responses and force fresh content.
+                if "If-Modified-Since" in self.headers:
+                    del self.headers["If-Modified-Since"]
+                if "If-None-Match" in self.headers:
+                    del self.headers["If-None-Match"]
+                return super().send_head()
 
             def do_GET(self) -> None:  # noqa: N802 (SimpleHTTPRequestHandler interface)
                 # Force 200 OK for core files to bypass browser cache issues
