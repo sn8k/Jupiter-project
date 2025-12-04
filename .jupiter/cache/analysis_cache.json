@@ -1,39 +1,131 @@
 {
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_usage_stats.py": {
+    "mtime": 1764799051.468043,
+    "complexity": 24
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_error_report.py": {
+    "mtime": 1764797147.2674735,
+    "complexity": 35
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_api_registry.py": {
+    "mtime": 1764806231.6615362,
+    "complexity": 9
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_notifications.py": {
+    "mtime": 1764795465.9197116,
+    "complexity": 2
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_governance.py": {
+    "mtime": 1764794241.6151073,
+    "complexity": 5
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\routers\\system.py": {
-    "mtime": 1764719589.9034567,
-    "complexity": 203
+    "mtime": 1764788236.173794,
+    "complexity": 230
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_dev_mode.py": {
+    "mtime": 1764793680.0813632,
+    "complexity": 2
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_hot_reload.py": {
+    "mtime": 1764791011.0543988,
+    "complexity": 20
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_legacy_adapter.py": {
+    "mtime": 1764791011.0493984,
+    "complexity": 5
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_permissions.py": {
+    "mtime": 1764791011.0504012,
+    "complexity": 10
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_signature.py": {
+    "mtime": 1764793680.0743647,
+    "complexity": 5
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\bridge_plugin.py": {
     "mtime": 1764719589.9264567,
     "complexity": 57
   },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_alerting.py": {
+    "mtime": 1764806231.6995351,
+    "complexity": 1
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_ui_registry.py": {
+    "mtime": 1764777637.1630566,
+    "complexity": 8
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\usage_stats.py": {
+    "mtime": 1764797147.2050414,
+    "complexity": 112
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_bridge.py": {
-    "mtime": 1764772258.3029194,
+    "mtime": 1764782541.535626,
     "complexity": 12
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_events.py": {
-    "mtime": 1764773093.1411712,
+    "mtime": 1764774240.7326486,
     "complexity": 2
   },
-  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_cli_registry.py": {
-    "mtime": 1764773603.7136688,
-    "complexity": 11
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_monitoring.py": {
+    "mtime": 1764793680.077363,
+    "complexity": 9
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\bridge.py": {
-    "mtime": 1764772258.3019156,
-    "complexity": 93
+    "mtime": 1764799051.4547644,
+    "complexity": 115
   },
-  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_api_registry.py": {
-    "mtime": 1764773808.5212564,
-    "complexity": 8
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\error_report.py": {
+    "mtime": 1764799051.470043,
+    "complexity": 109
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\notifications.py": {
+    "mtime": 1764795465.9187107,
+    "complexity": 89
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_cli_registry.py": {
+    "mtime": 1764774240.7356503,
+    "complexity": 11
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_jobs.py": {
+    "mtime": 1764799051.465042,
+    "complexity": 35
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\governance.py": {
+    "mtime": 1764794241.6141064,
+    "complexity": 69
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_circuit_breaker.py": {
+    "mtime": 1764793680.0743647,
+    "complexity": 15
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\core_plugins\\settings_update_plugin.py": {
+    "mtime": 1764779943.4087472,
+    "complexity": 28
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\jobs.py": {
+    "mtime": 1764799051.4640427,
+    "complexity": 90
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\api_registry.py": {
+    "mtime": 1764806231.6575377,
+    "complexity": 65
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_interfaces.py": {
     "mtime": 1764772258.2989173,
     "complexity": 3
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_services.py": {
-    "mtime": 1764772807.6420574,
+    "mtime": 1764774240.7316494,
     "complexity": 20
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_router_plugins.py": {
+    "mtime": 1764779943.4057512,
+    "complexity": 14
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\dev_mode.py": {
+    "mtime": 1764809354.3641655,
+    "complexity": 49
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\code_quality.py": {
     "mtime": 1764702662.8973236,
@@ -43,48 +135,108 @@
     "mtime": 1764641939.598487,
     "complexity": 6
   },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_cli_plugin_commands.py": {
+    "mtime": 1764802476.5804987,
+    "complexity": 61
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\callgraph.py": {
     "mtime": 1764702662.8973236,
     "complexity": 83
   },
-  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\services.py": {
-    "mtime": 1764772735.4682682,
-    "complexity": 39
-  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\events.py": {
-    "mtime": 1764773209.0439484,
-    "complexity": 40
+    "mtime": 1764799051.4815676,
+    "complexity": 41
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\services.py": {
+    "mtime": 1764782541.5386415,
+    "complexity": 31
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\alerting.py": {
+    "mtime": 1764806231.687534,
+    "complexity": 76
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\ui_registry.py": {
+    "mtime": 1764782541.5396264,
+    "complexity": 48
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\signature.py": {
+    "mtime": 1764793680.0713637,
+    "complexity": 60
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\manifest.py": {
     "mtime": 1764772258.2989173,
     "complexity": 47
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\plugin_manager.py": {
-    "mtime": 1764719589.9284592,
-    "complexity": 113
+    "mtime": 1764809568.9435177,
+    "complexity": 123
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_metrics.py": {
+    "mtime": 1764788236.1897929,
+    "complexity": 8
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\routers\\plugins.py": {
+    "mtime": 1764779943.4017465,
+    "complexity": 104
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\hot_reload.py": {
+    "mtime": 1764791011.0533948,
+    "complexity": 52
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\legacy_adapter.py": {
+    "mtime": 1764791011.0504012,
+    "complexity": 47
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_plugin_config.py": {
+    "mtime": 1764782541.5436268,
+    "complexity": 17
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_manifest.py": {
     "mtime": 1764772258.2999187,
     "complexity": 8
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\interfaces.py": {
-    "mtime": 1764772258.2909188,
-    "complexity": 1
+    "mtime": 1764779943.3197355,
+    "complexity": 11
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\permissions.py": {
+    "mtime": 1764791011.0504012,
+    "complexity": 26
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_lifecycle.py": {
+    "mtime": 1764799051.471042,
+    "complexity": 13
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_core_plugins.py": {
+    "mtime": 1764779943.4087472,
+    "complexity": 8
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_meeting_adapter.py": {
     "mtime": 1764544356.514033,
     "complexity": 1
   },
-  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\api_registry.py": {
-    "mtime": 1764773748.0170786,
-    "complexity": 31
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\metrics.py": {
+    "mtime": 1764788422.7895482,
+    "complexity": 37
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\tests\\test_plugin.py": {
+    "mtime": 1764813695.2328398,
+    "complexity": 4
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\cli\\plugin_commands.py": {
+    "mtime": 1764802476.5440981,
+    "complexity": 134
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\cli\\command_handlers.py": {
     "mtime": 1764645411.6017165,
     "complexity": 85
   },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\monitoring.py": {
+    "mtime": 1764793680.0763655,
+    "complexity": 49
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\cli_registry.py": {
-    "mtime": 1764773617.8089027,
+    "mtime": 1764774240.7326486,
     "complexity": 40
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\language\\python.py": {
@@ -94,6 +246,10 @@
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\config\\config.py": {
     "mtime": 1764716938.965411,
     "complexity": 57
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\plugin_config.py": {
+    "mtime": 1764782541.5436268,
+    "complexity": 53
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_autodiag.py": {
     "mtime": 1764643902.1797845,
@@ -110,6 +266,10 @@
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_autodiag_runner.py": {
     "mtime": 1764707218.3688447,
     "complexity": 7
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\server\\api.py": {
+    "mtime": 1764813537.0549123,
+    "complexity": 29
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\autodiag.py": {
     "mtime": 1764707070.929997,
@@ -135,6 +295,18 @@
     "mtime": 1764702662.8973236,
     "complexity": 29
   },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\__init__.py": {
+    "mtime": 1764811377.9710097,
+    "complexity": 47
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\api.py": {
+    "mtime": 1764788236.167795,
+    "complexity": 39
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_bridge_bootstrap.py": {
+    "mtime": 1764777637.1720567,
+    "complexity": 2
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_web_integration.py": {
     "mtime": 1764611687.4811375,
     "complexity": 3
@@ -155,10 +327,6 @@
     "mtime": 1764626590.3515575,
     "complexity": 18
   },
-  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\api.py": {
-    "mtime": 1764716938.965411,
-    "complexity": 26
-  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\manager.py": {
     "mtime": 1764597344.5043724,
     "complexity": 25
@@ -171,9 +339,21 @@
     "mtime": 1764714285.1271482,
     "complexity": 3
   },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\%TEMP%\\test_plugin\\plugin.py": {
+    "mtime": 1764782113.9485877,
+    "complexity": 1
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\cli\\commands.py": {
+    "mtime": 1764813587.4259317,
+    "complexity": 28
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\routers\\auth.py": {
     "mtime": 1764633690.6373343,
     "complexity": 27
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_server_ws_bridge.py": {
+    "mtime": 1764788236.173794,
+    "complexity": 6
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\cache.py": {
     "mtime": 1764540103.5172212,
@@ -207,6 +387,10 @@
     "mtime": 1764707218.3618445,
     "complexity": 1
   },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\core\\logic.py": {
+    "mtime": 1764813840.5443065,
+    "complexity": 44
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\simulator.py": {
     "mtime": 1764540103.5447364,
     "complexity": 23
@@ -214,6 +398,10 @@
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\docs\\plugin_model\\__init__.py": {
     "mtime": 1764769123.024896,
     "complexity": 9
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\ws_bridge.py": {
+    "mtime": 1764788236.173794,
+    "complexity": 12
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\connectors\\remote.py": {
     "mtime": 1764594666.331368,
@@ -223,9 +411,17 @@
     "mtime": 1764540103.5457823,
     "complexity": 14
   },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\cli\\main.py": {
+    "mtime": 1764799051.4570215,
+    "complexity": 55
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper.py": {
     "mtime": 1764625287.9191983,
     "complexity": 27
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\bootstrap.py": {
+    "mtime": 1764779943.4017465,
+    "complexity": 17
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\tracer.py": {
     "mtime": 1764540103.547014,
@@ -256,7 +452,7 @@
     "complexity": 46
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\routers\\scan.py": {
-    "mtime": 1764642977.0824656,
+    "mtime": 1764782322.156165,
     "complexity": 22
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\tests\\test_scan_advanced.py": {
@@ -278,10 +474,6 @@
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\connectors\\base.py": {
     "mtime": 1764594635.8476455,
     "complexity": 1
-  },
-  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\cli\\main.py": {
-    "mtime": 1764721618.815961,
-    "complexity": 26
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\exceptions.py": {
     "mtime": 1764772258.2899177,
@@ -335,6 +527,10 @@
     "mtime": 1764617926.5514615,
     "complexity": 5
   },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\core_plugins\\__init__.py": {
+    "mtime": 1764779943.4067464,
+    "complexity": 2
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\docs\\plugin_model\\server\\events.py": {
     "mtime": 1764761892.0814004,
     "complexity": 1
@@ -383,12 +579,12 @@
     "mtime": 1764540103.590314,
     "complexity": 1
   },
-  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\models.py": {
-    "mtime": 1764716938.965411,
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\__init__.py": {
+    "mtime": 1764806231.6219761,
     "complexity": 1
   },
-  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\bridge\\__init__.py": {
-    "mtime": 1764773853.474539,
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\server\\models.py": {
+    "mtime": 1764716938.965411,
     "complexity": 1
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\__init__.py": {
@@ -401,6 +597,10 @@
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\config\\__init__.py": {
     "mtime": 1764547306.1218915,
+    "complexity": 1
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\core\\__init__.py": {
+    "mtime": 1764811396.512852,
     "complexity": 1
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\__init__.py": {
@@ -419,6 +619,18 @@
     "mtime": 1764540103.5342555,
     "complexity": 1
   },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\server\\__init__.py": {
+    "mtime": 1764813532.50049,
+    "complexity": 1
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\tests\\__init__.py": {
+    "mtime": 1764813690.9714117,
+    "complexity": 1
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\cli\\__init__.py": {
+    "mtime": 1764813582.8628292,
+    "complexity": 1
+  },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\core\\quality\\__init__.py": {
     "mtime": 1764540103.5393002,
     "complexity": 1
@@ -432,8 +644,56 @@
     "complexity": 1
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\app.js": {
-    "mtime": 1764733945.3619492,
-    "complexity": 1826
+    "mtime": 1764806231.671538,
+    "complexity": 1906
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\plugin_settings_frame.js": {
+    "mtime": 1764808703.2304027,
+    "complexity": 240
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\auto_form.js": {
+    "mtime": 1764808703.2264042,
+    "complexity": 160
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\data_export.js": {
+    "mtime": 1764810582.6281743,
+    "complexity": 119
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\jupiter_bridge.js": {
+    "mtime": 1764808703.2264042,
+    "complexity": 130
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\ux_utils.js": {
+    "mtime": 1764810582.631171,
+    "complexity": 85
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\logs_panel.js": {
+    "mtime": 1764808703.2274027,
+    "complexity": 113
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\help_panel.js": {
+    "mtime": 1764810582.6281743,
+    "complexity": 121
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\i18n_loader.js": {
+    "mtime": 1764808703.2314022,
+    "complexity": 133
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\metrics_widget.js": {
+    "mtime": 1764808703.2324042,
+    "complexity": 89
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\plugin_container.js": {
+    "mtime": 1764808703.2204027,
+    "complexity": 92
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\web\\js\\plugin_integration.js": {
+    "mtime": 1764808703.2434065,
+    "complexity": 92
+  },
+  "C:\\-=- Developpements Divers -=-\\Jupiter-project\\jupiter\\plugins\\ai_helper\\web\\panels\\main.js": {
+    "mtime": 1764813647.4685397,
+    "complexity": 37
   },
   "C:\\-=- Developpements Divers -=-\\Jupiter-project\\docs\\plugin_model\\web\\panels\\main.js": {
     "mtime": 1764764022.9976277,

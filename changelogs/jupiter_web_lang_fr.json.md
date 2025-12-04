@@ -1,4 +1,44 @@
 # Changelog – jupiter/web/lang/fr.json
+
+## Plugin Activity Widget i18n (Phase 4.2.1)
+
+### Ajouté
+- `plugin_activity_loading`: "Chargement des métriques..."
+- `plugin_activity_disabled`: "Suivi d'activité désactivé"
+- `plugin_activity_never`: "Jamais"
+- `plugin_activity_requests`: "Requêtes"
+- `plugin_activity_requests_tooltip`: Tooltip pour le compteur de requêtes
+- `plugin_activity_errors`: "Erreurs"
+- `plugin_activity_errors_tooltip`: Tooltip pour le compteur d'erreurs
+- `plugin_activity_error_rate`: "Taux d'erreur"
+- `plugin_activity_error_rate_tooltip`: Tooltip pour le taux d'erreur
+- `plugin_activity_last`: "Dernière activité"
+- `plugin_activity_last_tooltip`: Tooltip pour l'horodatage de dernière activité
+
+## Badge de confiance & Circuit Breaker i18n
+
+### Ajouté
+- Traductions badge de confiance :
+  - `trust_official`: "Officiel" - plugins signés Jupiter
+  - `trust_verified`: "Vérifié" - plugins tiers vérifiés
+  - `trust_community`: "Communauté" - plugins communautaires
+  - `trust_unsigned`: "Non signé" - plugins sans signature
+  - `trust_experimental`: "Expérimental" - plugins expérimentaux
+  - `trust_tooltip_official`: Tooltip expliquant le statut officiel
+  - `trust_tooltip_verified`: Tooltip expliquant le statut vérifié
+  - `trust_tooltip_community`: Tooltip expliquant le statut communautaire
+  - `trust_tooltip_unsigned`: Avertissement plugins non signés
+  - `trust_tooltip_experimental`: Avertissement plugins expérimentaux
+- Traductions circuit breaker :
+  - `circuit_closed`: "Sain" - fonctionnement normal
+  - `circuit_half_open`: "Récupération" - test de récupération
+  - `circuit_open`: "Dégradé" - circuit ouvert, appels bloqués
+  - `circuit_tooltip_closed`: Tooltip état sain
+  - `circuit_tooltip_half_open`: Tooltip état récupération
+  - `circuit_tooltip_open`: Tooltip état dégradé
+
+---
+
 - Ajout des chaînes pour les vues Diagnostic, Analyse, Fichiers et Plugins restaurées, badges de statut, et messages de contexte API/CORS.
 - Ajout des chaînes `suggestions_refresh_*` pour l'état d'actualisation des suggestions IA.
 - Ajout du vocabulaire pour le tableau de bord Projets (hero actif, métriques, actions rapides, états vides) et formats de temps relatifs.

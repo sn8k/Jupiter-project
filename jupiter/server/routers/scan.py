@@ -1,9 +1,10 @@
 """
 Scan router for Jupiter API.
 
-Version: 1.1.0
+Version: 1.2.0
 """
 import logging
+import time
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from jupiter.server.models import ScanRequest, ScanReport, FileAnalysis
@@ -13,6 +14,9 @@ from jupiter.core.cache import CacheManager
 from jupiter.server.ws import manager
 from jupiter.server.system_services import SystemState
 from jupiter.server.routers.watch import create_scan_progress_callback, get_watch_state
+
+# Bridge event system for plugin notifications
+from jupiter.core.bridge import emit_scan_started, emit_scan_finished, emit_scan_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,8 +29,11 @@ async def post_scan(request: Request, options: ScanRequest) -> ScanReport:
     logger.info("Scanning project at %s with options: %s", root, options)
 
     cache_manager = CacheManager(root)
+    start_time = time.time()
 
+    # Emit via both WebSocket and Bridge event system
     await manager.broadcast(JupiterEvent(type=SCAN_STARTED, payload={"root": str(root), "options": options.dict()}))
+    emit_scan_started(str(root), options.dict())
 
     if options.backend_name:
         connector = app.state.project_manager.get_connector(options.backend_name)
@@ -56,6 +63,8 @@ async def post_scan(request: Request, options: ScanRequest) -> ScanReport:
         report_dict = await connector.scan(scan_options)
     except Exception as e:
         logger.error("Scan failed: %s", e)
+        # Emit scan error via Bridge event system
+        emit_scan_error(str(root), str(e))
         raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
     
     file_models = [
@@ -107,6 +116,10 @@ async def post_scan(request: Request, options: ScanRequest) -> ScanReport:
             logger.warning("Failed to fetch API info during scan: %s", e)
 
     await manager.broadcast(JupiterEvent(type=SCAN_FINISHED, payload={"file_count": len(report.files)}))
+
+    # Emit scan finished via Bridge event system
+    duration_ms = int((time.time() - start_time) * 1000)
+    emit_scan_finished(str(root), len(report.files), duration_ms)
 
     try:
         cache_manager.save_last_scan(report.dict())

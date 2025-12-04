@@ -1,6 +1,30 @@
 # Changelog – jupiter/server/routers/system.py
 
-## Version 1.6.2 (2025-12-03) – Plugin Restart Protection
+## Version 1.9.0 – Phase 4.3: Job Management API
+- Added `GET /jobs` endpoint to list background jobs with filters
+  - Supports status filter (pending, running, completed, failed, cancelled)
+  - Supports plugin_id filter
+  - Returns job list and statistics
+- Added `GET /jobs/{job_id}` endpoint to get single job details
+- Added `POST /jobs/{job_id}/cancel` endpoint to cancel running jobs
+- Added `DELETE /jobs/history` endpoint to clear completed job history
+
+## Version 1.8.0 – Phase 4.2.1: Bridge Metrics API
+- Added `GET /metrics/bridge` endpoint for Bridge plugin metrics
+  - Returns system metrics, plugin metrics, custom recorded metrics
+  - Collects fresh plugin metrics on each request
+- Added `GET /metrics/prometheus` endpoint for Prometheus format export
+  - Returns metrics in Prometheus text format for scraping
+  - Supports labels and metric types
+- Added `PlainTextResponse` import for Prometheus endpoint
+
+## Version 1.7.0 – Phase 1.4: Bridge Event Integration
+- Added import of `emit_config_changed` from Bridge events
+- `POST /config` now emits `emit_config_changed(None, "config", None, new_config.dict())` after successful save
+- `PATCH /config` now emits `emit_config_changed(None, key, None, value)` for each updated key
+- These events allow plugins to subscribe to configuration changes
+
+## Version 1.6.2 – Plugin Restart Protection
 
 ### Added
 - Restart protection check in `POST /plugins/{name}/restart` endpoint

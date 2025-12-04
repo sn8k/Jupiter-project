@@ -3093,10 +3093,176 @@ function getPluginIcon(pluginName) {
   return icons[pluginName] || "🔌";
 }
 
+/**
+ * Get a trust badge HTML for a plugin based on trust_level and signature
+ * Trust levels: official, verified, community, unsigned, experimental
+ */
+function getTrustBadge(plugin) {
+  const trustLevel = plugin.trust_level || "experimental";
+  const signature = plugin.signature;
+  const isCore = plugin.is_core;
+  
+  // Core plugins get official badge
+  if (isCore) {
+    return `<span class="trust-badge trust-official" title="${t('trust_official_tooltip') || 'Official Jupiter plugin'}">✓ ${t('trust_official') || 'Official'}</span>`;
+  }
+  
+  // Check signature verification
+  if (signature && signature.verified) {
+    const signerInfo = signature.signer ? ` (${signature.signer})` : "";
+    switch (signature.trust_level || trustLevel) {
+      case "official":
+        return `<span class="trust-badge trust-official" title="${t('trust_official_signed_tooltip') || 'Signed by Jupiter team'}${signerInfo}">✓ ${t('trust_official') || 'Official'}</span>`;
+      case "verified":
+        return `<span class="trust-badge trust-verified" title="${t('trust_verified_tooltip') || 'Verified developer'}${signerInfo}">✓ ${t('trust_verified') || 'Verified'}</span>`;
+      case "community":
+        return `<span class="trust-badge trust-community" title="${t('trust_community_tooltip') || 'Community plugin'}${signerInfo}">✓ ${t('trust_community') || 'Community'}</span>`;
+      default:
+        return `<span class="trust-badge trust-signed" title="${t('trust_signed_tooltip') || 'Signed plugin'}${signerInfo}">✓ ${t('trust_signed') || 'Signed'}</span>`;
+    }
+  }
+  
+  // Unsigned plugins
+  switch (trustLevel) {
+    case "official":
+      return `<span class="trust-badge trust-official" title="${t('trust_official_tooltip') || 'Official Jupiter plugin'}">★ ${t('trust_official') || 'Official'}</span>`;
+    case "verified":
+      return `<span class="trust-badge trust-verified" title="${t('trust_verified_tooltip') || 'Verified developer'}">★ ${t('trust_verified') || 'Verified'}</span>`;
+    case "community":
+      return `<span class="trust-badge trust-community" title="${t('trust_community_tooltip') || 'Community plugin'}">☆ ${t('trust_community') || 'Community'}</span>`;
+    case "unsigned":
+      return `<span class="trust-badge trust-unsigned" title="${t('trust_unsigned_tooltip') || 'Unsigned plugin - use with caution'}">⚠ ${t('trust_unsigned') || 'Unsigned'}</span>`;
+    case "experimental":
+    default:
+      return `<span class="trust-badge trust-experimental" title="${t('trust_experimental_tooltip') || 'Experimental plugin'}">⚗ ${t('trust_experimental') || 'Experimental'}</span>`;
+  }
+}
+
+/**
+ * Get a circuit breaker badge HTML for a plugin
+ * Shows warning when circuit breaker is open (plugin is rate-limited due to failures)
+ */
+function getCircuitBreakerBadge(plugin) {
+  const cb = plugin.circuit_breaker;
+  if (!cb) return "";
+  
+  const state = cb.state;
+  if (state === "closed") {
+    // Normal operation - no badge needed
+    return "";
+  }
+  
+  if (state === "open") {
+    const failureCount = cb.failure_count || 0;
+    const tooltip = t('circuit_breaker_open_tooltip') || `Circuit breaker open - ${failureCount} failures. Jobs temporarily blocked.`;
+    return `<span class="circuit-breaker-badge cb-open" title="${tooltip}">⚡ ${t('circuit_breaker_open') || 'Blocked'}</span>`;
+  }
+  
+  if (state === "half_open") {
+    const tooltip = t('circuit_breaker_half_open_tooltip') || 'Circuit breaker half-open - testing recovery';
+    return `<span class="circuit-breaker-badge cb-half-open" title="${tooltip}">⚡ ${t('circuit_breaker_half_open') || 'Testing'}</span>`;
+  }
+  
+  return "";
+}
+
+/**
+ * Fetch and render plugin activity widget (metrics)
+ * Shows request count, error count, last activity for each plugin
+ */
+async function fetchPluginMetrics(pluginName) {
+  if (!state.apiBaseUrl) return null;
+  
+  try {
+    const response = await apiFetch(`${state.apiBaseUrl}/plugins/${pluginName}/metrics`);
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch (e) {
+    console.debug(`Metrics not available for plugin ${pluginName}:`, e.message);
+  }
+  return null;
+}
+
+/**
+ * Generate activity widget HTML for a plugin
+ */
+function getPluginActivityWidget(plugin, metrics) {
+  if (!plugin.enabled) {
+    return `<div class="plugin-activity-widget disabled">
+      <span class="activity-label">${t('plugin_activity_disabled') || 'Activity tracking disabled'}</span>
+    </div>`;
+  }
+  
+  if (!metrics) {
+    return `<div class="plugin-activity-widget loading">
+      <span class="activity-label">${t('plugin_activity_loading') || 'Loading metrics...'}</span>
+    </div>`;
+  }
+  
+  const requestCount = metrics.request_count || 0;
+  const errorCount = metrics.error_count || 0;
+  const errorRate = requestCount > 0 ? ((errorCount / requestCount) * 100).toFixed(1) : 0;
+  const lastActivity = metrics.last_activity 
+    ? formatRelativeTime(new Date(metrics.last_activity))
+    : t('plugin_activity_never') || 'Never';
+  
+  // Custom metrics can include additional plugin-specific data
+  const customMetrics = metrics.custom_metrics || {};
+  
+  return `<div class="plugin-activity-widget">
+    <div class="activity-stats">
+      <div class="activity-stat" title="${t('plugin_activity_requests_tooltip') || 'Total API requests'}">
+        <span class="stat-icon">📊</span>
+        <span class="stat-value">${requestCount}</span>
+        <span class="stat-label">${t('plugin_activity_requests') || 'Requests'}</span>
+      </div>
+      <div class="activity-stat ${errorCount > 0 ? 'has-errors' : ''}" title="${t('plugin_activity_errors_tooltip') || 'Error count'}">
+        <span class="stat-icon">⚠️</span>
+        <span class="stat-value">${errorCount}</span>
+        <span class="stat-label">${t('plugin_activity_errors') || 'Errors'}</span>
+      </div>
+      <div class="activity-stat" title="${t('plugin_activity_error_rate_tooltip') || 'Error rate percentage'}">
+        <span class="stat-icon">📈</span>
+        <span class="stat-value">${errorRate}%</span>
+        <span class="stat-label">${t('plugin_activity_error_rate') || 'Error Rate'}</span>
+      </div>
+      <div class="activity-stat" title="${t('plugin_activity_last_tooltip') || 'Last activity timestamp'}">
+        <span class="stat-icon">🕐</span>
+        <span class="stat-value">${lastActivity}</span>
+        <span class="stat-label">${t('plugin_activity_last') || 'Last Activity'}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+/**
+ * Load metrics for all enabled plugins and update their activity widgets
+ */
+async function loadPluginActivityWidgets() {
+  const widgets = document.querySelectorAll('.plugin-activity-widget.loading');
+  
+  for (const widget of widgets) {
+    const pluginName = widget.dataset.plugin;
+    if (!pluginName) continue;
+    
+    const metrics = await fetchPluginMetrics(pluginName);
+    if (metrics) {
+      // Find parent card and get plugin data
+      const card = widget.closest('.plugin-card');
+      const plugin = state.pluginsCache?.find(p => p.name === pluginName) || { enabled: true };
+      widget.outerHTML = getPluginActivityWidget(plugin, metrics);
+    }
+  }
+}
+
 function renderPluginList(plugins) {
   const container = document.getElementById("plugin-list");
   if (!container) return;
   container.innerHTML = "";
+  
+  // Cache plugins for later reference
+  state.pluginsCache = plugins;
 
   updatePluginsSummary(plugins || []);
 
@@ -3113,6 +3279,21 @@ function renderPluginList(plugins) {
     const statusClass = plugin.enabled ? "status-ok" : "status-disabled";
     const pluginVersion = plugin.version ? `v${plugin.version}` : "";
     const pluginIcon = getPluginIcon(plugin.name);
+    
+    // Trust badge based on trust_level and signature
+    const trustBadge = getTrustBadge(plugin);
+    
+    // Circuit breaker indicator
+    const circuitBreakerBadge = getCircuitBreakerBadge(plugin);
+    
+    // Activity widget placeholder (loaded async)
+    const activityWidget = plugin.enabled 
+      ? `<div class="plugin-activity-widget loading" data-plugin="${plugin.name}">
+           <span class="activity-label">${t('plugin_activity_loading') || 'Loading metrics...'}</span>
+         </div>`
+      : `<div class="plugin-activity-widget disabled">
+           <span class="activity-label">${t('plugin_activity_disabled') || 'Activity tracking disabled'}</span>
+         </div>`;
     
     let configHtml = "";
     if (plugin.name === "notifications_webhook" && plugin.enabled) {
@@ -3135,6 +3316,8 @@ function renderPluginList(plugins) {
                 <span>${pluginIcon}</span>
                 ${plugin.name}
                 ${pluginVersion ? `<span class="plugin-version">${pluginVersion}</span>` : ""}
+                ${trustBadge}
+                ${circuitBreakerBadge}
             </p>
             <p class="plugin-description">${plugin.description || t("plugin_no_description") || "No description available."}</p>
             <span class="plugin-status ${statusClass}">● ${statusText}</span>
@@ -3150,6 +3333,7 @@ function renderPluginList(plugins) {
           </button>
         </div>
       </div>
+      ${activityWidget}
       ${configHtml}
     `;
     
@@ -3163,6 +3347,9 @@ function renderPluginList(plugins) {
 
     container.appendChild(card);
   });
+  
+  // Load activity metrics asynchronously after rendering
+  loadPluginActivityWidgets();
 }
 
 async function savePluginConfig(name, config) {

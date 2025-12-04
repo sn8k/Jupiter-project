@@ -1,6 +1,6 @@
 # Jupiter
 
-Version : 1.8.21  
+Version : 1.8.35  
 **Project Inspection & Observability Tool**
 
 Jupiter scans, analyzes, and observes software projects through a unified pipeline used by the CLI, API, and Web UI. It blends static analysis, optional dynamic traces, snapshots, and plugins to help you understand what your codebase does and how it evolves.

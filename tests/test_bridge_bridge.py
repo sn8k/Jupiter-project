@@ -1,6 +1,6 @@
 """Tests for Bridge singleton and plugin lifecycle.
 
-Version: 0.1.0
+Version: 0.1.1
 """
 
 import pytest
@@ -61,7 +61,7 @@ def make_manifest(
     if api_contributions:
         data["api"] = {"routes": [{"path": a.path, "method": a.method, "entrypoint": a.entrypoint} for a in api_contributions]}
     if ui_contributions:
-        data["ui"] = {"panels": [{"id": u.id, "location": u.location.value, "route": u.route, "title_key": u.title_key} for u in ui_contributions]}
+        data["ui"] = {"panels": [{"id": u.id, "location": u.location.value if u.location else "sidebar", "route": u.route, "title_key": u.title_key} for u in ui_contributions]}
     
     return PluginManifest.from_dict(data)
 
@@ -613,20 +613,26 @@ class TestBridgeDiscovery:
     """Tests for plugin discovery (with mocked filesystem)."""
     
     def test_discover_empty_dir(self, tmp_path):
-        """Discover should handle empty directory."""
+        """Discover should handle empty directory (but still include core plugins)."""
         bridge = Bridge()
         bridge.plugins_dir = tmp_path
         
         discovered = bridge.discover()
-        assert discovered == []
+        # Core plugins are always included
+        assert "settings_update" in discovered
+        # No additional plugins discovered
+        assert len(discovered) == 1
     
     def test_discover_nonexistent_dir(self, tmp_path):
-        """Discover should handle nonexistent directory."""
+        """Discover should handle nonexistent directory (but still include core plugins)."""
         bridge = Bridge()
         bridge.plugins_dir = tmp_path / "nonexistent"
         
         discovered = bridge.discover()
-        assert discovered == []
+        # Core plugins are always included
+        assert "settings_update" in discovered
+        # No additional plugins discovered
+        assert len(discovered) == 1
     
     def test_discover_v2_plugin(self, tmp_path):
         """Should discover v2 plugin with manifest."""

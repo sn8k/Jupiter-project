@@ -1,0 +1,49 @@
+# Changelog – jupiter/core/bridge/error_report.py
+
+## Version 0.1.0
+
+- **Module créé** : Système de rapport d'erreur pour les plugins
+- **Enums** :
+  - `ErrorSeverity` : Niveaux de sévérité (LOW, MEDIUM, HIGH, CRITICAL)
+  - `ErrorCategory` : Catégories d'erreurs (INITIALIZATION, CONFIGURATION, EXECUTION, DEPENDENCY, PERMISSION, NETWORK, RESOURCE, UNKNOWN)
+  - `ReportFormat` : Formats d'export (JSON, MARKDOWN, TEXT, MINIMAL)
+- **Dataclasses** :
+  - `SystemInfo` : Informations système anonymisées
+  - `PluginContext` : Contexte du plugin (ID, version, état, méthode)
+  - `ErrorContext` : Détails de l'erreur (type, message, stacktrace, hash pour déduplication)
+  - `ErrorReport` : Rapport complet avec export multi-format
+  - `ErrorReportConfig` : Configuration du système de rapports
+- **Classes principales** :
+  - `DataAnonymizer` : Anonymisation des données sensibles
+    - Chemins utilisateur Windows/Unix/Mac
+    - Adresses email et IP
+    - Clés API et tokens Bearer
+    - Patterns personnalisés
+  - `ErrorReportManager` : Gestionnaire principal avec :
+    - `create_report()` : Création de rapport depuis exception
+    - `get_report()` / `get_all_reports()` : Récupération
+    - `get_reports_by_plugin()` / `by_severity()` / `by_category()` : Filtrage
+    - `update_report()` : Ajout de notes utilisateur et étapes de reproduction
+    - `mark_submitted()` : Marquage comme soumis
+    - `delete_report()` : Suppression
+    - `export_report()` / `export_all_reports()` : Export multi-format
+    - `submit_report()` : Soumission via callbacks
+    - `get_summary()` : Résumé des rapports
+    - `save_to_disk()` / `_load_from_disk()` : Persistance
+- **Fonctionnalités** :
+  - Détection automatique de sévérité basée sur type d'exception
+  - Catégorisation automatique basée sur mots-clés
+  - Déduplication par hash de stacktrace
+  - Anonymisation configurable des données sensibles
+  - Callbacks pour soumission externe
+  - Export JSON, Markdown, Text, Minimal
+  - Persistance sur disque
+- **Fonctions globales** :
+  - `get_error_report_manager()` : Instance singleton
+  - `init_error_report_manager()` : Initialisation avec config
+  - `reset_error_report_manager()` : Reset pour tests
+  - `report_error()` : Création rapide de rapport
+  - `get_error_report()` / `get_error_reports()` : Accès rapide
+  - `get_error_summary()` : Résumé rapide
+  - `export_error_report()` : Export rapide
+- **Tests** : 85 tests couvrant tous les scénarios

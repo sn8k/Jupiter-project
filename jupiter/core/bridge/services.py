@@ -1,6 +1,6 @@
 """Service Locator for Jupiter Plugin Bridge.
 
-Version: 0.1.0
+Version: 0.2.0
 
 This module provides secure, scoped access to Jupiter's core services
 for plugins. Each service is wrapped to enforce permissions and provide
@@ -43,6 +43,7 @@ from jupiter.core.bridge.interfaces import Permission
 
 if TYPE_CHECKING:
     from jupiter.core.bridge.bridge import Bridge
+    from jupiter.core.bridge.plugin_config import PluginConfigManager
     from jupiter.core.history import HistoryManager
     from jupiter.core.runner import CommandResult
     from jupiter.server.manager import ProjectManager
@@ -464,65 +465,46 @@ class ServiceLocator:
             ConfigProxy for accessing configuration values
         """
         if self._config is None:
-            # Load global plugin config
-            global_config = self._load_global_plugin_config()
+            # Use PluginConfigManager for consistent config loading
+            from jupiter.core.bridge.plugin_config import PluginConfigManager
             
-            # Load project overrides
-            project_overrides = self._load_project_overrides()
+            manager = PluginConfigManager(
+                plugin_id=self._plugin_id,
+                defaults=self._config_defaults,
+            )
             
             self._config = ConfigProxy(
                 plugin_id=self._plugin_id,
                 defaults=self._config_defaults,
-                global_config=global_config,
-                project_overrides=project_overrides,
+                global_config=manager.get_global_config(),
+                project_overrides=manager.get_project_overrides(),
             )
         return self._config
     
-    def _load_global_plugin_config(self) -> Dict[str, Any]:
-        """Load global configuration for this plugin."""
-        import yaml
+    def get_config_manager(self) -> "PluginConfigManager":
+        """Get the full PluginConfigManager for advanced config operations.
         
-        # Look for config.yaml in plugin directory
-        plugin_dir = Path(__file__).parent.parent.parent / "plugins" / self._plugin_id
-        config_file = plugin_dir / "config.yaml"
+        Use this when you need:
+        - Per-project enabled state checking
+        - Saving global config
+        - Setting project-specific enabled state
         
-        if config_file.exists():
-            try:
-                with open(config_file, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f) or {}
-            except Exception as e:
-                logger.warning(
-                    "Failed to load global config for plugin %s: %s",
-                    self._plugin_id, e
-                )
-        
-        return {}
+        Returns:
+            PluginConfigManager instance
+        """
+        from jupiter.core.bridge.plugin_config import PluginConfigManager
+        return PluginConfigManager(
+            plugin_id=self._plugin_id,
+            defaults=self._config_defaults,
+        )
     
-    def _load_project_overrides(self) -> Dict[str, Any]:
-        """Load project-specific overrides for this plugin."""
-        try:
-            from jupiter.core.state import load_last_root
-            from jupiter.config.config import load_config
-            
-            project_root = load_last_root()
-            if project_root is None:
-                return {}
-            
-            config = load_config(project_root)
-            
-            # Look for plugins.<plugin_id>.config_overrides
-            plugins_config = getattr(config, "plugins", None)
-            if plugins_config and isinstance(plugins_config, dict):
-                plugin_config = plugins_config.get(self._plugin_id, {})
-                return plugin_config.get("config_overrides", {})
-            
-        except Exception as e:
-            logger.debug(
-                "No project overrides for plugin %s: %s",
-                self._plugin_id, e
-            )
+    def is_enabled_for_project(self) -> bool:
+        """Check if this plugin is enabled for the current project.
         
-        return {}
+        Returns:
+            True if enabled, False if disabled
+        """
+        return self.get_config_manager().is_enabled_for_project()
     
     def get_event_bus(self) -> Any:
         """Get the event bus for pub/sub communication.

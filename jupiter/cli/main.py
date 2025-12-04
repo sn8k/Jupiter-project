@@ -1,7 +1,7 @@
 """
 Command line entrypoint for Jupiter.
 
-Version: 1.1.1
+Version: 1.5.0 - Added plugins sign/verify commands
 """
 
 from __future__ import annotations
@@ -33,6 +33,19 @@ from jupiter.cli.command_handlers import (
     handle_meeting_check_license,
     handle_autodiag,
 )
+from jupiter.cli.plugin_commands import (
+    handle_plugins_list,
+    handle_plugins_info,
+    handle_plugins_enable,
+    handle_plugins_disable,
+    handle_plugins_status,
+    handle_plugins_install,
+    handle_plugins_uninstall,
+    handle_plugins_scaffold,
+    handle_plugins_reload,
+    handle_plugins_sign,
+    handle_plugins_verify,
+)
 
 configure_logging("INFO")
 logger = logging.getLogger(__name__)
@@ -59,6 +72,17 @@ CLI_HANDLERS: Dict[str, Any] = {
     "simulate_remove": handle_simulate_remove,
     "meeting_check_license": handle_meeting_check_license,
     "autodiag": handle_autodiag,
+    "plugins_list": handle_plugins_list,
+    "plugins_info": handle_plugins_info,
+    "plugins_enable": handle_plugins_enable,
+    "plugins_disable": handle_plugins_disable,
+    "plugins_status": handle_plugins_status,
+    "plugins_install": handle_plugins_install,
+    "plugins_uninstall": handle_plugins_uninstall,
+    "plugins_scaffold": handle_plugins_scaffold,
+    "plugins_reload": handle_plugins_reload,
+    "plugins_sign": handle_plugins_sign,
+    "plugins_verify": handle_plugins_verify,
 }
 
 
@@ -82,6 +106,85 @@ def get_cli_handlers() -> List[Dict[str, Any]]:
             "qualname": getattr(func, "__qualname__", getattr(func, "__name__", str(func))),
         })
     return handlers
+
+
+def _add_plugin_commands(subcommands: argparse._SubParsersAction) -> None:
+    """Add CLI commands from plugins via Bridge.
+    
+    This function queries the Bridge for all registered CLI contributions
+    and adds them as subcommands to the parser.
+    
+    Args:
+        subcommands: The subparser action to add commands to
+    """
+    try:
+        from jupiter.core.bridge import get_cli_registry
+        
+        registry = get_cli_registry()
+        
+        for plugin_id in registry.get_plugins_with_commands():
+            commands = registry.get_plugin_commands(plugin_id)
+            
+            if not commands:
+                continue
+            
+            for cmd in commands:
+                # Skip if command would conflict with protected commands
+                if cmd.name in {"scan", "analyze", "server", "gui", "ci", "plugins", "config"}:
+                    logger.debug(
+                        "Skipping plugin command %s/%s: conflicts with built-in",
+                        plugin_id, cmd.name
+                    )
+                    continue
+                
+                # Create the parser for this command
+                cmd_parser = subcommands.add_parser(
+                    f"p:{plugin_id}:{cmd.name}",  # Namespaced command
+                    help=cmd.description or f"Command from plugin {plugin_id}",
+                    description=cmd.help_text or cmd.description,
+                )
+                
+                # Add arguments
+                for arg in cmd.arguments:
+                    arg_name = arg.get("name", "")
+                    arg_help = arg.get("help", "")
+                    arg_type = arg.get("type", str)
+                    if arg.get("required", True):
+                        cmd_parser.add_argument(arg_name, help=arg_help, type=arg_type)
+                    else:
+                        cmd_parser.add_argument(
+                            f"--{arg_name}", 
+                            help=arg_help, 
+                            type=arg_type,
+                            default=arg.get("default"),
+                        )
+                
+                # Add options
+                for opt in cmd.options:
+                    opt_name = opt.get("name", "")
+                    opt_short = opt.get("short", "")
+                    opt_help = opt.get("help", "")
+                    opt_action = opt.get("action", "store")
+                    
+                    names = [f"--{opt_name}"]
+                    if opt_short:
+                        names.insert(0, f"-{opt_short}")
+                    
+                    cmd_parser.add_argument(*names, help=opt_help, action=opt_action)
+                
+                # Store handler reference for later execution
+                cmd_parser.set_defaults(
+                    _plugin_handler=cmd.handler,
+                    _plugin_id=plugin_id,
+                    _plugin_cmd=cmd.name,
+                )
+                
+                logger.debug("Added plugin command: p:%s:%s", plugin_id, cmd.name)
+                
+    except ImportError:
+        logger.debug("CLI registry not available, skipping plugin commands")
+    except Exception as e:
+        logger.warning("Failed to load plugin commands: %s", e)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -211,7 +314,87 @@ def build_parser() -> argparse.ArgumentParser:
     autodiag_parser.add_argument("--skip-plugins", action="store_true", help="Skip plugin hook tests")
     autodiag_parser.add_argument("--timeout", type=float, default=30.0, help="Timeout per scenario (seconds)")
 
+    # Plugins subcommand (Bridge v2)
+    plugins_parser = subcommands.add_parser("plugins", help="Manage Jupiter plugins (Bridge v2)")
+    plugins_sub = plugins_parser.add_subparsers(dest="plugins_command", required=True)
+    
+    plugins_list = plugins_sub.add_parser("list", help="List all registered plugins")
+    plugins_list.add_argument("--json", action="store_true", help="Output as JSON")
+    
+    plugins_info = plugins_sub.add_parser("info", help="Show detailed info for a plugin")
+    plugins_info.add_argument("plugin_id", help="Plugin identifier")
+    plugins_info.add_argument("--json", action="store_true", help="Output as JSON")
+    
+    plugins_enable = plugins_sub.add_parser("enable", help="Enable a plugin")
+    plugins_enable.add_argument("plugin_id", help="Plugin identifier")
+    
+    plugins_disable = plugins_sub.add_parser("disable", help="Disable a plugin")
+    plugins_disable.add_argument("plugin_id", help="Plugin identifier")
+    
+    plugins_status = plugins_sub.add_parser("status", help="Show Bridge system status")
+    plugins_status.add_argument("--json", action="store_true", help="Output as JSON")
+    
+    plugins_install = plugins_sub.add_parser("install", help="Install a plugin from URL/path")
+    plugins_install.add_argument("source", help="Plugin source: local path, ZIP URL, or Git URL")
+    plugins_install.add_argument("--force", "-f", action="store_true", help="Overwrite existing plugin")
+    
+    plugins_uninstall = plugins_sub.add_parser("uninstall", help="Uninstall a plugin")
+    plugins_uninstall.add_argument("plugin_id", help="Plugin identifier")
+    plugins_uninstall.add_argument("--force", "-f", action="store_true", help="Skip confirmation")
+    
+    plugins_scaffold = plugins_sub.add_parser("scaffold", help="Generate a new plugin skeleton")
+    plugins_scaffold.add_argument("plugin_id", help="Plugin identifier (used as directory name)")
+    plugins_scaffold.add_argument("--output", "-o", default=".", help="Output directory (default: current)")
+    
+    plugins_reload = plugins_sub.add_parser("reload", help="Hot-reload a plugin (dev mode only)")
+    plugins_reload.add_argument("plugin_id", help="Plugin identifier")
+    
+    # Plugin signing commands
+    plugins_sign = plugins_sub.add_parser("sign", help="Sign a plugin with cryptographic signature")
+    plugins_sign.add_argument("path", help="Path to plugin directory")
+    plugins_sign.add_argument("--signer-id", help="Signer identifier (default: $JUPITER_SIGNER_ID or 'local-developer')")
+    plugins_sign.add_argument("--signer-name", help="Signer name (default: $JUPITER_SIGNER_NAME or 'Local Developer')")
+    plugins_sign.add_argument("--trust-level", choices=["official", "verified", "community"], default="community",
+                              help="Trust level to assign (default: community)")
+    plugins_sign.add_argument("--key", help="Path to private key file (optional)")
+    
+    plugins_verify = plugins_sub.add_parser("verify", help="Verify a plugin's signature")
+    plugins_verify.add_argument("path", help="Path to plugin directory")
+    plugins_verify.add_argument("--require-level", choices=["official", "verified", "community"],
+                                help="Require minimum trust level (exit 1 if not met)")
+    
+    # Add dynamic plugin commands from Bridge
+    _add_plugin_commands(subcommands)
+    
     return parser
+
+
+def _handle_plugin_command(args: argparse.Namespace) -> None:
+    """Handle a dynamically loaded plugin command.
+    
+    Args:
+        args: Parsed command line arguments
+    """
+    handler = getattr(args, "_plugin_handler", None)
+    plugin_id = getattr(args, "_plugin_id", None)
+    cmd_name = getattr(args, "_plugin_cmd", None)
+    
+    if handler is None:
+        print(f"Error: No handler found for plugin command {plugin_id}:{cmd_name}")
+        return
+    
+    try:
+        # Convert args namespace to dict, removing internal keys
+        kwargs = {
+            k: v for k, v in vars(args).items()
+            if not k.startswith("_") and k not in ("command", "root")
+        }
+        handler(**kwargs)
+    except Exception as e:
+        logger.error("Plugin command %s:%s failed: %s", plugin_id, cmd_name, e)
+        print(f"Error running plugin command: {e}")
+
+
 def main() -> None:
     """Entrypoint for the CLI."""
     parser = build_parser()
@@ -330,6 +513,34 @@ def main() -> None:
             fail_on_duplication=args.fail_on_duplication,
             fail_on_unused=args.fail_on_unused,
         )
+    elif args.command == "plugins":
+        if args.plugins_command == "list":
+            handle_plugins_list(args)
+        elif args.plugins_command == "info":
+            handle_plugins_info(args)
+        elif args.plugins_command == "enable":
+            handle_plugins_enable(args)
+        elif args.plugins_command == "disable":
+            handle_plugins_disable(args)
+        elif args.plugins_command == "status":
+            handle_plugins_status(args)
+        elif args.plugins_command == "install":
+            handle_plugins_install(args)
+        elif args.plugins_command == "uninstall":
+            handle_plugins_uninstall(args)
+        elif args.plugins_command == "scaffold":
+            handle_plugins_scaffold(args)
+        elif args.plugins_command == "reload":
+            handle_plugins_reload(args)
+        elif args.plugins_command == "sign":
+            handle_plugins_sign(args)
+        elif args.plugins_command == "verify":
+            handle_plugins_verify(args)
+        else:
+            raise ValueError(f"Unhandled plugins command {args.plugins_command}")
+    elif args.command and args.command.startswith("p:"):
+        # Handle dynamic plugin commands (p:plugin_id:command_name)
+        _handle_plugin_command(args)
     else:
         raise ValueError(f"Unhandled command {args.command}")
 

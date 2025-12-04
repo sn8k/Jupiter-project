@@ -1,5 +1,8 @@
 # Changelog – Manual.md
 
+## v1.8.35: Version badge refresh
+- Mise à jour de l'en-tête du manuel vers la version 1.8.35 pour rester aligné avec `VERSION` et le README.
+
 ## v1.8.21: Note migration SQL
 - Mise à jour de l'en-tête du manuel vers la version 1.8.21.
 - Ajout d'un encart indiquant la roadmap de transition vers un stockage SQL automatisé tout en conservant le mode fichier durant la migration.

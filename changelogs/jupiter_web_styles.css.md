@@ -1,4 +1,37 @@
 # Changelog – jupiter/web/styles.css
+
+## Plugin Activity Widget Styles (Phase 4.2.1)
+
+### Added
+- `.plugin-activity-widget`: Base container for activity metrics widget
+- `.plugin-activity-widget.disabled`: Muted style for disabled plugins
+- `.plugin-activity-widget.loading`: Loading state with spinner animation
+- `.activity-stats`: Grid layout for 4-column stat display
+- `.activity-stat`: Individual stat card with hover effects
+- `.activity-stat.has-errors`: Red highlight for plugins with errors
+- `.stat-icon`, `.stat-value`, `.stat-label`: Typography for stat components
+- `@keyframes spin`: Loading spinner animation
+- Responsive grid (2 columns on mobile)
+
+## Trust Badge & Circuit Breaker Styles
+
+### Added
+- `.trust-badge`: Base styling for trust level badges (font-size, padding, border-radius)
+- Trust level modifiers:
+  - `.trust-badge.official`: Gold/amber color for official plugins
+  - `.trust-badge.verified`: Green color for verified plugins
+  - `.trust-badge.community`: Blue color for community plugins
+  - `.trust-badge.unsigned`: Orange/warning color for unsigned plugins
+  - `.trust-badge.experimental`: Purple color for experimental plugins
+- `.circuit-breaker`: Base styling for circuit breaker badges
+- Circuit breaker state modifiers:
+  - `.circuit-breaker.closed`: Green color for healthy state
+  - `.circuit-breaker.half-open`: Yellow color for recovery state
+  - `.circuit-breaker.open`: Red color for degraded state
+- Tooltip support with `title` attribute for all badges
+
+---
+
 - Added global `.hidden` helper to control modal visibility reliably across browsers.
 - Introduced `.version-pill`, `.update-box`, et `.version-indicator` pour styliser le badge de version global et la carte de mise à jour dans les paramètres.
 - Switched to refreshed dark design system with panel/contrast variables, gradients, and shadowed cards.

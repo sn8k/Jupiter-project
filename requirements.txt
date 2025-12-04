@@ -7,6 +7,7 @@ httpx
 pyright
 requests
 psutil
+watchdog  # File watching for plugin hot-reload in developer mode
 # Notifications webhook keeps using httpx for outbound posts while now falling back to in-app alerts when no URL is set.
 python-multipart
 # Standard library only for now; GUI (http.server + static assets) does not add third-party needs yet.

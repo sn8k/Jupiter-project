@@ -1,6 +1,6 @@
 """Interface definitions for the Jupiter Plugin Bridge.
 
-Version: 0.1.1
+Version: 0.2.0
 
 This module defines the Abstract Base Classes (ABCs) and Protocols
 that plugins must implement to integrate with Jupiter's Bridge system.
@@ -115,35 +115,83 @@ class CLIContribution:
 
 @dataclass
 class APIContribution:
-    """Describes an API route contributed by a plugin."""
+    """Describes an API route contributed by a plugin.
     
-    path: str                           # Route path (e.g., "/quality/analyze")
-    method: str                         # HTTP method
-    entrypoint: str                     # Module:function path
+    For v2 plugins with manifest, use path/method/entrypoint.
+    For core plugins, use plugin_id/router/prefix.
+    """
+    
+    # For manifest-based routes
+    path: str = ""                      # Route path (e.g., "/quality/analyze")
+    method: str = ""                    # HTTP method
+    entrypoint: str = ""                # Module:function path
     tags: List[str] = field(default_factory=list)
     auth_required: bool = False
     
+    # For core plugins with FastAPI router
+    plugin_id: str = ""                 # Plugin ID (for core plugins)
+    router: Optional[Any] = None        # FastAPI APIRouter instance
+    prefix: str = ""                    # Route prefix
+    
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        result = {
+            "path": self.path,
+            "method": self.method,
+            "entrypoint": self.entrypoint,
+            "tags": self.tags,
+            "auth_required": self.auth_required,
+        }
+        if self.plugin_id:
+            result["plugin_id"] = self.plugin_id
+        if self.prefix:
+            result["prefix"] = self.prefix
+        return result
 
 
 @dataclass
 class UIContribution:
     """Describes a UI panel/section contributed by a plugin."""
     
-    id: str                             # Unique panel ID
-    location: UILocation                # Where to show (sidebar, settings, both)
-    route: str                          # URL route
-    title_key: str                      # i18n key for title
+    # Required fields - use defaults with sentinel values for flexibility
+    title_key: str = ""                 # i18n key for title
+    
+    # Optional fields with defaults
+    id: str = ""                        # Unique panel ID (optional if plugin_id used)
+    location: Optional[UILocation] = None  # Where to show (sidebar, settings, both)
+    route: str = ""                     # URL route
     icon: str = "🔌"                    # Icon (emoji or class)
     order: int = 100                    # Sort order
     settings_section: Optional[str] = None
     
+    # For core plugins with direct UI contributions
+    plugin_id: str = ""                 # Plugin ID (for core plugins)
+    panel_type: str = ""                # Type of panel (settings, sidebar, etc)
+    panel_id: str = ""                  # ID within the panel type
+    mount_point: str = ""               # Where to mount the UI
+    
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            **asdict(self),
-            "location": self.location.value,
+        result = {
+            "title_key": self.title_key,
+            "icon": self.icon,
+            "order": self.order,
         }
+        if self.id:
+            result["id"] = self.id
+        if self.location:
+            result["location"] = self.location.value
+        if self.route:
+            result["route"] = self.route
+        if self.settings_section:
+            result["settings_section"] = self.settings_section
+        if self.plugin_id:
+            result["plugin_id"] = self.plugin_id
+        if self.panel_type:
+            result["panel_type"] = self.panel_type
+        if self.panel_id:
+            result["panel_id"] = self.panel_id
+        if self.mount_point:
+            result["mount_point"] = self.mount_point
+        return result
 
 
 @dataclass 

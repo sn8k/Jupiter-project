@@ -1,4 +1,4 @@
-# Manuel utilisateur — Jupiter (v1.8.21)
+# Manuel utilisateur — Jupiter (v1.8.35)
 
 Ce manuel explique comment installer, configurer et utiliser Jupiter via l’interface Web et la CLI. Il reflète l’état actuel du code (CLI, API FastAPI, Web UI et plugins).
 

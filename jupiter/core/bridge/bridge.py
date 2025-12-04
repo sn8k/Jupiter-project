@@ -1,6 +1,6 @@
 """Jupiter Plugin Bridge - Core Singleton.
 
-Version: 0.1.1
+Version: 0.3.0 - Added ready() method for WebUI publication
 
 The Bridge is the central orchestrator for Jupiter's plugin system v2.
 It manages:
@@ -202,17 +202,65 @@ class Bridge:
     # PLUGIN LIFECYCLE
     # =========================================================================
     
+    def discover_core_plugins(self) -> List[str]:
+        """Discover and register built-in core plugins.
+        
+        Core plugins are hard-coded and always loaded first.
+        They don't have external manifests.
+        
+        Returns:
+            List of discovered core plugin IDs
+        """
+        discovered: List[str] = []
+        
+        try:
+            from jupiter.core.bridge.core_plugins import get_core_plugins
+            
+            for plugin in get_core_plugins():
+                try:
+                    manifest = plugin.manifest
+                    plugin_id = manifest.id
+                    
+                    if plugin_id in self._plugins:
+                        logger.debug("Core plugin %s already registered", plugin_id)
+                        continue
+                    
+                    # Register with the plugin instance attached
+                    with self._lock:
+                        self._plugins[plugin_id] = PluginInfo(
+                            manifest=manifest,
+                            instance=plugin,
+                            state=PluginState.DISCOVERED,
+                            legacy=False,
+                        )
+                    
+                    discovered.append(plugin_id)
+                    logger.debug("Discovered core plugin: %s", plugin_id)
+                    
+                except Exception as e:
+                    logger.error("Failed to register core plugin: %s", e)
+        except ImportError as e:
+            logger.warning("Core plugins module not available: %s", e)
+        
+        logger.info("Discovered %d core plugins", len(discovered))
+        return discovered
+    
     def discover(self) -> List[str]:
         """Discover plugins in the plugins directory.
         
         Scans for:
-        1. v2 plugins with plugin.yaml manifest
-        2. v1 plugins (Python files/classes matching LegacyPlugin protocol)
+        1. Core plugins (hard-coded, always loaded first)
+        2. v2 plugins with plugin.yaml manifest
+        3. v1 plugins (Python files/classes matching LegacyPlugin protocol)
         
         Returns:
             List of discovered plugin IDs
         """
         discovered: List[str] = []
+        
+        # 1. Discover core plugins first
+        core_plugins = self.discover_core_plugins()
+        discovered.extend(core_plugins)
         
         if not self._plugins_dir.exists():
             logger.warning("Plugins directory does not exist: %s", self._plugins_dir)
@@ -381,10 +429,122 @@ class Bridge:
                     self._plugins[plugin_id].state = PluginState.ERROR
                     self._plugins[plugin_id].error = str(e)
         
-        self._ready = True
         self._emit_event("BRIDGE_READY", {"plugins": list(results.keys())})
         
         return results
+    
+    def ready(self) -> Dict[str, Any]:
+        """Publish the plugin system as ready for WebUI consumption.
+        
+        This method should be called after initialize() to:
+        1. Build the complete UI manifest for WebUI
+        2. Emit PLUGINS_READY event with manifest data
+        3. Mark the Bridge as fully ready for UI interactions
+        
+        Returns:
+            Dict containing:
+            - ui_manifest: Complete UI manifest for WebUI
+            - plugins_ready: Count of ready plugins
+            - plugins_error: Count of error plugins
+        """
+        if not self._ready:
+            logger.warning("ready() called before initialize(), auto-initializing")
+            self.initialize()
+        
+        # Build UI manifest for WebUI
+        ui_manifest = self._build_ui_manifest()
+        
+        # Count plugin states
+        ready_count = sum(
+            1 for p in self._plugins.values() 
+            if p.state == PluginState.READY
+        )
+        error_count = sum(
+            1 for p in self._plugins.values() 
+            if p.state == PluginState.ERROR
+        )
+        
+        result = {
+            "ui_manifest": ui_manifest,
+            "plugins_ready": ready_count,
+            "plugins_error": error_count,
+        }
+        
+        # Emit PLUGINS_READY event for WebUI
+        self._emit_event("PLUGINS_READY", result)
+        
+        self._ready = True
+        logger.info(
+            "Plugin system ready for WebUI: %d plugins ready, %d errors",
+            ready_count,
+            error_count
+        )
+        
+        return result
+    
+    def _build_ui_manifest(self) -> Dict[str, Any]:
+        """Build complete UI manifest for WebUI.
+        
+        Returns:
+            Dict containing:
+            - plugins: List of plugin summaries
+            - ui_contributions: All UI panels/menus grouped by plugin
+            - menus: Dynamic menu entries to add
+        """
+        plugins_summary: List[Dict[str, Any]] = []
+        ui_contributions: Dict[str, List[Dict[str, Any]]] = {}
+        menu_entries: List[Dict[str, Any]] = []
+        
+        for plugin_id, info in self._plugins.items():
+            # Build plugin summary
+            summary = {
+                "id": plugin_id,
+                "name": info.manifest.name,
+                "version": info.manifest.version,
+                "state": info.state.value,
+                "type": info.manifest.plugin_type.value,
+                "has_ui": bool(info.manifest.ui_contributions),
+                "legacy": info.legacy,
+            }
+            plugins_summary.append(summary)
+            
+            # Collect UI contributions
+            if info.state == PluginState.READY:
+                plugin_ui: List[Dict[str, Any]] = []
+                
+                for ui in info.manifest.ui_contributions:
+                    ui_entry = {
+                        "id": ui.id,
+                        "type": str(ui.panel_type),
+                        "mount_point": ui.mount_point,
+                        "route": ui.route,
+                        "title_key": ui.title_key,
+                        "icon": ui.icon,
+                    }
+                    plugin_ui.append(ui_entry)
+                    
+                    # Add menu entry
+                    if ui.mount_point == "sidebar":
+                        menu_entries.append({
+                            "plugin_id": plugin_id,
+                            "panel_id": ui.id,
+                            "title_key": ui.title_key,
+                            "route": ui.route or f"/plugins/{plugin_id}/{ui.id}",
+                            "icon": ui.icon or "puzzle-piece",
+                            "order": getattr(ui, 'order', 100),
+                        })
+                
+                if plugin_ui:
+                    ui_contributions[plugin_id] = plugin_ui
+        
+        # Sort menu entries by order
+        menu_entries.sort(key=lambda x: x.get("order", 100))
+        
+        return {
+            "plugins": plugins_summary,
+            "ui_contributions": ui_contributions,
+            "menus": menu_entries,
+        }
     
     def _sort_by_load_order(self, plugin_ids: List[str]) -> List[str]:
         """Sort plugins by type priority and dependencies.
@@ -518,6 +678,14 @@ class Bridge:
         """Initialize a v2 plugin with manifest."""
         manifest = info.manifest
         
+        # Check if this is a core plugin with pre-attached instance
+        if info.instance is not None:
+            # Core plugin - instance already attached, just call init
+            if hasattr(info.instance, "init"):
+                services = self._create_service_locator(info.manifest.id)
+                info.instance.init(services)
+            return
+        
         # Load the module if not already loaded
         if info.module is None and manifest.source_path:
             plugin_dir = manifest.source_path.parent
@@ -548,23 +716,45 @@ class Bridge:
         manifest = info.manifest
         plugin_id = manifest.id
         
-        # Register CLI contributions
+        # Register contributions from manifest (v2 plugins)
         for cli in manifest.cli_contributions:
             key = f"{plugin_id}.{cli.name}"
             self._cli_contributions[key] = cli
             logger.debug("Registered CLI: %s", key)
         
-        # Register API contributions
         for api in manifest.api_contributions:
             key = f"{plugin_id}.{api.path}"
             self._api_contributions[key] = api
             logger.debug("Registered API: %s", key)
         
-        # Register UI contributions
         for ui in manifest.ui_contributions:
             key = f"{plugin_id}.{ui.id}"
             self._ui_contributions[key] = ui
             logger.debug("Registered UI: %s", key)
+        
+        # Register contributions from plugin instance methods (core plugins)
+        if info.instance:
+            # API contribution
+            if hasattr(info.instance, "get_api_contribution"):
+                try:
+                    api_contrib = info.instance.get_api_contribution()
+                    if api_contrib:
+                        key = f"{plugin_id}.api"
+                        self._api_contributions[key] = api_contrib
+                        logger.debug("Registered API contribution from core plugin: %s", key)
+                except Exception as e:
+                    logger.warning("Failed to get API contribution from %s: %s", plugin_id, e)
+            
+            # UI contribution
+            if hasattr(info.instance, "get_ui_contribution"):
+                try:
+                    ui_contrib = info.instance.get_ui_contribution()
+                    if ui_contrib:
+                        key = f"{plugin_id}.{ui_contrib.panel_id}"
+                        self._ui_contributions[key] = ui_contrib
+                        logger.debug("Registered UI contribution from core plugin: %s", key)
+                except Exception as e:
+                    logger.warning("Failed to get UI contribution from %s: %s", plugin_id, e)
     
     def shutdown(self, plugin_id: str) -> None:
         """Shutdown a single plugin.

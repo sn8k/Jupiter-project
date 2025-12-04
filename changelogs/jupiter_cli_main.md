@@ -1,5 +1,47 @@
 # Changelog – jupiter/cli/main.py
 
+## Version 1.5.0 - Phase 7.2 Plugin Signing Commands
+- Added plugin signing commands:
+  - `jupiter plugins sign <path>` : Sign a plugin with cryptographic signature
+    - `--signer-id` : Signer identifier (default: $JUPITER_SIGNER_ID)
+    - `--signer-name` : Signer name (default: $JUPITER_SIGNER_NAME)
+    - `--trust-level` : Trust level (official/verified/community)
+    - `--key` : Path to private key file
+  - `jupiter plugins verify <path>` : Verify a plugin's signature
+    - `--require-level` : Require minimum trust level (exit 1 if not met)
+- Added handlers to `CLI_HANDLERS` registry:
+  - `plugins_sign`, `plugins_verify`
+- 10 new tests in test_cli_plugin_commands.py
+
+## Version 1.4.0 - Phase 3.2 Plugin Management Commands
+- Added plugin management commands:
+  - `jupiter plugins install <source>` : Install from URL, ZIP, or Git
+  - `jupiter plugins uninstall <id>` : Remove a plugin
+  - `jupiter plugins scaffold <id>` : Generate new plugin skeleton
+  - `jupiter plugins reload <id>` : Hot-reload in dev mode
+- Added handlers to `CLI_HANDLERS` registry:
+  - `plugins_install`, `plugins_uninstall`, `plugins_scaffold`, `plugins_reload`
+- Install supports: local paths, local ZIP files, HTTP URLs, Git repositories
+- Scaffold generates: `manifest.json`, `plugin.py`, `README.md`
+- Reload requires developer mode enabled in Bridge config
+
+## Version 1.3.0 - Dynamic Plugin CLI Commands
+- Added `_add_plugin_commands()` to dynamically load CLI commands from plugins
+- Added `_handle_plugin_command()` to execute plugin command handlers
+- Plugin commands use prefix `p:plugin_id:cmd` to avoid conflicts
+
+## Version 1.2.0 - Plugins Commands (Bridge v2)
+- Added `plugins` command group with subcommands:
+  - `jupiter plugins list` : List all registered plugins
+  - `jupiter plugins info <id>` : Show plugin details
+  - `jupiter plugins enable <id>` : Enable a plugin
+  - `jupiter plugins disable <id>` : Disable a plugin
+  - `jupiter plugins status` : Show Bridge system status
+- Added imports from `jupiter.cli.plugin_commands`
+- Added plugin handlers to `CLI_HANDLERS` registry:
+  - `plugins_list`, `plugins_info`, `plugins_enable`, `plugins_disable`, `plugins_status`
+- All commands support `--json` flag for machine-readable output
+
 ## Version 1.1.1 (2025-12-03) – CLI Parser Fix
 - **Bug Fix**: Fixed argument parser where `--no-snapshot` and `--snapshot-label` were incorrectly attached to `scan_parser` after `analyze_parser` definition
 - **Impact**: `scan` command now correctly accepts `--no-snapshot` and `--snapshot-label` flags

@@ -1,6 +1,29 @@
 # Changelog – jupiter/server/api.py
 
-## Version 1.1.0 (2025-12-02) – Phase 3: Dual-Port Architecture
+## Version 1.4.0 – Bridge-to-WebSocket Event Propagation
+- Integrated `ws_bridge` module for automatic event forwarding
+- Added `init_ws_bridge()` call after Bridge initialization
+- Added `shutdown_ws_bridge()` call during shutdown
+- All Bridge events now automatically propagate to connected WebSocket clients
+- Enables real-time WebUI updates for plugin events, scans, config changes
+
+## Version 1.3.0 – Dynamic Plugin Route Mounting
+- Added `_mount_plugin_api_routes(app, bridge)` function
+  - Dynamically mounts API routes from plugins after Bridge initialization
+  - Supports both `router` objects and route specifications from APIContribution
+  - Logs mounted routes for debugging
+- Plugin API routes are mounted after Bridge init in the lifespan
+
+## Version 1.2.0 – Bridge v2 Plugin System Integration
+- Intégration du système de plugins Bridge v2 dans le lifespan
+  - Appel de `init_plugin_system()` au démarrage
+  - Appel de `shutdown_plugin_system()` à l'arrêt
+  - Log des statistiques de plugins chargés
+- Ajout du router `plugins_v2_router` pour les endpoints `/plugins/v2/*`
+- Import du module `jupiter.server.routers.plugins`
+- Coexistence avec l'ancien PluginManager (migration progressive)
+
+## Version 1.1.0 – Phase 3: Dual-Port Architecture
 - Added dual-port server support for autodiag
   - Main API server runs on configured host:port
   - Autodiag server runs on 127.0.0.1:autodiag_port (localhost only)

@@ -1,6 +1,6 @@
 """API Registry for Jupiter Plugin Bridge.
 
-Version: 0.1.0
+Version: 0.2.0
 
 This module provides a registry for API contributions from plugins.
 It allows plugins to register FastAPI routes that are dynamically
@@ -10,6 +10,7 @@ Features:
 - Register and unregister API routes per plugin
 - Automatic route prefixing under /plugins/<plugin_id>/
 - Permission checking for route registration
+- Runtime permission validation via middleware
 - Standard plugin endpoints (health, metrics, config, logs)
 - OpenAPI schema integration
 """
@@ -17,9 +18,11 @@ Features:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from functools import wraps
+from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING
 
 from jupiter.core.bridge.interfaces import APIContribution, Permission
 from jupiter.core.bridge.exceptions import (
@@ -28,7 +31,13 @@ from jupiter.core.bridge.exceptions import (
     ValidationError,
 )
 
+if TYPE_CHECKING:
+    from fastapi import Request, Response
+    from starlette.middleware.base import RequestResponseEndpoint
+
 logger = logging.getLogger(__name__)
+
+__version__ = "0.2.0"
 
 
 class HTTPMethod(str, Enum):
@@ -567,8 +576,462 @@ class APIRegistry:
         }
 
 
+# =============================================================================
+# RUNTIME PERMISSION VALIDATION
+# =============================================================================
+
+# Pattern to extract plugin_id from path: /plugins/{plugin_id}/...
+_PLUGIN_PATH_PATTERN = re.compile(r"^/plugins/([a-zA-Z_][a-zA-Z0-9_]*)(?:/.*)?$")
+
+
+@dataclass
+class RoutePermissionConfig:
+    """Configuration for route-level permission requirements."""
+    
+    plugin_id: str
+    path_pattern: str  # regex or exact path
+    required_permissions: List[Permission]
+    require_all: bool = True  # True=AND, False=OR
+    description: str = ""
+
+
+class PermissionValidationResult:
+    """Result of permission validation for an API call."""
+    
+    def __init__(
+        self,
+        allowed: bool,
+        plugin_id: Optional[str] = None,
+        checked_permissions: Optional[List[Permission]] = None,
+        denied_permissions: Optional[List[Permission]] = None,
+        reason: str = "",
+    ):
+        self.allowed = allowed
+        self.plugin_id = plugin_id
+        self.checked_permissions = checked_permissions or []
+        self.denied_permissions = denied_permissions or []
+        self.reason = reason
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dictionary."""
+        return {
+            "allowed": self.allowed,
+            "plugin_id": self.plugin_id,
+            "checked_permissions": [p.value for p in self.checked_permissions],
+            "denied_permissions": [p.value for p in self.denied_permissions],
+            "reason": self.reason,
+        }
+
+
+class APIPermissionValidator:
+    """Runtime permission validator for API routes.
+    
+    This class provides middleware and utilities for validating
+    permissions when plugin API routes are called.
+    
+    Usage:
+        validator = APIPermissionValidator(api_registry, permission_checker)
+        
+        # In FastAPI app setup
+        app.middleware("http")(validator.middleware)
+        
+        # Or use the dependency
+        @app.get("/plugins/{plugin_id}/action")
+        async def action(validated: bool = Depends(validator.require_api_permission)):
+            ...
+    """
+    
+    def __init__(
+        self,
+        api_registry: "APIRegistry",
+        permission_checker: Optional[Any] = None,
+    ):
+        """Initialize the validator.
+        
+        Args:
+            api_registry: API registry instance
+            permission_checker: PermissionChecker instance (optional)
+        """
+        self._registry = api_registry
+        self._permission_checker = permission_checker
+        
+        # Route-specific permission requirements
+        # path_pattern -> RoutePermissionConfig
+        self._route_configs: Dict[str, RoutePermissionConfig] = {}
+        
+        # Plugin-level permission overrides
+        # plugin_id -> set of always-required permissions
+        self._plugin_requirements: Dict[str, Set[Permission]] = {}
+        
+        # Validation statistics
+        self._stats = {
+            "total_checks": 0,
+            "allowed": 0,
+            "denied": 0,
+            "bypassed": 0,
+        }
+        
+        # Paths that bypass permission checks (e.g., health endpoints)
+        self._bypass_paths: Set[str] = {
+            "/health",
+            "/metrics",
+            "/docs",
+            "/openapi.json",
+            "/redoc",
+        }
+        
+        logger.debug("APIPermissionValidator initialized")
+    
+    def set_permission_checker(self, checker: Any) -> None:
+        """Set the permission checker.
+        
+        Args:
+            checker: PermissionChecker instance
+        """
+        self._permission_checker = checker
+    
+    def add_bypass_path(self, path: str) -> None:
+        """Add a path that bypasses permission checks.
+        
+        Args:
+            path: Path to bypass (exact match)
+        """
+        self._bypass_paths.add(path)
+    
+    def remove_bypass_path(self, path: str) -> None:
+        """Remove a path from bypass list.
+        
+        Args:
+            path: Path to remove
+        """
+        self._bypass_paths.discard(path)
+    
+    def configure_route(
+        self,
+        plugin_id: str,
+        path_pattern: str,
+        permissions: List[Permission],
+        require_all: bool = True,
+        description: str = "",
+    ) -> None:
+        """Configure permission requirements for a specific route.
+        
+        Args:
+            plugin_id: Plugin identifier
+            path_pattern: Path pattern (regex supported)
+            permissions: Required permissions
+            require_all: True to require ALL, False for ANY
+            description: Description of the requirement
+        """
+        config = RoutePermissionConfig(
+            plugin_id=plugin_id,
+            path_pattern=path_pattern,
+            required_permissions=permissions,
+            require_all=require_all,
+            description=description,
+        )
+        
+        full_pattern = f"/plugins/{plugin_id}{path_pattern}"
+        self._route_configs[full_pattern] = config
+        
+        logger.debug(
+            "Configured route permissions: %s requires %s",
+            full_pattern,
+            [p.value for p in permissions],
+        )
+    
+    def set_plugin_requirements(
+        self,
+        plugin_id: str,
+        permissions: Set[Permission],
+    ) -> None:
+        """Set base permission requirements for all routes of a plugin.
+        
+        Args:
+            plugin_id: Plugin identifier
+            permissions: Set of always-required permissions
+        """
+        self._plugin_requirements[plugin_id] = permissions.copy()
+    
+    def extract_plugin_id(self, path: str) -> Optional[str]:
+        """Extract plugin ID from request path.
+        
+        Args:
+            path: Request path (e.g., /plugins/my_plugin/action)
+            
+        Returns:
+            Plugin ID or None if not a plugin route
+        """
+        match = _PLUGIN_PATH_PATTERN.match(path)
+        if match:
+            return match.group(1)
+        return None
+    
+    def should_bypass(self, path: str) -> bool:
+        """Check if path should bypass permission validation.
+        
+        Args:
+            path: Request path
+            
+        Returns:
+            True if should bypass
+        """
+        # Check exact bypass paths
+        if path in self._bypass_paths:
+            return True
+        
+        # Check plugin standard endpoints (health, metrics)
+        plugin_id = self.extract_plugin_id(path)
+        if plugin_id:
+            suffix = path[len(f"/plugins/{plugin_id}"):]
+            if suffix in {"/health", "/metrics"}:
+                return True
+        
+        return False
+    
+    def validate(self, path: str, method: str = "GET") -> PermissionValidationResult:
+        """Validate permissions for a request.
+        
+        Args:
+            path: Request path
+            method: HTTP method
+            
+        Returns:
+            PermissionValidationResult
+        """
+        self._stats["total_checks"] += 1
+        
+        # Check bypass
+        if self.should_bypass(path):
+            self._stats["bypassed"] += 1
+            return PermissionValidationResult(
+                allowed=True,
+                reason="Path bypasses permission checks",
+            )
+        
+        # Extract plugin ID
+        plugin_id = self.extract_plugin_id(path)
+        if not plugin_id:
+            # Not a plugin route - allow
+            self._stats["allowed"] += 1
+            return PermissionValidationResult(
+                allowed=True,
+                reason="Not a plugin route",
+            )
+        
+        # Check if plugin is registered
+        if plugin_id not in self._registry._routers:
+            self._stats["denied"] += 1
+            return PermissionValidationResult(
+                allowed=False,
+                plugin_id=plugin_id,
+                reason=f"Plugin '{plugin_id}' is not registered",
+            )
+        
+        # Get permissions to check
+        required: Set[Permission] = set()
+        
+        # Add plugin-level requirements
+        if plugin_id in self._plugin_requirements:
+            required.update(self._plugin_requirements[plugin_id])
+        
+        # Add REGISTER_API as base requirement
+        required.add(Permission.REGISTER_API)
+        
+        # Check route-specific requirements
+        for pattern, config in self._route_configs.items():
+            if config.plugin_id == plugin_id:
+                if re.match(pattern, path):
+                    required.update(config.required_permissions)
+        
+        # Validate permissions
+        if not self._permission_checker:
+            # No checker - allow but warn
+            logger.warning("No permission checker configured, allowing by default")
+            self._stats["allowed"] += 1
+            return PermissionValidationResult(
+                allowed=True,
+                plugin_id=plugin_id,
+                checked_permissions=list(required),
+                reason="Permission checker not configured",
+            )
+        
+        # Check each required permission
+        denied = []
+        for perm in required:
+            if not self._permission_checker.has_permission(plugin_id, perm):
+                denied.append(perm)
+        
+        if denied:
+            self._stats["denied"] += 1
+            return PermissionValidationResult(
+                allowed=False,
+                plugin_id=plugin_id,
+                checked_permissions=list(required),
+                denied_permissions=denied,
+                reason=f"Missing permissions: {[p.value for p in denied]}",
+            )
+        
+        self._stats["allowed"] += 1
+        return PermissionValidationResult(
+            allowed=True,
+            plugin_id=plugin_id,
+            checked_permissions=list(required),
+            reason="All permissions granted",
+        )
+    
+    async def middleware(
+        self,
+        request: "Request",
+        call_next: "RequestResponseEndpoint",
+    ) -> "Response":
+        """FastAPI middleware for permission validation.
+        
+        Usage:
+            app.middleware("http")(validator.middleware)
+        """
+        from fastapi import HTTPException
+        from starlette.responses import JSONResponse
+        
+        path = request.url.path
+        method = request.method
+        
+        result = self.validate(path, method)
+        
+        if not result.allowed:
+            logger.warning(
+                "Permission denied for %s %s: %s",
+                method,
+                path,
+                result.reason,
+            )
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "Permission denied",
+                    "detail": result.reason,
+                    "plugin_id": result.plugin_id,
+                    "denied_permissions": [p.value for p in result.denied_permissions],
+                },
+            )
+        
+        return await call_next(request)
+    
+    def get_stats(self) -> Dict[str, int]:
+        """Get validation statistics.
+        
+        Returns:
+            Dictionary with stats
+        """
+        return self._stats.copy()
+    
+    def reset_stats(self) -> None:
+        """Reset validation statistics."""
+        self._stats = {
+            "total_checks": 0,
+            "allowed": 0,
+            "denied": 0,
+            "bypassed": 0,
+        }
+
+
+def require_plugin_permission(
+    *permissions: Permission,
+    require_all: bool = True,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Decorator to require specific permissions for a route handler.
+    
+    This decorator wraps a route handler and validates that the calling
+    plugin has the required permissions.
+    
+    Args:
+        *permissions: Required permissions
+        require_all: True to require ALL permissions, False for ANY
+        
+    Returns:
+        Decorated function
+        
+    Usage:
+        @router.get("/dangerous")
+        @require_plugin_permission(Permission.RUN_COMMANDS, Permission.FS_WRITE)
+        async def dangerous_action(request: Request):
+            ...
+    """
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            from fastapi import HTTPException, Request
+            
+            # Try to get request from args or kwargs
+            request = None
+            for arg in args:
+                if isinstance(arg, Request):
+                    request = arg
+                    break
+            if not request:
+                request = kwargs.get("request")
+            
+            if not request:
+                # No request context - allow (might be called internally)
+                return await func(*args, **kwargs)
+            
+            # Get permission validator from app state
+            validator = getattr(request.app.state, "permission_validator", None)
+            if not validator:
+                # No validator configured - allow
+                return await func(*args, **kwargs)
+            
+            # Extract plugin ID from path
+            plugin_id = validator.extract_plugin_id(str(request.url.path))
+            if not plugin_id:
+                # Not a plugin route
+                return await func(*args, **kwargs)
+            
+            # Check permissions
+            checker = validator._permission_checker
+            if not checker:
+                return await func(*args, **kwargs)
+            
+            missing = []
+            granted = []
+            for perm in permissions:
+                if checker.has_permission(plugin_id, perm):
+                    granted.append(perm)
+                else:
+                    missing.append(perm)
+            
+            # Evaluate requirement
+            if require_all and missing:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "Permission denied",
+                        "plugin_id": plugin_id,
+                        "required_permissions": [p.value for p in permissions],
+                        "missing_permissions": [p.value for p in missing],
+                    },
+                )
+            elif not require_all and not granted:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "Permission denied",
+                        "plugin_id": plugin_id,
+                        "required_one_of": [p.value for p in permissions],
+                    },
+                )
+            
+            return await func(*args, **kwargs)
+        
+        return wrapper
+    return decorator
+
+
 # Global API registry instance
 _api_registry: Optional[APIRegistry] = None
+
+# Global permission validator instance
+_permission_validator: Optional[APIPermissionValidator] = None
 
 
 def get_api_registry() -> APIRegistry:
@@ -583,7 +1046,22 @@ def get_api_registry() -> APIRegistry:
     return _api_registry
 
 
+def get_permission_validator() -> APIPermissionValidator:
+    """Get the global permission validator instance.
+    
+    Returns:
+        APIPermissionValidator singleton
+    """
+    global _permission_validator, _api_registry
+    if _permission_validator is None:
+        if _api_registry is None:
+            _api_registry = APIRegistry()
+        _permission_validator = APIPermissionValidator(_api_registry)
+    return _permission_validator
+
+
 def reset_api_registry() -> None:
     """Reset the global API registry (for testing)."""
-    global _api_registry
+    global _api_registry, _permission_validator
     _api_registry = None
+    _permission_validator = None

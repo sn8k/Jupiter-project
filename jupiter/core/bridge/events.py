@@ -1,6 +1,6 @@
 """Event Bus for Jupiter Plugin Bridge.
 
-Version: 0.1.0
+Version: 0.2.0 - Added PLUGINS_READY topic for WebUI publication
 
 This module provides a centralized event bus for pub/sub communication
 between plugins and the Jupiter core. It supports:
@@ -48,6 +48,7 @@ class EventTopic(str, Enum):
     PLUGIN_DISABLED = "plugin.disabled"
     PLUGIN_RELOADED = "plugin.reloaded"
     PLUGIN_UNLOADED = "plugin.unloaded"
+    PLUGINS_READY = "plugins.ready"  # All plugins initialized, UI manifest available
     
     # Scan events
     SCAN_STARTED = "scan.started"
@@ -603,4 +604,29 @@ def emit_job_failed(job_id: str, error: str) -> None:
     get_event_bus().emit(
         EventTopic.JOB_FAILED.value,
         {"job_id": job_id, "error": error}
+    )
+
+
+def emit_plugins_ready(
+    plugins_ready: int,
+    plugins_error: int,
+    ui_manifest: Optional[Dict[str, Any]] = None
+) -> None:
+    """Emit plugins ready event for WebUI publication.
+    
+    This event signals that all plugins have been initialized and
+    the UI manifest is available for consumption by the WebUI.
+    
+    Args:
+        plugins_ready: Number of plugins in ready state
+        plugins_error: Number of plugins in error state
+        ui_manifest: Complete UI manifest with plugin summaries and contributions
+    """
+    get_event_bus().emit(
+        EventTopic.PLUGINS_READY.value,
+        {
+            "plugins_ready": plugins_ready,
+            "plugins_error": plugins_error,
+            "ui_manifest": ui_manifest or {},
+        }
     )

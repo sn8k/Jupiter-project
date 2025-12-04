@@ -1,6 +1,6 @@
 """Plugin manager for Jupiter.
 
-Version: 1.8.1
+Version: 1.9.1 - Type-safe signature metadata and circuit breaker lookup
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ import importlib
 import logging
 import pkgutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Type, Optional
 
@@ -261,15 +262,59 @@ class PluginManager:
                     logger.error("Plugin %s failed on_analyze: %s", plugin.name, e)
 
     def get_plugins_info(self) -> List[Dict[str, Any]]:
-        """Return info about loaded plugins."""
+        """Return info about loaded plugins.
+        
+        Includes signature verification status if Bridge is available.
+        """
+        # Try to get signature verifier from Bridge
+        signature_verifier = None
+        try:
+            from jupiter.core.bridge.signature import get_signature_verifier
+            signature_verifier = get_signature_verifier()
+        except Exception:
+            pass
+        
         result = []
         for p in self.plugins:
+            trust_level = getattr(p, "trust_level", "experimental")
+            signature_info = None
+            
+            # Try to get signature verification if available
+            if signature_verifier:
+                try:
+                    plugin_path = self._get_plugin_path(p.name)
+                    if plugin_path:
+                        verification = signature_verifier.verify_plugin(plugin_path)
+                        sig_info = verification.signature_info
+                        signer_id = sig_info.signer_id if sig_info else None
+                        signed_at = (
+                            datetime.fromtimestamp(sig_info.timestamp, tz=timezone.utc).isoformat()
+                            if sig_info else None
+                        )
+                        signature_info = {
+                            "valid": verification.valid,
+                            "trust_level": verification.trust_level.value if verification.trust_level else None,
+                            "signer": signer_id,
+                            "signed_at": signed_at,
+                            "verified": verification.valid,
+                        }
+                        # Use verified trust level if signature is valid
+                        if verification.valid and verification.trust_level:
+                            trust_level = verification.trust_level.value
+                except Exception as e:
+                    logger.debug("Could not verify signature for %s: %s", p.name, e)
+            
+            # Get circuit breaker status from job manager
+            circuit_breaker_info = self._get_circuit_breaker_status(p.name)
+            
             info: Dict[str, Any] = {
                 "name": p.name,
                 "version": p.version,
                 "description": getattr(p, "description", ""),
                 "enabled": self.is_enabled(p.name),
-                "trust_level": getattr(p, "trust_level", "experimental"),
+                "trust_level": trust_level,
+                "signature": signature_info,
+                "circuit_breaker": circuit_breaker_info,
                 "config": getattr(p, "config", {}),
                 "is_core": p.name in self.CORE_PLUGINS,
                 "restartable": getattr(p, "restartable", True),  # Default True, Bridge sets False
@@ -289,6 +334,60 @@ class PluginManager:
             result.append(info)
         
         return result
+    
+    def _get_plugin_path(self, name: str) -> Optional[Path]:
+        """Get the path to a plugin's directory.
+        
+        Args:
+            name: Plugin name
+            
+        Returns:
+            Path to plugin directory or None
+        """
+        try:
+            import jupiter.plugins
+            plugins_base = Path(jupiter.plugins.__file__).parent
+            plugin_path = plugins_base / name
+            if plugin_path.exists():
+                return plugin_path
+        except Exception:
+            pass
+        return None
+    
+    def _get_circuit_breaker_status(self, plugin_id: str) -> Optional[Dict[str, Any]]:
+        """Get circuit breaker status for a plugin from the JobManager.
+        
+        Args:
+            plugin_id: Plugin identifier
+            
+        Returns:
+            Circuit breaker info dict or None if not available
+        """
+        try:
+            from jupiter.core.bridge.jobs import get_job_manager
+            job_manager = get_job_manager()
+            
+            breaker = job_manager.get_circuit_breaker(plugin_id)
+            if breaker is None:
+                return None
+            
+            last_failure = (
+                datetime.fromtimestamp(breaker.last_failure_time, tz=timezone.utc).isoformat()
+                if breaker.last_failure_time is not None else None
+            )
+            opened_at = (
+                datetime.fromtimestamp(breaker.opened_at, tz=timezone.utc).isoformat()
+                if breaker.opened_at is not None else None
+            )
+            return {
+                "state": breaker.state.value,
+                "failure_count": breaker.failure_count,
+                "last_failure": last_failure,
+                "opened_at": opened_at,
+                "is_open": breaker.state.value == "open",
+            }
+        except Exception:
+            return None
 
     def get_sidebar_plugins(self) -> List[Dict[str, Any]]:
         """Return plugins that should appear in the sidebar menu."""

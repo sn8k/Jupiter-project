@@ -1,0 +1,50 @@
+# Changelog – jupiter/core/bridge/usage_stats.py
+
+## Version 0.1.0
+
+- **Module créé** : Système de statistiques d'utilisation des plugins
+- **Enums** :
+  - `TimeFrame` : Périodes d'agrégation (HOUR, DAY, WEEK, MONTH, ALL_TIME)
+  - `ExecutionStatus` : Statuts d'exécution (SUCCESS, FAILURE, TIMEOUT, CANCELLED)
+- **Dataclasses** :
+  - `ExecutionRecord` : Enregistrement d'une exécution individuelle
+  - `MethodStats` : Statistiques par méthode (count, duration, success rate, percentiles)
+  - `PluginStats` : Statistiques agrégées par plugin (load/unload, tags, erreurs)
+  - `TimeframeStats` : Statistiques agrégées par période
+  - `UsageStatsConfig` : Configuration du système de stats
+- **Classes principales** :
+  - `ExecutionTimer` : Context manager pour mesurer les exécutions
+  - `UsageStatsManager` : Gestionnaire principal avec :
+    - `record_execution()` : Enregistrer une exécution
+    - `time_execution()` : Timer context manager
+    - `get_plugin_stats()` / `get_all_plugin_stats()` : Récupérer les stats
+    - `get_method_stats()` : Stats par méthode
+    - `record_plugin_load()` / `record_plugin_unload()` : Events de lifecycle
+    - `add_plugin_tag()` / `remove_plugin_tag()` : Tagging pour filtrage
+    - `get_timeframe_stats()` : Stats par période
+    - `get_recent_records()` : Records récents avec filtrage
+    - `get_top_plugins()` : Top plugins par métrique
+    - `get_slowest_methods()` : Méthodes les plus lentes
+    - `get_error_summary()` : Résumé des erreurs
+    - `get_summary()` : Résumé global
+    - `register_callback()` : Notifications de nouvelles exécutions
+    - `clear_all_stats()` / `clear_plugin_stats()` : Nettoyage
+    - `cleanup_old_records()` : Rétention des données
+    - `export_to_json()` : Export JSON
+    - `save_to_disk()` / `_load_from_disk()` : Persistance
+- **Fonctions globales** :
+  - `get_usage_stats_manager()` : Instance singleton
+  - `init_usage_stats_manager()` : Initialisation avec config
+  - `reset_usage_stats_manager()` : Reset pour tests
+  - `record_execution()` : Enregistrement rapide
+  - `time_execution()` : Timer rapide
+  - `get_plugin_stats()` : Stats rapides
+  - `get_stats_summary()` : Résumé rapide
+- **Fonctionnalités** :
+  - Thread-safe avec RLock
+  - Calcul de percentiles (p50, p95)
+  - Anonymisation des erreurs configurable
+  - Limite de records en mémoire
+  - Historique de durées par méthode
+  - Callbacks sur nouvelles exécutions
+- **Tests** : 91 tests couvrant tous les scénarios

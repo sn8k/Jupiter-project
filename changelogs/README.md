@@ -1,5 +1,8 @@
 # Changelog – README.md
 
+## v1.8.35: Version badge refresh
+- Mise à jour du bandeau de version en 1.8.35 pour rester cohérent avec `VERSION` et le manuel.
+
 ## v1.8.21: Roadmap SQL
 - Ajout d'un bandeau de version (1.8.21) en tête de document.
 - Référence explicite aux roadmaps `TODOs/`, notamment la migration SQL gérée automatiquement.

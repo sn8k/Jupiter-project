@@ -1,13 +1,13 @@
 """Tests for jupiter.core.bridge.api_registry module.
 
-Version: 0.1.0
+Version: 0.2.0
 
-Tests for the API Registry functionality.
+Tests for the API Registry functionality including runtime permission validation.
 """
 
 import pytest
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from jupiter.core.bridge.api_registry import (
     APIRegistry,
@@ -16,6 +16,11 @@ from jupiter.core.bridge.api_registry import (
     PluginRouter,
     get_api_registry,
     reset_api_registry,
+    RoutePermissionConfig,
+    PermissionValidationResult,
+    APIPermissionValidator,
+    require_plugin_permission,
+    get_permission_validator,
 )
 from jupiter.core.bridge.interfaces import (
     APIContribution,
@@ -608,3 +613,462 @@ class TestGlobalAPIRegistry:
         r2 = get_api_registry()
         
         assert r1 is not r2
+
+
+# =============================================================================
+# RoutePermissionConfig Tests
+# =============================================================================
+
+class TestRoutePermissionConfig:
+    """Tests for RoutePermissionConfig dataclass."""
+    
+    def test_creates_with_required_fields(self):
+        """Should create config with required fields."""
+        config = RoutePermissionConfig(
+            plugin_id="test_plugin",
+            path_pattern="/action",
+            required_permissions=[Permission.REGISTER_API],
+        )
+        
+        assert config.plugin_id == "test_plugin"
+        assert config.path_pattern == "/action"
+        assert Permission.REGISTER_API in config.required_permissions
+        assert config.require_all is True  # default
+    
+    def test_creates_with_all_options(self):
+        """Should create config with all options."""
+        config = RoutePermissionConfig(
+            plugin_id="test",
+            path_pattern="/admin/.*",
+            required_permissions=[Permission.REGISTER_API, Permission.NETWORK_OUTBOUND],
+            require_all=False,
+            description="Admin routes",
+        )
+        
+        assert config.require_all is False
+        assert config.description == "Admin routes"
+
+
+# =============================================================================
+# PermissionValidationResult Tests
+# =============================================================================
+
+class TestPermissionValidationResult:
+    """Tests for PermissionValidationResult class."""
+    
+    def test_creates_allowed_result(self):
+        """Should create allowed result."""
+        result = PermissionValidationResult(
+            allowed=True,
+            plugin_id="test",
+            reason="All permissions granted",
+        )
+        
+        assert result.allowed is True
+        assert result.plugin_id == "test"
+        assert result.reason == "All permissions granted"
+        assert result.checked_permissions == []
+        assert result.denied_permissions == []
+    
+    def test_creates_denied_result(self):
+        """Should create denied result with details."""
+        result = PermissionValidationResult(
+            allowed=False,
+            plugin_id="test",
+            checked_permissions=[Permission.REGISTER_API, Permission.FS_READ],
+            denied_permissions=[Permission.FS_READ],
+            reason="Missing permissions",
+        )
+        
+        assert result.allowed is False
+        assert Permission.FS_READ in result.denied_permissions
+    
+    def test_to_dict_serializes_result(self):
+        """Should serialize to dictionary."""
+        result = PermissionValidationResult(
+            allowed=False,
+            plugin_id="test",
+            checked_permissions=[Permission.REGISTER_API],
+            denied_permissions=[Permission.REGISTER_API],
+            reason="No permission",
+        )
+        
+        data = result.to_dict()
+        
+        assert data["allowed"] is False
+        assert data["plugin_id"] == "test"
+        assert "register_api" in data["denied_permissions"]
+
+
+# =============================================================================
+# APIPermissionValidator Tests
+# =============================================================================
+
+class TestAPIPermissionValidator:
+    """Tests for APIPermissionValidator class."""
+    
+    @pytest.fixture
+    def validator(self, registry):
+        """Create a permission validator."""
+        return APIPermissionValidator(registry)
+    
+    def test_creates_with_registry(self, registry):
+        """Should create validator with registry."""
+        validator = APIPermissionValidator(registry)
+        
+        assert validator._registry is registry
+        assert validator._permission_checker is None
+    
+    def test_creates_with_permission_checker(self, registry):
+        """Should create with permission checker."""
+        checker = MagicMock()
+        validator = APIPermissionValidator(registry, checker)
+        
+        assert validator._permission_checker is checker
+    
+    def test_extract_plugin_id_from_path(self, validator):
+        """Should extract plugin ID from route path."""
+        assert validator.extract_plugin_id("/plugins/my_plugin/action") == "my_plugin"
+        assert validator.extract_plugin_id("/plugins/test/sub/path") == "test"
+        assert validator.extract_plugin_id("/plugins/a") == "a"
+    
+    def test_extract_plugin_id_returns_none_for_non_plugin_paths(self, validator):
+        """Should return None for non-plugin paths."""
+        assert validator.extract_plugin_id("/api/projects") is None
+        assert validator.extract_plugin_id("/health") is None
+        assert validator.extract_plugin_id("/") is None
+    
+    def test_should_bypass_standard_paths(self, validator):
+        """Should bypass standard paths."""
+        assert validator.should_bypass("/health") is True
+        assert validator.should_bypass("/metrics") is True
+        assert validator.should_bypass("/docs") is True
+        assert validator.should_bypass("/openapi.json") is True
+    
+    def test_should_bypass_plugin_health_metrics(self, validator):
+        """Should bypass plugin health and metrics endpoints."""
+        assert validator.should_bypass("/plugins/test/health") is True
+        assert validator.should_bypass("/plugins/test/metrics") is True
+    
+    def test_should_not_bypass_regular_plugin_routes(self, validator):
+        """Should not bypass regular plugin routes."""
+        assert validator.should_bypass("/plugins/test/action") is False
+        assert validator.should_bypass("/plugins/test/sub/path") is False
+    
+    def test_add_and_remove_bypass_path(self, validator):
+        """Should add and remove bypass paths."""
+        validator.add_bypass_path("/custom")
+        assert validator.should_bypass("/custom") is True
+        
+        validator.remove_bypass_path("/custom")
+        assert validator.should_bypass("/custom") is False
+    
+    def test_validate_allows_non_plugin_routes(self, validator):
+        """Should allow non-plugin routes."""
+        result = validator.validate("/api/projects")
+        
+        assert result.allowed is True
+        assert result.reason == "Not a plugin route"
+    
+    def test_validate_allows_bypass_paths(self, validator):
+        """Should allow bypass paths."""
+        result = validator.validate("/health")
+        
+        assert result.allowed is True
+        assert result.reason == "Path bypasses permission checks"
+    
+    def test_validate_denies_unregistered_plugin(self, validator, registry, handler):
+        """Should deny unregistered plugin."""
+        # Don't register the plugin
+        result = validator.validate("/plugins/unknown/action")
+        
+        assert result.allowed is False
+        assert "not registered" in result.reason
+    
+    def test_validate_allows_with_permissions(self, validator, registry, handler):
+        """Should allow when plugin has required permissions."""
+        # Setup plugin with permissions
+        registry.set_plugin_permissions("test", {Permission.REGISTER_API})
+        registry.register_route("test", "/action", HTTPMethod.GET, handler)
+        
+        # Setup permission checker that grants permission
+        checker = MagicMock()
+        checker.has_permission.return_value = True
+        validator.set_permission_checker(checker)
+        
+        result = validator.validate("/plugins/test/action")
+        
+        assert result.allowed is True
+    
+    def test_validate_denies_without_permissions(self, validator, registry, handler):
+        """Should deny when plugin lacks required permissions."""
+        # Setup plugin
+        registry.set_plugin_permissions("test", {Permission.REGISTER_API})
+        registry.register_route("test", "/action", HTTPMethod.GET, handler)
+        
+        # Setup permission checker that denies
+        checker = MagicMock()
+        checker.has_permission.return_value = False
+        validator.set_permission_checker(checker)
+        
+        result = validator.validate("/plugins/test/action")
+        
+        assert result.allowed is False
+        assert len(result.denied_permissions) > 0
+    
+    def test_configure_route_permissions(self, validator, registry, handler):
+        """Should configure route-specific permissions."""
+        registry.set_plugin_permissions("test", {Permission.REGISTER_API})
+        registry.register_route("test", "/admin", HTTPMethod.POST, handler)
+        
+        validator.configure_route(
+            plugin_id="test",
+            path_pattern="/admin",
+            permissions=[Permission.FS_WRITE],
+            description="Admin route",
+        )
+        
+        # Setup checker that denies FS_WRITE
+        checker = MagicMock()
+        def check_perm(pid, perm):
+            return perm == Permission.REGISTER_API
+        checker.has_permission.side_effect = check_perm
+        validator.set_permission_checker(checker)
+        
+        result = validator.validate("/plugins/test/admin")
+        
+        assert result.allowed is False
+        assert Permission.FS_WRITE in result.denied_permissions
+    
+    def test_set_plugin_requirements(self, validator, registry, handler):
+        """Should set plugin-level permission requirements."""
+        registry.set_plugin_permissions("test", {Permission.REGISTER_API})
+        registry.register_route("test", "/action", HTTPMethod.GET, handler)
+        
+        validator.set_plugin_requirements("test", {Permission.NETWORK_OUTBOUND})
+        
+        # Checker that only grants REGISTER_API
+        checker = MagicMock()
+        def check_perm(pid, perm):
+            return perm == Permission.REGISTER_API
+        checker.has_permission.side_effect = check_perm
+        validator.set_permission_checker(checker)
+        
+        result = validator.validate("/plugins/test/action")
+        
+        assert result.allowed is False
+        assert Permission.NETWORK_OUTBOUND in result.denied_permissions
+    
+    def test_get_stats_returns_statistics(self, validator, registry, handler):
+        """Should track validation statistics."""
+        registry.set_plugin_permissions("test", {Permission.REGISTER_API})
+        registry.register_route("test", "/action", HTTPMethod.GET, handler)
+        
+        # Some validations
+        validator.validate("/health")  # bypass
+        validator.validate("/api/x")   # non-plugin - allow
+        validator.validate("/plugins/unknown/x")  # unregistered - deny
+        
+        stats = validator.get_stats()
+        
+        assert stats["total_checks"] == 3
+        assert stats["bypassed"] == 1
+        assert stats["allowed"] == 1
+        assert stats["denied"] == 1
+    
+    def test_reset_stats(self, validator):
+        """Should reset statistics."""
+        validator.validate("/health")
+        validator.reset_stats()
+        
+        stats = validator.get_stats()
+        assert stats["total_checks"] == 0
+
+
+# =============================================================================
+# APIPermissionValidator Middleware Tests
+# =============================================================================
+
+class TestAPIPermissionValidatorMiddleware:
+    """Tests for middleware functionality."""
+    
+    @pytest.fixture
+    def validator(self, registry):
+        """Create a permission validator."""
+        return APIPermissionValidator(registry)
+    
+    @pytest.mark.asyncio
+    async def test_middleware_allows_valid_request(self, validator, registry, handler):
+        """Middleware should allow valid requests."""
+        # Setup plugin
+        registry.set_plugin_permissions("test", {Permission.REGISTER_API})
+        registry.register_route("test", "/action", HTTPMethod.GET, handler)
+        
+        # Setup checker
+        checker = MagicMock()
+        checker.has_permission.return_value = True
+        validator.set_permission_checker(checker)
+        
+        # Create mock request
+        request = MagicMock()
+        request.url.path = "/plugins/test/action"
+        request.method = "GET"
+        
+        # Create mock next handler
+        expected_response = MagicMock()
+        call_next = AsyncMock(return_value=expected_response)
+        
+        response = await validator.middleware(request, call_next)
+        
+        assert response is expected_response
+        call_next.assert_called_once_with(request)
+    
+    @pytest.mark.asyncio
+    async def test_middleware_denies_unauthorized_request(self, validator, registry, handler):
+        """Middleware should deny unauthorized requests."""
+        # Setup plugin
+        registry.set_plugin_permissions("test", {Permission.REGISTER_API})
+        registry.register_route("test", "/action", HTTPMethod.GET, handler)
+        
+        # Setup checker that denies
+        checker = MagicMock()
+        checker.has_permission.return_value = False
+        validator.set_permission_checker(checker)
+        
+        # Create mock request
+        request = MagicMock()
+        request.url.path = "/plugins/test/action"
+        request.method = "GET"
+        
+        call_next = AsyncMock()
+        
+        response = await validator.middleware(request, call_next)
+        
+        # Should return 403 response
+        assert response.status_code == 403
+        call_next.assert_not_called()
+    
+    @pytest.mark.asyncio
+    async def test_middleware_bypasses_health(self, validator):
+        """Middleware should bypass health endpoints."""
+        request = MagicMock()
+        request.url.path = "/health"
+        request.method = "GET"
+        
+        expected_response = MagicMock()
+        call_next = AsyncMock(return_value=expected_response)
+        
+        response = await validator.middleware(request, call_next)
+        
+        assert response is expected_response
+
+
+# =============================================================================
+# require_plugin_permission Decorator Tests
+# =============================================================================
+
+class TestRequirePluginPermissionDecorator:
+    """Tests for require_plugin_permission decorator."""
+    
+    @pytest.mark.asyncio
+    async def test_allows_with_all_permissions(self):
+        """Should allow when all required permissions are granted."""
+        checker = MagicMock()
+        checker.has_permission.return_value = True
+        
+        # Create a validator mock with the checker
+        validator = MagicMock()
+        validator.extract_plugin_id.return_value = "test"
+        validator._permission_checker = checker
+        
+        @require_plugin_permission(Permission.FS_READ, Permission.FS_WRITE)
+        async def handler(request):
+            return {"status": "ok"}
+        
+        request = MagicMock()
+        request.url.path = "/plugins/test/action"
+        request.app.state.permission_validator = validator
+        
+        # Pass request as keyword argument so it can be found
+        result = await handler(request=request)
+        
+        assert result == {"status": "ok"}
+    
+    @pytest.mark.asyncio
+    async def test_denies_missing_permissions(self):
+        """Should deny when required permissions are missing."""
+        from fastapi import HTTPException
+        
+        checker = MagicMock()
+        def check_perm(pid, perm):
+            return perm == Permission.FS_READ
+        checker.has_permission.side_effect = check_perm
+        
+        # Create a validator mock with the checker
+        validator = MagicMock()
+        validator.extract_plugin_id.return_value = "test"
+        validator._permission_checker = checker
+        
+        @require_plugin_permission(Permission.FS_READ, Permission.FS_WRITE)
+        async def handler(request):
+            return {"status": "ok"}
+        
+        request = MagicMock()
+        request.url.path = "/plugins/test/action"
+        request.app.state.permission_validator = validator
+        
+        with pytest.raises(HTTPException) as exc_info:
+            # Pass request as keyword argument so it can be found
+            await handler(request=request)
+        
+        assert exc_info.value.status_code == 403
+        assert "fs_write" in str(exc_info.value.detail).lower()
+    
+    @pytest.mark.asyncio
+    async def test_allows_with_any_permission_when_require_all_false(self):
+        """Should allow when any permission is granted with require_all=False."""
+        checker = MagicMock()
+        def check_perm(pid, perm):
+            return perm == Permission.FS_READ
+        checker.has_permission.side_effect = check_perm
+        
+        # Create a validator mock with the checker
+        validator = MagicMock()
+        validator.extract_plugin_id.return_value = "test"
+        validator._permission_checker = checker
+        
+        @require_plugin_permission(Permission.FS_READ, Permission.FS_WRITE, require_all=False)
+        async def handler(request):
+            return {"status": "ok"}
+        
+        request = MagicMock()
+        request.url.path = "/plugins/test/action"
+        request.app.state.permission_validator = validator
+        
+        # Pass request as keyword argument so it can be found
+        result = await handler(request=request)
+        
+        assert result == {"status": "ok"}
+
+
+# =============================================================================
+# Global Permission Validator Tests
+# =============================================================================
+
+class TestGlobalPermissionValidator:
+    """Tests for global permission validator functions."""
+    
+    def test_get_permission_validator_returns_singleton(self):
+        """get_permission_validator should return same instance."""
+        v1 = get_permission_validator()
+        v2 = get_permission_validator()
+        
+        assert v1 is v2
+    
+    def test_reset_clears_permission_validator(self):
+        """reset_api_registry should also reset permission validator."""
+        v1 = get_permission_validator()
+        reset_api_registry()
+        v2 = get_permission_validator()
+        
+        assert v1 is not v2

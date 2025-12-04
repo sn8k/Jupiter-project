@@ -1,7 +1,7 @@
 """
 Lightweight API server using FastAPI.
 
-Version: 1.1.0 - Phase 3: Dual-port architecture for autodiag
+Version: 1.4.0 - Added Bridge-to-WebSocket event propagation
 """
 
 from __future__ import annotations
@@ -30,12 +30,67 @@ from jupiter.server.manager import ProjectManager
 from jupiter.server.ws import websocket_endpoint
 from jupiter.server.meeting_adapter import MeetingAdapter
 from jupiter.server.routers import auth, scan, system, analyze, watch, autodiag
+from jupiter.server.routers import plugins as plugins_v2_router
 from jupiter.core.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
 
 # Global reference for the heartbeat task
 _heartbeat_task: Optional[asyncio.Task] = None
+
+
+def _mount_plugin_api_routes(app: FastAPI) -> None:
+    """Mount API routes from plugins via Bridge.
+    
+    This function queries the Bridge for all API contributions and
+    mounts their routes dynamically.
+    
+    Args:
+        app: FastAPI application instance
+    """
+    try:
+        from jupiter.core.bridge import get_bridge, get_api_registry
+        
+        bridge = get_bridge()
+        if bridge is None:
+            logger.debug("No bridge available for plugin routes")
+            return
+        
+        # Get API contributions from bridge
+        api_contributions = bridge.get_api_contributions()
+        
+        mounted_count = 0
+        for plugin_id, contribution in api_contributions.items():
+            # Check if contribution has a router
+            router = getattr(contribution, 'router', None)
+            prefix = getattr(contribution, 'prefix', f"/plugins/{plugin_id}")
+            
+            if router is not None:
+                # Mount the FastAPI router directly
+                try:
+                    app.include_router(
+                        router,
+                        prefix=prefix,
+                        tags=contribution.tags or [f"plugin:{plugin_id}"],
+                    )
+                    logger.info(
+                        "Mounted plugin API router: %s at %s",
+                        plugin_id, prefix
+                    )
+                    mounted_count += 1
+                except Exception as e:
+                    logger.error(
+                        "Failed to mount plugin router %s: %s",
+                        plugin_id, e
+                    )
+        
+        if mounted_count > 0:
+            logger.info("Mounted %d plugin API routers", mounted_count)
+            
+    except ImportError:
+        logger.debug("Bridge not available, skipping plugin routes")
+    except Exception as e:
+        logger.warning("Failed to mount plugin API routes: %s", e)
 
 
 async def _meeting_heartbeat_loop(adapter: MeetingAdapter, interval_seconds: int) -> None:
@@ -64,6 +119,37 @@ async def lifespan(app: FastAPI):
     watch.set_main_loop(loop)
     logger.info("Main event loop captured for watch callbacks")
     
+    # Initialize Bridge v2 plugin system
+    try:
+        from jupiter.core.bridge import init_plugin_system, is_initialized
+        
+        # Get plugins directory from app state or use default
+        plugins_dir = getattr(app.state, 'plugins_dir', None)
+        
+        await init_plugin_system(app=app, plugins_dir=plugins_dir)
+        
+        if is_initialized():
+            from jupiter.core.bridge import get_plugin_stats, get_bridge
+            stats = get_plugin_stats()
+            logger.info(
+                "Bridge v2 initialized: %d plugins loaded, %d ready, %d errors",
+                stats.get("loaded", 0),
+                stats.get("ready", 0),
+                stats.get("error", 0),
+            )
+            
+            # Mount dynamic plugin API routes
+            _mount_plugin_api_routes(app)
+            
+            # Initialize Bridge-to-WebSocket event propagation
+            try:
+                from jupiter.server.ws_bridge import init_ws_bridge
+                await init_ws_bridge()
+            except Exception as ws_e:
+                logger.warning("Could not initialize WS bridge: %s", ws_e)
+    except Exception as e:
+        logger.warning("Could not initialize Bridge v2 plugin system: %s", e)
+    
     # Start Meeting heartbeat task if adapter is available and enabled
     # Note: The adapter is set up in JupiterAPIServer.start() before uvicorn.run()
     # so it should be available here via app.state
@@ -80,6 +166,21 @@ async def lifespan(app: FastAPI):
         logger.warning("Could not start Meeting heartbeat task: %s", e)
     
     yield
+    
+    # Shutdown: cleanup Bridge v2
+    try:
+        # First shutdown WS bridge
+        try:
+            from jupiter.server.ws_bridge import shutdown_ws_bridge
+            await shutdown_ws_bridge()
+        except Exception as ws_e:
+            logger.warning("Error during WS bridge shutdown: %s", ws_e)
+        
+        from jupiter.core.bridge import shutdown_plugin_system
+        await shutdown_plugin_system()
+        logger.info("Bridge v2 plugin system shutdown complete")
+    except Exception as e:
+        logger.warning("Error during Bridge v2 shutdown: %s", e)
     
     # Shutdown: cancel heartbeat task and cleanup
     if _heartbeat_task:
@@ -126,6 +227,7 @@ app.include_router(scan.router)
 app.include_router(system.router)
 app.include_router(analyze.router)
 app.include_router(watch.router)
+app.include_router(plugins_v2_router.router)  # Bridge v2 plugin routes
 
 @app.exception_handler(JupiterError)
 async def jupiter_exception_handler(request: Request, exc: JupiterError):

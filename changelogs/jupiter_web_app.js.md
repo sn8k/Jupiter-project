@@ -1,4 +1,41 @@
 # Changelog – jupiter/web/app.js
+
+## Plugin Activity Widgets (Phase 4.2.1)
+
+### Added
+- `fetchPluginMetrics(pluginName)`: Async function to fetch metrics for a specific plugin from `/plugins/{name}/metrics`
+- `getPluginActivityWidget(plugin, metrics)`: Generates activity widget HTML showing:
+  - Request count with icon
+  - Error count with visual highlight for errors
+  - Error rate percentage
+  - Last activity timestamp (relative time)
+- `loadPluginActivityWidgets()`: Loads metrics for all enabled plugins asynchronously after render
+- `state.pluginsCache`: Cache for plugin data to avoid re-fetching
+
+### Changed
+- `renderPluginList()`: Now includes activity widget in each plugin card
+  - Widget loads asynchronously to avoid blocking UI
+  - Shows loading spinner while fetching metrics
+  - Disabled plugins show "Activity tracking disabled"
+
+## Trust Badge & Circuit Breaker WebUI Support
+
+### Added
+- `getTrustBadge(plugin)`: Renders trust level badge based on plugin signature verification
+  - Shows official/verified/community/unsigned/experimental with appropriate styling
+  - Includes i18n support via lang keys (trust_official, trust_verified, etc.)
+  - Displays tooltip with verification details
+- `getCircuitBreakerBadge(plugin)`: Renders circuit breaker state badge
+  - Shows closed/half_open/open states with color-coded styling
+  - Includes failure count and last failure time in tooltip
+  - Uses i18n keys (circuit_closed, circuit_half_open, circuit_open)
+
+### Changed
+- `renderPluginList()`: Now includes trust badge and circuit breaker badge in plugin cards
+  - Both badges shown in header area for at-a-glance health status
+
+---
+
 - Refactored event handling to use `data-action` delegation, fixing "frozen" UI issues with ES Modules.
 - Charge et affiche la version globale de Jupiter (badge header + panneau Mise à jour), et protège l'affichage des plugins lorsque `plugin.version` n'est pas fourni.
 - Removed inline `onclick` handlers from `showOnboarding` and `renderPluginList`.

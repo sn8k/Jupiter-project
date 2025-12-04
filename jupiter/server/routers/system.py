@@ -1,7 +1,7 @@
 """
 System router for Jupiter API.
 
-Version: 1.6.2
+Version: 1.9.0
 """
 from typing import Dict, Any, List, Optional, cast
 import inspect
@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, HTTPException, UploadFile, File, Body
+from fastapi.responses import PlainTextResponse
 from jupiter.server.routers.auth import verify_token, require_admin, log_action
 from jupiter.core.metrics import MetricsCollector
 from jupiter.core.plugin_manager import PluginManager
@@ -40,6 +41,9 @@ from jupiter.server.models import (
     RunResponse,
 )
 
+# Bridge event system for plugin notifications
+from jupiter.core.bridge import emit_config_changed
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -52,6 +56,211 @@ async def get_metrics(request: Request) -> Dict[str, Any]:
         plugin_manager=request.app.state.plugin_manager,
     )
     return collector.collect()
+
+
+@router.get("/metrics/bridge", dependencies=[Depends(verify_token)])
+async def get_bridge_metrics(request: Request) -> Dict[str, Any]:
+    """Get Bridge plugin system metrics.
+    
+    Returns comprehensive metrics from the Bridge including:
+    - System metrics (uptime, counters)
+    - Plugin metrics (from IPluginMetrics implementations)
+    - Custom recorded metrics
+    """
+    try:
+        from jupiter.core.bridge import (
+            get_metrics_collector,
+            is_initialized as bridge_initialized,
+        )
+        
+        if not bridge_initialized():
+            return {
+                "error": "Bridge not initialized",
+                "bridge_active": False,
+            }
+        
+        collector = get_metrics_collector()
+        
+        # Collect fresh plugin metrics
+        collector.collect_plugin_metrics()
+        
+        # Return all metrics
+        metrics = collector.get_all_metrics()
+        metrics["bridge_active"] = True
+        
+        return metrics
+        
+    except ImportError:
+        return {
+            "error": "Bridge module not available",
+            "bridge_active": False,
+        }
+    except Exception as e:
+        logger.error("Error collecting bridge metrics: %s", e)
+        return {
+            "error": str(e),
+            "bridge_active": False,
+        }
+
+
+@router.get("/metrics/prometheus", dependencies=[Depends(verify_token)])
+async def get_prometheus_metrics(request: Request) -> PlainTextResponse:
+    """Get metrics in Prometheus text format.
+    
+    Returns metrics formatted for Prometheus scraping.
+    """
+    try:
+        from jupiter.core.bridge import get_metrics_collector, is_initialized
+        
+        if not is_initialized():
+            return PlainTextResponse(
+                "# Jupiter Bridge not initialized\n",
+                media_type="text/plain"
+            )
+        
+        collector = get_metrics_collector()
+        prometheus_output = collector.to_prometheus()
+        
+        return PlainTextResponse(prometheus_output, media_type="text/plain")
+        
+    except ImportError:
+        return PlainTextResponse(
+            "# Jupiter Bridge not available\n",
+            media_type="text/plain"
+        )
+    except Exception as e:
+        logger.error("Error generating Prometheus metrics: %s", e)
+        return PlainTextResponse(
+            f"# Error: {e}\n",
+            media_type="text/plain"
+        )
+
+
+# =============================================================================
+# JOB MANAGEMENT ENDPOINTS
+# =============================================================================
+
+@router.get("/jobs", dependencies=[Depends(verify_token)])
+async def list_jobs_endpoint(
+    request: Request,
+    status: Optional[str] = None,
+    plugin_id: Optional[str] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """List background jobs.
+    
+    Args:
+        status: Filter by status (pending, running, completed, failed, cancelled)
+        plugin_id: Filter by plugin ID
+        limit: Maximum jobs to return
+    """
+    try:
+        from jupiter.core.bridge import get_job_manager, JobStatus, is_initialized
+        
+        if not is_initialized():
+            return {"jobs": [], "error": "Bridge not initialized"}
+        
+        manager = get_job_manager()
+        
+        # Parse status filter
+        status_filter = None
+        if status:
+            try:
+                status_filter = JobStatus(status)
+            except ValueError:
+                pass
+        
+        jobs = manager.list(status=status_filter, plugin_id=plugin_id, limit=limit)
+        
+        return {
+            "jobs": [j.to_dict() for j in jobs],
+            "stats": manager.get_stats(),
+        }
+        
+    except ImportError:
+        return {"jobs": [], "error": "Bridge not available"}
+    except Exception as e:
+        logger.error("Error listing jobs: %s", e)
+        return {"jobs": [], "error": str(e)}
+
+
+@router.get("/jobs/{job_id}", dependencies=[Depends(verify_token)])
+async def get_job_endpoint(request: Request, job_id: str) -> Dict[str, Any]:
+    """Get a specific job by ID."""
+    try:
+        from jupiter.core.bridge import get_job, is_initialized
+        
+        if not is_initialized():
+            raise HTTPException(status_code=503, detail="Bridge not initialized")
+        
+        job = get_job(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        
+        return job.to_dict()
+        
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Bridge not available")
+    except Exception as e:
+        logger.error("Error getting job %s: %s", job_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/cancel", dependencies=[Depends(require_admin)])
+async def cancel_job_endpoint(request: Request, job_id: str) -> Dict[str, Any]:
+    """Cancel a running job."""
+    try:
+        from jupiter.core.bridge import cancel_job, get_job, is_initialized
+        
+        if not is_initialized():
+            raise HTTPException(status_code=503, detail="Bridge not initialized")
+        
+        result = await cancel_job(job_id)
+        
+        if not result:
+            job = get_job(job_id)
+            if job is None:
+                raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Job {job_id} cannot be cancelled (status: {job.status.value})"
+            )
+        
+        return {"status": "cancelled", "job_id": job_id}
+        
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Bridge not available")
+    except Exception as e:
+        logger.error("Error cancelling job %s: %s", job_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/jobs/history", dependencies=[Depends(require_admin)])
+async def clear_job_history(request: Request) -> Dict[str, Any]:
+    """Clear completed job history."""
+    try:
+        from jupiter.core.bridge import get_job_manager, is_initialized
+        
+        if not is_initialized():
+            raise HTTPException(status_code=503, detail="Bridge not initialized")
+        
+        manager = get_job_manager()
+        cleared = manager.clear_history()
+        
+        return {"status": "ok", "cleared": cleared}
+        
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Bridge not available")
+    except Exception as e:
+        logger.error("Error clearing job history: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/health", response_model=HealthStatus)
 async def get_health(request: Request) -> HealthStatus:
@@ -178,6 +387,11 @@ async def update_config(request: Request, new_config: ConfigModel, role: str = D
         state.rebuild_runtime(current_config)
 
         await manager.broadcast(JupiterEvent(type=CONFIG_UPDATED, payload=new_config.dict()))
+        
+        # Emit via Bridge event system for plugin notifications
+        # For full config updates, we emit a bulk "config" change
+        emit_config_changed(None, "config", None, new_config.dict())
+        
         return new_config
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save config: {e}")
@@ -248,6 +462,12 @@ async def patch_config(request: Request, partial_config: PartialConfigModel, rol
         state.rebuild_runtime(current_config)
         
         await manager.broadcast(JupiterEvent(type=CONFIG_UPDATED, payload=updates))
+        
+        # Emit via Bridge event system for plugin notifications
+        # For partial updates, emit each key change
+        for key, value in updates.items():
+            emit_config_changed(None, key, None, value)
+        
         return {"status": "ok", "updated": list(updates.keys())}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save config: {e}")

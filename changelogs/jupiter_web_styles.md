@@ -1,0 +1,63 @@
+# Changelog - jupiter/web/styles.css
+
+## v1.2.0
+- Added Help Panel styles:
+  - Slide-in panel from right side
+  - Header with close button
+  - Search input styling
+  - Collapsible sections with toggle icons
+  - Keyboard shortcut badges (kbd)
+  - Code blocks and lists
+  - Feedback section
+- Added Data Export Panel styles:
+  - Panel container with header/body/footer
+  - Source selection dropdown
+  - Format selection grid with selected state
+  - Fields list with checkboxes
+  - Filter row with operator selection
+  - Active filter tags
+  - Preview container with stats
+  - Copy/download buttons
+- Added UX Utility styles:
+  - Task status badges (pending, running, success, error)
+  - Skeleton loader animation
+  - Progress-related keyframes
+  - Spinner animation
+
+## v1.1.0
+- Added Plugin Bridge Frontend Component styles
+- Toast notification system:
+  - Container positioning and stacking
+  - Type-specific border colors (info, success, warning, error)
+  - Slide-in and fade-out animations
+- Jupiter Modal system:
+  - Overlay backdrop
+  - Size variants (small, medium, large)
+  - Header, body, footer layout
+  - Scale-in animation
+- Metrics Widget:
+  - Grid layout for metric cards
+  - Warning/critical state colors
+  - Trend indicators (up/down)
+  - Chart container styling
+  - Mini sparkline charts
+- Logs Panel:
+  - Fixed header with controls
+  - Scrollable log body
+  - Log level color coding
+  - Search highlighting
+  - Timestamp and source styling
+- Plugin Settings Frame:
+  - Tab navigation
+  - Form layout
+  - Dirty state indicator
+  - Footer actions
+- Auto Form:
+  - Form group and label styles
+  - Input focus states
+  - Toggle switch
+  - Error state styling
+- Plugin Container:
+  - Loading and error states
+  - Iframe styling for sandboxed plugins
+
