@@ -1,10 +1,10 @@
 # Plugin Manifest v2 – Modèle de référence
 # Ce fichier décrit les métadonnées et les contributions d'un plugin Jupiter.
-# Conforme à plugins_architecture.md v0.4.0
+# Conforme à plugins_architecture.md v0.6.0
 
 id: example_plugin           # Identifiant unique (snake_case)
 type: tool                    # system | tool (les plugins core n'ont pas de manifest)
-version: 0.3.0                # semver
+version: 0.4.0                # semver
 
 # Métadonnées affichées
 name:
@@ -19,7 +19,7 @@ homepage: https://github.com/sn8k/Jupiter-project
 
 # Compatibilité Jupiter (obligatoire)
 jupiter:
-  version: ">=1.9.0,<3.0.0"
+  version: ">=1.8.0,<3.0.0"
 
 # Schéma de configuration (pour migrations et Auto-UI §3.4.3)
 config_schema:
@@ -101,6 +101,12 @@ capabilities:
   jobs:
     default_timeout: 300     # secondes
     max_concurrent: 2
+  # Healthcheck configuration (§3.5)
+  health:
+    enabled: true
+    endpoint: /example/health
+    interval_seconds: 60
+    timeout_seconds: 5
 
 # Fichiers i18n fournis (fusionnés au runtime)
 i18n:
@@ -119,12 +125,22 @@ dependencies:
 # extends:
 #   - id: ai_helper
 
-# Healthcheck (optionnel pour tool, obligatoire pour system) - §3.5
-healthcheck:
-  enabled: true
-  endpoint: /example/health
-  interval_seconds: 60
-  timeout_seconds: 5
+# Monitoring et limites (§7.4)
+monitoring:
+  rate_limit:
+    enabled: true
+    max_requests_per_minute: 60
+  timeouts:
+    init: 30
+    health: 5
+    api: 30
+
+# Gouvernance (§7.5)
+governance:
+  # feature_flags peuvent désactiver des fonctionnalités
+  feature_flags: []
+  # Peut être protégé contre la blacklist
+  protected: false
 
 # Signature (générée par `jupiter plugins sign`) - §3.9
 # signature:

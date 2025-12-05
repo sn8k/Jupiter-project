@@ -2,6 +2,61 @@
 
 Ce fichier documente les modifications apportées au module Bridge du système de plugins Jupiter v2.
 
+## [0.25.0] - V2 Plugin API Router Support
+
+### Ajouté
+- **`bridge.py`** (v0.3.0 → v0.3.1) - Support des routeurs API v2
+  - `_resolve_api_router()` : Nouvelle méthode pour résoudre les entrypoints de routeur
+    - Import dynamique du module routeur depuis l'entrypoint (ex: "server.api:router")
+    - Création d'APIContribution avec le routeur résolu
+    - Gestion des erreurs d'import avec logs appropriés
+  - `_register_contributions()` modifié pour détecter et résoudre les routeurs v2
+    - Détection via plugin_id + entrypoint + router=None
+    - Appel à _resolve_api_router pour les plugins avec api.router
+
+- **`manifest.py`** (v0.1.2 → v0.1.3) - Format api.router
+  - Support du format `api.router` dans le manifest :
+    ```yaml
+    api:
+      router: "server.api:router"
+      prefix: /ai_helper
+      tags: [ai_helper]
+    ```
+  - Stockage de l'entrypoint dans APIContribution pour résolution ultérieure
+  - Conserve le support du format `api.routes[]` existant
+
+### Technique
+- Les plugins v2 peuvent maintenant déclarer un routeur FastAPI complet
+- Le routeur est importé et monté automatiquement par le serveur
+- Unifie le comportement entre core plugins et v2 plugins
+
+## [0.24.0] - Per-plugin log levels with global floor
+
+### Ajouté
+- **`services.py`** (v0.2.0 → v0.3.0) - Configuration des niveaux de log
+  - `set_global_log_level_floor()` : Définir le niveau minimum global (plancher)
+  - `get_global_log_level_floor()` : Récupérer le niveau plancher actuel
+  - `set_plugin_log_level()` : Définir le niveau de log par plugin
+  - `get_plugin_log_level()` : Récupérer le niveau d'un plugin
+  - `clear_plugin_log_levels()` : Effacer tous les niveaux par plugin
+  - `PluginLogger` amélioré :
+    - Respect du plancher global (plugin ne peut pas être plus verbeux)
+    - Niveau effectif = max(global_floor, plugin_level)
+    - `isEnabledFor()` pour vérifier si un niveau est actif
+    - `_should_log()` pour vérification interne
+  - 13 nouveaux tests dans test_bridge_services.py
+
+- **`__init__.py`** (v0.23.0 → v0.24.0)
+  - Export des fonctions de gestion des niveaux de log
+
+## [0.23.0] - Fix source_path for v2 plugin UI assets
+
+### Corrigé
+- **`manifest.py`** (v0.1.1 → v0.1.2) - Fix du chemin source
+  - `from_yaml()` passait le chemin du fichier YAML au lieu du répertoire plugin
+  - Maintenant passe `path.parent` comme `source_path` pour que les assets UI soient trouvés
+  - Permet à `get_plugin_ui_js()` de lire correctement `web/panels/main.js`
+
 ## [0.22.0] - Phase 1.3/4.3 : Ready Method & Job Export
 
 ### Ajouté

@@ -1,0 +1,58 @@
+{
+  "plugin.bridge_config.title": "Configuration du Bridge",
+  "plugin.bridge_config.description": "Panneau de configuration de l'infrastructure Bridge de Jupiter",
+  
+  "bridge_config_status_title": "État du Bridge",
+  "bridge_config_status_bridge": "Bridge",
+  "bridge_config_status_dev_mode": "Mode Développeur",
+  "bridge_config_status_governance": "Gouvernance",
+  
+  "bridge_config_available": "Disponible",
+  "bridge_config_unavailable": "Indisponible",
+  "bridge_config_active": "Actif",
+  "bridge_config_inactive": "Inactif",
+  
+  "bridge_config_plugins_title": "Aperçu des Plugins",
+  "bridge_config_plugins_total": "Total",
+  "bridge_config_plugins_ready": "Prêts",
+  "bridge_config_plugins_error": "Erreurs",
+  "bridge_config_plugins_legacy": "Legacy",
+  "bridge_config_plugins_list": "Plugins Chargés",
+  "bridge_config_no_plugins": "Aucun plugin chargé",
+  
+  "bridge_config_actions_title": "Actions Rapides",
+  "bridge_config_toggle_dev_mode": "Basculer Mode Dev",
+  "bridge_config_refresh": "Actualiser",
+  "bridge_config_view_plugins": "Voir les Plugins",
+  
+  "bridge_config_dev_mode_title": "Paramètres Mode Développeur",
+  "bridge_config_allow_unsigned": "Autoriser les plugins non signés",
+  "bridge_config_hot_reload": "Activer le rechargement à chaud",
+  "bridge_config_verbose_logging": "Journalisation détaillée",
+  
+  "bridge_config_dev_mode_enabled": "Mode développeur activé",
+  "bridge_config_dev_mode_disabled": "Mode développeur désactivé",
+  "bridge_config_saved": "Configuration enregistrée",
+  "bridge_config_error": "Opération échouée",
+  
+  "bridge_config_settings_developer_mode": "Mode Développeur",
+  "bridge_config_settings_developer_mode_desc": "Activer le mode développeur avec sécurité réduite",
+  "bridge_config_settings_allow_unsigned": "Autoriser Plugins Non Signés",
+  "bridge_config_settings_allow_unsigned_desc": "Charger les plugins sans vérification de signature",
+  "bridge_config_settings_hot_reload": "Rechargement à Chaud",
+  "bridge_config_settings_hot_reload_desc": "Recharger automatiquement les plugins modifiés",
+  "bridge_config_settings_verbose": "Journalisation Détaillée",
+  "bridge_config_settings_verbose_desc": "Activer les logs de débogage détaillés",
+  "bridge_config_settings_timeout": "Timeout des Plugins",
+  "bridge_config_settings_timeout_desc": "Délai d'attente par défaut en secondes",
+  "bridge_config_settings_health_interval": "Intervalle de Vérification",
+  "bridge_config_settings_health_interval_desc": "Intervalle entre les vérifications de santé",
+  "bridge_config_settings_max_jobs": "Jobs Concurrents Max",
+  "bridge_config_settings_max_jobs_desc": "Nombre maximum de jobs parallèles",
+  "bridge_config_settings_governance": "Mode Gouvernance",
+  "bridge_config_settings_governance_desc": "Politique de filtrage des plugins",
+  "bridge_config_settings_metrics": "Collecte de Métriques",
+  "bridge_config_settings_metrics_desc": "Activer les métriques des plugins",
+  "bridge_config_settings_circuit_breaker": "Seuil Circuit Breaker",
+  "bridge_config_settings_circuit_breaker_desc": "Échecs avant ouverture du circuit"
+}

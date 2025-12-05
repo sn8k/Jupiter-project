@@ -10,7 +10,7 @@ This plugin provides AI-assisted code analysis with suggestions for:
 
 Conforme à plugins_architecture.md v0.4.0
 
-@version 1.1.0
+@version 1.3.0
 @module jupiter.plugins.ai_helper
 """
 
@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
-__version__ = "1.1.0"
+__version__ = "1.3.0"
 
 # =============================================================================
 # BRIDGE REFERENCES (injected during init)

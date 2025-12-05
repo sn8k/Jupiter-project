@@ -1,5 +1,16 @@
 # Docs: Architecture des plugins (2025-12-03)
 
+**Version 0.6.0** – Documentation Phase 11.2, mise à jour status implémentation.
+
+## v0.6.0 – Documentation finale Phase 11.2
+
+### Status d'implémentation mis à jour
+- 1400+ tests (vs 1341+ précédemment)
+- Phase 8 : Hot reload avec dev mode guard explicitement mentionné
+- Phase 11.1 : 22 tests d'intégration détaillés (install, usage, update, failure, jobs, hot reload, API)
+
+---
+
 **Version 0.4.0** – Intégration complète de l'analyse externe avec clarifications validées.
 
 ## Ajouts et clarifications majeurs (v0.4.0)

@@ -1,0 +1,58 @@
+{
+  "plugin.bridge_config.title": "Bridge Configuration",
+  "plugin.bridge_config.description": "Configuration panel for the Jupiter Plugin Bridge",
+  
+  "bridge_config_status_title": "Bridge Status",
+  "bridge_config_status_bridge": "Bridge",
+  "bridge_config_status_dev_mode": "Developer Mode",
+  "bridge_config_status_governance": "Governance",
+  
+  "bridge_config_available": "Available",
+  "bridge_config_unavailable": "Unavailable",
+  "bridge_config_active": "Active",
+  "bridge_config_inactive": "Inactive",
+  
+  "bridge_config_plugins_title": "Plugins Overview",
+  "bridge_config_plugins_total": "Total",
+  "bridge_config_plugins_ready": "Ready",
+  "bridge_config_plugins_error": "Errors",
+  "bridge_config_plugins_legacy": "Legacy",
+  "bridge_config_plugins_list": "Loaded Plugins",
+  "bridge_config_no_plugins": "No plugins loaded",
+  
+  "bridge_config_actions_title": "Quick Actions",
+  "bridge_config_toggle_dev_mode": "Toggle Dev Mode",
+  "bridge_config_refresh": "Refresh Status",
+  "bridge_config_view_plugins": "View Plugins",
+  
+  "bridge_config_dev_mode_title": "Developer Mode Settings",
+  "bridge_config_allow_unsigned": "Allow unsigned plugins",
+  "bridge_config_hot_reload": "Enable hot reload",
+  "bridge_config_verbose_logging": "Verbose logging",
+  
+  "bridge_config_dev_mode_enabled": "Developer mode enabled",
+  "bridge_config_dev_mode_disabled": "Developer mode disabled",
+  "bridge_config_saved": "Configuration saved",
+  "bridge_config_error": "Operation failed",
+  
+  "bridge_config_settings_developer_mode": "Developer Mode",
+  "bridge_config_settings_developer_mode_desc": "Enable developer mode with relaxed security",
+  "bridge_config_settings_allow_unsigned": "Allow Unsigned Plugins",
+  "bridge_config_settings_allow_unsigned_desc": "Load plugins without signature verification",
+  "bridge_config_settings_hot_reload": "Hot Reload",
+  "bridge_config_settings_hot_reload_desc": "Auto-reload plugins on file changes",
+  "bridge_config_settings_verbose": "Verbose Logging",
+  "bridge_config_settings_verbose_desc": "Enable detailed debug logs",
+  "bridge_config_settings_timeout": "Plugin Timeout",
+  "bridge_config_settings_timeout_desc": "Default timeout in seconds",
+  "bridge_config_settings_health_interval": "Health Check Interval",
+  "bridge_config_settings_health_interval_desc": "Interval between health checks",
+  "bridge_config_settings_max_jobs": "Max Concurrent Jobs",
+  "bridge_config_settings_max_jobs_desc": "Maximum parallel plugin jobs",
+  "bridge_config_settings_governance": "Governance Mode",
+  "bridge_config_settings_governance_desc": "Plugin filtering policy",
+  "bridge_config_settings_metrics": "Metrics Collection",
+  "bridge_config_settings_metrics_desc": "Enable plugin metrics",
+  "bridge_config_settings_circuit_breaker": "Circuit Breaker Threshold",
+  "bridge_config_settings_circuit_breaker_desc": "Failures before circuit opens"
+}

@@ -1,14 +1,34 @@
-"""Plugin system for Jupiter."""
+"""Plugin system for Jupiter.
+
+Version: 0.6.0 - Deprecated v1 Protocol, migrate to Bridge v2
+
+DEPRECATION WARNING:
+The v1 plugin system (Plugin Protocol, UIPlugin Protocol) is deprecated
+and will be removed in Jupiter 2.0.0. Please migrate your plugins to
+the Bridge v2 architecture.
+
+See: docs/PLUGIN_MIGRATION_GUIDE.md
+See: docs/BRIDGE_V2_CHANGELOG.md
+"""
 
 from __future__ import annotations
 
+import warnings
 from typing import Protocol, Any, runtime_checkable, Optional, TYPE_CHECKING
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 
 # Type checking imports to avoid circular dependencies
 if TYPE_CHECKING:
-    from jupiter.plugins.bridge_plugin import BridgeContext
+    from jupiter.core.bridge import Bridge as BridgeContext
+
+# Emit deprecation warning on module import
+warnings.warn(
+    "The v1 plugin system (Plugin/UIPlugin Protocols) is deprecated. "
+    "Migrate to Bridge v2 architecture. See docs/PLUGIN_MIGRATION_GUIDE.md",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
 class PluginUIType(str, Enum):
@@ -53,7 +73,12 @@ class PluginUIConfig:
 
 @runtime_checkable
 class Plugin(Protocol):
-    """Base interface for Jupiter plugins."""
+    """Base interface for Jupiter plugins.
+    
+    .. deprecated:: 1.8.53
+        Use Bridge v2 architecture instead (IPlugin interface).
+        See docs/PLUGIN_MIGRATION_GUIDE.md for migration guide.
+    """
 
     name: str
     version: str
@@ -77,6 +102,10 @@ class UIPlugin(Protocol):
     
     Plugins can implement this protocol to provide custom views
     in the Jupiter web interface.
+    
+    .. deprecated:: 1.8.53
+        Use Bridge v2 architecture instead (IPlugin with ui_registry).
+        See docs/PLUGIN_MIGRATION_GUIDE.md for migration guide.
     """
     
     name: str
@@ -136,7 +165,7 @@ def get_bridge() -> Optional["BridgeContext"]:
                 result = bridge.invoke("scan_directory", path)
     """
     try:
-        from jupiter.plugins.bridge_plugin import get_bridge as _get_bridge
+        from jupiter.core.bridge.bootstrap import get_bridge as _get_bridge
         return _get_bridge()
     except ImportError:
         return None

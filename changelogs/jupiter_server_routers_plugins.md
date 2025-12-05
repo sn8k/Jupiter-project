@@ -1,5 +1,16 @@
 # Changelog: jupiter/server/routers/plugins.py
 
+## Version 0.4.0
+
+### Hot Reload Endpoint (Phase 8.1)
+- Ajout `POST /plugins/v2/{id}/reload` - Hot reload d'un plugin
+  - Vérifie que `developer_mode` est activé dans la config
+  - Utilise `HotReloader` du bridge pour recharger le plugin
+  - Retourne détails complets: success, duration_ms, versions, warnings
+  - Requiert authentification admin
+- Nouveau modèle `HotReloadResponse` pour la réponse API
+- Intégration avec le bouton 🔥 de la WebUI (visible uniquement en dev mode)
+
 ## Version 0.3.0
 
 ### WebSocket Logs Streaming (Phase 4.2)

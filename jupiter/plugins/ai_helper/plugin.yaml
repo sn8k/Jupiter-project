@@ -1,49 +1,102 @@
 # AI Helper Plugin Manifest v2
 # Migrated from legacy ai_helper.py
+# Version: 1.1.1 - Fixed manifest schema compliance
 
 id: ai_helper
+name: AI Helper
+version: 1.3.0
+description: AI-assisted code analysis with Ollama, OpenAI, Anthropic support for refactoring, documentation, and optimization suggestions.
 type: tool
-version: 1.1.0
+jupiter_version: ">=1.8.0"
 
-# Metadata
-name:
-  en: AI Helper
-  fr: Assistant IA
-description:
-  en: AI-assisted code analysis providing refactoring, documentation, and optimization suggestions.
-  fr: Analyse de code assistée par IA fournissant des suggestions de refactoring, documentation et optimisation.
-author: Jupiter Team
+# Optional metadata
+author:
+  name: Jupiter Team
+  url: https://github.com/sn8k/Jupiter-project
 license: MIT
 homepage: https://github.com/sn8k/Jupiter-project
+trust_level: community
 
-# Jupiter compatibility
-jupiter:
-  version: ">=1.8.0,<3.0.0"
+# Permissions (array format per schema)
+permissions:
+  - fs_read
+  - emit_events
+  - register_api
+  - register_cli
+  - register_ui
 
-# Configuration schema for Auto-UI
-config_schema:
-  version: 1
-  format: yaml
+# Capabilities
+capabilities:
+  metrics:
+    enabled: true
+    export_format: json
+  jobs:
+    enabled: true
+    max_concurrent: 1
+    timeout: 120
+  health_check:
+    enabled: true
+    interval: 60
+
+# Entrypoints
+entrypoints:
+  init: "__init__:init"
+  shutdown: "__init__:shutdown"
+  health: "__init__:health"
+  metrics: "__init__:metrics"
+
+# CLI contributions
+cli:
+  commands:
+    - name: suggest
+      description: Generate AI suggestions for the project
+      entrypoint: "cli.commands:cmd_suggest"
+    - name: analyze-file
+      description: Analyze a specific file with AI
+      entrypoint: "cli.commands:cmd_analyze_file"
+    - name: ai-status
+      description: Show AI Helper status
+      entrypoint: "cli.commands:cmd_status"
+    - name: ai-health
+      description: Check AI Helper health
+      entrypoint: "cli.commands:cmd_health"
+
+# API contributions
+api:
+  router: "server.api:router"
+  prefix: /ai_helper
+  tags:
+    - ai_helper
+    - analysis
+
+# UI contributions
+ui:
+  panels:
+    - id: main
+      location: sidebar
+      route: /plugins/ai_helper
+      title_key: plugin.ai_helper.title
+      icon: "🤖"
+      order: 50
+  assets:
+    js:
+      - web/panels/main.js
+  i18n:
+    path: web/lang
+    languages:
+      - en
+      - fr
+
+# Configuration
+config:
   schema:
     type: object
     properties:
       enabled:
         type: boolean
-        title:
-          en: Enable AI Helper
-          fr: Activer l'assistant IA
-        description:
-          en: Enable or disable AI-assisted analysis
-          fr: Activer ou désactiver l'analyse assistée par IA
         default: true
       provider:
         type: string
-        title:
-          en: AI Provider
-          fr: Fournisseur IA
-        description:
-          en: The AI provider to use for suggestions
-          fr: Le fournisseur IA à utiliser pour les suggestions
         enum:
           - mock
           - openai
@@ -52,43 +105,17 @@ config_schema:
         default: mock
       api_key:
         type: string
-        title:
-          en: API Key
-          fr: Clé API
-        description:
-          en: API key for the selected provider (leave empty for mock)
-          fr: Clé API pour le fournisseur sélectionné (laisser vide pour mock)
         format: password
-        x-sensitive: true
       suggestion_types:
         type: array
-        title:
-          en: Suggestion Types
-          fr: Types de suggestions
-        description:
-          en: Types of suggestions to generate
-          fr: Types de suggestions à générer
         items:
           type: string
-          enum:
-            - refactoring
-            - doc
-            - security
-            - optimization
-            - testing
-            - cleanup
         default:
           - refactoring
           - doc
           - testing
       severity_threshold:
         type: string
-        title:
-          en: Minimum Severity
-          fr: Sévérité minimum
-        description:
-          en: Only show suggestions at or above this severity level
-          fr: Afficher uniquement les suggestions de ce niveau de sévérité ou plus
         enum:
           - info
           - low
@@ -98,127 +125,21 @@ config_schema:
         default: info
       large_file_threshold_kb:
         type: integer
-        title:
-          en: Large File Threshold (KB)
-          fr: Seuil fichier volumineux (Ko)
-        description:
-          en: Files larger than this are flagged for review
-          fr: Les fichiers plus grands que cette taille sont signalés
         minimum: 10
         maximum: 500
         default: 50
       max_functions_threshold:
         type: integer
-        title:
-          en: Max Functions per File
-          fr: Max fonctions par fichier
-        description:
-          en: Files with more functions than this trigger a God Object warning
-          fr: Les fichiers avec plus de fonctions déclenchent un avertissement God Object
         minimum: 5
         maximum: 100
         default: 20
-
-# Permissions
-permissions:
-  fs_read: true          # Read project files for analysis
-  fs_write: false
-  run_commands: false
-  network_outbound: true  # For external AI providers
-  access_meeting: false
-
-# Entrypoints (all mandatory per plugins_architecture.md v0.4.0)
-entrypoints:
-  init: "jupiter.plugins.ai_helper:init"
-  health: "jupiter.plugins.ai_helper:health"
-  metrics: "jupiter.plugins.ai_helper:metrics"
-  reset_settings: "jupiter.plugins.ai_helper:reset_settings"
-  server: "jupiter.plugins.ai_helper.server.api:register_api_contribution"
-  cli: "jupiter.plugins.ai_helper.cli.commands:register_cli_contribution"
-  # Hooks for analysis pipeline
-  on_scan: "jupiter.plugins.ai_helper:on_scan"
-  on_analyze: "jupiter.plugins.ai_helper:on_analyze"
-
-# Capabilities
-capabilities:
-  cli:
-    commands:
-      - name: suggest
-        help:
-          en: Generate AI suggestions for the project
-          fr: Générer des suggestions IA pour le projet
-      - name: analyze-file
-        help:
-          en: Analyze a specific file with AI
-          fr: Analyser un fichier spécifique avec IA
-  api:
-    routes:
-      - path: /ai_helper
-        methods: [GET, POST]
-        description: Main plugin endpoint
-      - path: /ai_helper/suggestions
-        methods: [GET]
-        description: Get AI suggestions for the project
-      - path: /ai_helper/suggestions/file
-        methods: [POST]
-        description: Get suggestions for a specific file
-      - path: /ai_helper/config
-        methods: [GET, PUT]
-        description: Get or update plugin configuration
-      - path: /ai_helper/health
-        methods: [GET]
-        description: Health check endpoint
-      - path: /ai_helper/metrics
-        methods: [GET]
-        description: Plugin metrics
-      - path: /ai_helper/logs
-        methods: [GET]
-        description: Download plugin logs
-      - path: /ai_helper/logs/stream
-        methods: [GET]
-        description: WebSocket for real-time logs
-      - path: /ai_helper/jobs
-        methods: [GET, POST, DELETE]
-        description: Job management endpoints
-      - path: /ai_helper/reset-settings
-        methods: [POST]
-        description: Reset plugin settings to defaults
-      - path: /ai_helper/changelog
-        methods: [GET]
-        description: Plugin changelog
-  ui:
-    panels:
-      - id: main
-        mount_point: main_area
-        route: /plugins/ai_helper
-        title_key: plugin.ai_helper.title
-      - id: suggestions
-        mount_point: sidebar
-        route: /plugins/ai_helper/suggestions
-        title_key: plugin.ai_helper.suggestions_panel
-    widgets:
-      - id: suggestion_count
-        type: counter
-        title_key: plugin.ai_helper.widget_suggestions
-    settings_frame: true
-  metrics:
+  defaults:
     enabled: true
-    export_format: json
-  jobs:
-    default_timeout: 120
-    max_concurrent: 1
-
-# i18n files
-i18n:
-  - web/lang/en.json
-  - web/lang/fr.json
-
-# Dependencies
-dependencies: []
-
-# Healthcheck
-healthcheck:
-  enabled: true
-  endpoint: /health
-  interval_seconds: 60
-  timeout_seconds: 5
+    provider: mock
+    suggestion_types:
+      - refactoring
+      - doc
+      - testing
+    severity_threshold: info
+    large_file_threshold_kb: 50
+    max_functions_threshold: 20

@@ -1,0 +1,94 @@
+{
+  "plugin.metrics_manager.title": "Gestionnaire de Métriques",
+  "plugin.metrics_manager.description": "Observation et gestion centralisée des métriques",
+  
+  "metrics_manager_title": "Gestionnaire de Métriques",
+  "metrics_manager_subtitle": "Tableau de bord des métriques système et plugins",
+  
+  "metrics_manager_status_idle": "Prêt",
+  "metrics_manager_status_collecting": "Collecte des métriques...",
+  "metrics_manager_status_error": "Erreur de collecte",
+  "metrics_manager_status_healthy": "Système sain",
+  
+  "metrics_manager_refresh": "Actualiser",
+  "metrics_manager_export": "Exporter",
+  "metrics_manager_reset": "Réinitialiser tout",
+  "metrics_manager_clear_alerts": "Effacer les alertes",
+  
+  "metrics_manager_system_title": "Métriques système",
+  "metrics_manager_system_uptime": "Temps de fonctionnement",
+  "metrics_manager_system_collected": "Métriques collectées",
+  "metrics_manager_system_unique": "Métriques uniques",
+  "metrics_manager_system_counters": "Compteurs suivis",
+  
+  "metrics_manager_plugins_title": "Métriques des plugins",
+  "metrics_manager_plugins_empty": "Aucune métrique de plugin disponible",
+  "metrics_manager_plugins_loading": "Chargement des métriques des plugins...",
+  
+  "metrics_manager_counters_title": "Compteurs",
+  "metrics_manager_counters_empty": "Aucun compteur enregistré",
+  
+  "metrics_manager_gauges_title": "Jauges",
+  "metrics_manager_gauges_empty": "Aucune métrique de jauge enregistrée",
+  
+  "metrics_manager_history_title": "Historique des métriques",
+  "metrics_manager_history_select": "Sélectionnez une métrique pour voir l'historique",
+  "metrics_manager_history_points": "points de données",
+  
+  "metrics_manager_alerts_title": "Alertes actives",
+  "metrics_manager_alerts_empty": "Aucune alerte active",
+  "metrics_manager_alerts_severity_warning": "Avertissement",
+  "metrics_manager_alerts_severity_critical": "Critique",
+  "metrics_manager_alerts_severity_info": "Info",
+  
+  "metrics_manager_export_json": "Exporter JSON",
+  "metrics_manager_export_prometheus": "Exporter Prometheus",
+  "metrics_manager_export_success": "Métriques exportées avec succès",
+  
+  "metrics_manager_logs_title": "Journaux",
+  "metrics_manager_logs_search": "Rechercher dans les journaux...",
+  "metrics_manager_logs_pause": "Pause",
+  "metrics_manager_logs_resume": "Reprendre",
+  "metrics_manager_logs_download": "Télécharger",
+  
+  "metrics_manager_stats_title": "Statistiques du plugin",
+  "metrics_manager_stats_collections": "Collectes",
+  "metrics_manager_stats_api_calls": "Appels API",
+  "metrics_manager_stats_exports": "Exports",
+  "metrics_manager_stats_errors": "Erreurs",
+  
+  "metrics_manager_chart_line": "Graphique linéaire",
+  "metrics_manager_chart_bar": "Graphique à barres",
+  "metrics_manager_chart_area": "Graphique en aires",
+  
+  "metrics_manager_time_1m": "1 minute",
+  "metrics_manager_time_5m": "5 minutes",
+  "metrics_manager_time_15m": "15 minutes",
+  "metrics_manager_time_1h": "1 heure",
+  "metrics_manager_time_custom": "Personnalisé",
+  
+  "metrics_manager_help_title": "Aide",
+  "metrics_manager_help_description": "Le gestionnaire de métriques fournit une surveillance et une visualisation centralisées de toutes les métriques Jupiter.",
+  "metrics_manager_help_features": "Fonctionnalités",
+  "metrics_manager_help_feature_1": "Surveillance des métriques système en temps réel",
+  "metrics_manager_help_feature_2": "Suivi de la santé et des performances des plugins",
+  "metrics_manager_help_feature_3": "Visualisation de l'historique des métriques",
+  "metrics_manager_help_feature_4": "Export au format JSON ou Prometheus",
+  "metrics_manager_help_feature_5": "Seuils d'alerte configurables",
+  "metrics_manager_help_link": "Voir la documentation",
+  
+  "plugin.metrics_manager.settings.enabled": "Activer le plugin",
+  "plugin.metrics_manager.settings.enabled_desc": "Activer ou désactiver le gestionnaire de métriques",
+  "plugin.metrics_manager.settings.refresh_interval": "Intervalle de rafraîchissement (ms)",
+  "plugin.metrics_manager.settings.refresh_interval_desc": "Fréquence de rafraîchissement des métriques dans l'interface",
+  "plugin.metrics_manager.settings.history_size": "Taille de l'historique",
+  "plugin.metrics_manager.settings.history_size_desc": "Nombre de points de données à conserver par métrique",
+  "plugin.metrics_manager.settings.export_format": "Format d'export par défaut",
+  "plugin.metrics_manager.settings.export_format_desc": "Format utilisé lors de l'export des métriques",
+  "plugin.metrics_manager.settings.show_system_metrics": "Afficher les métriques système",
+  "plugin.metrics_manager.settings.show_system_metrics_desc": "Afficher les métriques au niveau du système",
+  "plugin.metrics_manager.settings.show_plugin_metrics": "Afficher les métriques des plugins",
+  "plugin.metrics_manager.settings.show_plugin_metrics_desc": "Afficher les métriques des autres plugins",
+  "plugin.metrics_manager.settings.chart_type": "Type de graphique par défaut",
+  "plugin.metrics_manager.settings.chart_type_desc": "Visualisation par défaut pour les graphiques de métriques"
+}

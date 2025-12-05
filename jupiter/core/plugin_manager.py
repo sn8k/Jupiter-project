@@ -1,14 +1,29 @@
 """Plugin manager for Jupiter.
 
-Version: 1.9.1 - Type-safe signature metadata and circuit breaker lookup
-"""
+Version: 1.14.0 - Fix view_id collision (use plugin ID, not panel ID)
 
+DEPRECATION WARNING:
+The v1 PluginManager is deprecated and will be removed in Jupiter 2.0.0.
+Please use the Bridge v2 architecture for plugin management.
+
+The Bridge v2 provides:
+- Better isolation and security (permissions, signatures)
+- Hot reload support in developer mode
+- Jobs system for long-running tasks
+- Standardized CLI, API, and UI contributions
+- Health checks and metrics
+- Circuit breaker for fault tolerance
+
+See: docs/PLUGIN_MIGRATION_GUIDE.md
+See: docs/BRIDGE_V2_CHANGELOG.md
+"""
 from __future__ import annotations
 
 import importlib
 import logging
 import pkgutil
 import sys
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Type, Optional
@@ -20,9 +35,20 @@ logger = logging.getLogger(__name__)
 
 
 class PluginManager:
-    """Manages the lifecycle of Jupiter plugins."""
+    """Manages the lifecycle of Jupiter plugins.
+    
+    .. deprecated:: 1.8.53
+        Use Bridge v2 architecture instead.
+        See docs/PLUGIN_MIGRATION_GUIDE.md for migration guide.
+    """
 
     def __init__(self, plugin_dir: Path | None = None, config: PluginsConfig | None = None) -> None:
+        warnings.warn(
+            "PluginManager is deprecated. Use Bridge v2 architecture. "
+            "See docs/PLUGIN_MIGRATION_GUIDE.md",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.plugins: List[Plugin] = []
         self.plugin_status: Dict[str, bool] = {}
         self.plugin_dir = plugin_dir
@@ -264,6 +290,8 @@ class PluginManager:
     def get_plugins_info(self) -> List[Dict[str, Any]]:
         """Return info about loaded plugins.
         
+        Includes both legacy plugins and v2 plugins from Bridge.
+        V2 plugins take precedence over legacy plugins with the same name.
         Includes signature verification status if Bridge is available.
         """
         # Try to get signature verifier from Bridge
@@ -275,7 +303,48 @@ class PluginManager:
             pass
         
         result = []
+        v2_plugin_ids: set[str] = set()
+        
+        # First, add v2 plugins from Bridge (they take precedence)
+        try:
+            from jupiter.core.bridge import get_bridge
+            bridge = get_bridge()
+            if bridge:
+                for plugin_info in bridge.get_all_plugins():
+                    # Skip legacy-wrapped plugins (already in self.plugins)
+                    if plugin_info.legacy:
+                        continue
+                    
+                    v2_plugin_ids.add(plugin_info.manifest.id)
+                    
+                    # Convert v2 plugin info to legacy format
+                    info: Dict[str, Any] = {
+                        "name": plugin_info.manifest.id,
+                        "version": plugin_info.manifest.version,
+                        "description": plugin_info.manifest.description,
+                        "enabled": plugin_info.state.value == "ready",
+                        "trust_level": plugin_info.manifest.trust_level,
+                        "signature": None,  # TODO: Add signature verification for v2
+                        "circuit_breaker": self._get_circuit_breaker_status(plugin_info.manifest.id),
+                        "config": {},  # TODO: Add config from v2 manifest
+                        "is_core": plugin_info.manifest.id in self.CORE_PLUGINS,
+                        "restartable": True,
+                        "ui_config": None,
+                        "has_ui": bool(plugin_info.manifest.ui_contributions),
+                        "has_settings_ui": False,
+                        "v2": True,  # Flag to identify v2 plugins
+                        "state": plugin_info.state.value,
+                        "error": plugin_info.error,
+                    }
+                    result.append(info)
+        except Exception as e:
+            logger.debug("Could not get v2 plugins from Bridge: %s", e)
+        
+        # Then add legacy plugins (skip if v2 version exists)
         for p in self.plugins:
+            # Skip if v2 version already added
+            if p.name in v2_plugin_ids:
+                continue
             trust_level = getattr(p, "trust_level", "experimental")
             signature_info = None
             
@@ -390,9 +459,46 @@ class PluginManager:
             return None
 
     def get_sidebar_plugins(self) -> List[Dict[str, Any]]:
-        """Return plugins that should appear in the sidebar menu."""
+        """Return plugins that should appear in the sidebar menu.
+        
+        Includes both legacy plugins with ui_config and v2 plugins with UI contributions.
+        """
         sidebar_plugins = []
+        v2_plugin_ids: set[str] = set()
+        
+        # First, add v2 plugins from Bridge
+        try:
+            from jupiter.core.bridge import get_bridge
+            bridge = get_bridge()
+            if bridge:
+                for plugin_info in bridge.get_all_plugins():
+                    # Skip legacy-wrapped plugins
+                    if plugin_info.legacy:
+                        continue
+                    
+                    # Check for UI contributions with sidebar location
+                    for ui_contrib in plugin_info.manifest.ui_contributions:
+                        loc = ui_contrib.location.value if ui_contrib.location else "sidebar"
+                        if loc in ("sidebar", "both"):
+                            v2_plugin_ids.add(plugin_info.manifest.id)
+                            sidebar_plugins.append({
+                                "name": plugin_info.manifest.id,
+                                "menu_icon": ui_contrib.icon or "🔌",
+                                "menu_label_key": ui_contrib.title_key or plugin_info.manifest.id,
+                                "menu_order": ui_contrib.order or 100,
+                                # Always use plugin ID as view_id to avoid collisions
+                                # (panel id 'main' is common across plugins)
+                                "view_id": plugin_info.manifest.id,
+                                "v2": True,
+                                "route": ui_contrib.route,
+                            })
+        except Exception as e:
+            logger.debug("Could not get v2 sidebar plugins from Bridge: %s", e)
+        
+        # Then add legacy plugins
         for p in self.plugins:
+            if p.name in v2_plugin_ids:
+                continue
             if not self.is_enabled(p.name):
                 continue
             
@@ -415,9 +521,49 @@ class PluginManager:
         return sidebar_plugins
 
     def get_settings_plugins(self) -> List[Dict[str, Any]]:
-        """Return plugins that should appear in the settings page."""
+        """Return plugins that should appear in the settings page.
+        
+        Includes both legacy plugins with settings UI and v2 plugins with config schema.
+        """
         settings_plugins = []
+        v2_plugin_ids: set[str] = set()
+        
+        # First, add v2 plugins from Bridge (any v2 plugin with config schema gets settings)
+        try:
+            from jupiter.core.bridge import get_bridge
+            bridge = get_bridge()
+            if bridge:
+                for plugin_info in bridge.get_all_plugins():
+                    # Skip legacy-wrapped plugins
+                    if plugin_info.legacy:
+                        continue
+                    
+                    # Check for UI contributions with settings location
+                    has_settings_ui = False
+                    for ui_contrib in plugin_info.manifest.ui_contributions:
+                        loc = ui_contrib.location.value if ui_contrib.location else "sidebar"
+                        if loc in ("settings", "both"):
+                            has_settings_ui = True
+                            break
+                    
+                    # Also add if plugin has config schema (auto-generate settings form)
+                    has_config = bool(getattr(plugin_info.manifest, 'config_schema', None))
+                    
+                    if has_settings_ui or has_config:
+                        v2_plugin_ids.add(plugin_info.manifest.id)
+                        settings_plugins.append({
+                            "name": plugin_info.manifest.id,
+                            "settings_section": plugin_info.manifest.name,
+                            "v2": True,
+                            "has_config_schema": has_config,
+                        })
+        except Exception as e:
+            logger.debug("Could not get v2 settings plugins from Bridge: %s", e)
+        
+        # Then add legacy plugins
         for p in self.plugins:
+            if p.name in v2_plugin_ids:
+                continue
             if not self.is_enabled(p.name):
                 continue
             
@@ -435,7 +581,37 @@ class PluginManager:
         return settings_plugins
 
     def get_plugin_ui_html(self, plugin_name: str) -> Optional[str]:
-        """Get the UI HTML for a plugin."""
+        """Get the UI HTML for a plugin.
+        
+        For v2 plugins:
+        1. Try importing web.ui module and calling get_ui_html()
+        2. Fallback to empty container div
+        For legacy plugins, returns the result of get_ui_html() method.
+        """
+        # Check v2 plugins first
+        try:
+            from jupiter.core.bridge.bridge import Bridge
+            import importlib
+            bridge = Bridge.get_instance()
+            if bridge:
+                plugin_info = bridge.get_plugin(plugin_name)
+                if plugin_info and not plugin_info.legacy:
+                    # V2 plugins: try importing web.ui module first
+                    try:
+                        ui_module = importlib.import_module(f"jupiter.plugins.{plugin_name}.web.ui")
+                        get_html = getattr(ui_module, "get_ui_html", None)
+                        if get_html and callable(get_html):
+                            result = get_html()
+                            if result:
+                                return str(result)
+                    except ImportError:
+                        pass
+                    # Fallback: V2 plugins get a mount container - JS will populate it
+                    return f'<div id="plugin-{plugin_name}-container" class="plugin-v2-container"></div>'
+        except Exception:
+            pass
+        
+        # Legacy plugins
         for p in self.plugins:
             if p.name == plugin_name and self.is_enabled(p.name):
                 method = getattr(p, "get_ui_html", None)
@@ -445,7 +621,43 @@ class PluginManager:
         return None
 
     def get_plugin_ui_js(self, plugin_name: str) -> Optional[str]:
-        """Get the UI JavaScript for a plugin."""
+        """Get the UI JavaScript for a plugin.
+        
+        For v2 plugins:
+        1. Try reading web/panels/main.js
+        2. Try importing web.ui module and calling get_ui_js()
+        For legacy plugins, returns the result of get_ui_js() method.
+        """
+        # Check v2 plugins first
+        try:
+            from jupiter.core.bridge.bridge import Bridge
+            from pathlib import Path
+            import importlib
+            bridge = Bridge.get_instance()
+            if bridge:
+                plugin_info = bridge.get_plugin(plugin_name)
+                if plugin_info and not plugin_info.legacy:
+                    source_path = plugin_info.manifest.source_path
+                    if source_path:
+                        # V2 plugins: first try web/panels/main.js
+                        js_path = source_path / "web" / "panels" / "main.js"
+                        if js_path.exists():
+                            return js_path.read_text(encoding="utf-8")
+                    
+                    # Fallback: try importing web.ui module
+                    try:
+                        ui_module = importlib.import_module(f"jupiter.plugins.{plugin_name}.web.ui")
+                        get_js = getattr(ui_module, "get_ui_js", None)
+                        if get_js and callable(get_js):
+                            result = get_js()
+                            if result:
+                                return str(result)
+                    except ImportError:
+                        pass
+        except Exception as e:
+            logger.debug("Could not get v2 plugin JS for %s: %s", plugin_name, e)
+        
+        # Legacy plugins
         for p in self.plugins:
             if p.name == plugin_name and self.is_enabled(p.name):
                 method = getattr(p, "get_ui_js", None)
@@ -455,7 +667,35 @@ class PluginManager:
         return None
 
     def get_plugin_settings_html(self, plugin_name: str) -> Optional[str]:
-        """Get the settings HTML for a plugin."""
+        """Get the settings HTML for a plugin.
+        
+        For v2 plugins with config_schema, returns a container for auto-form generation.
+        For legacy plugins, returns the result of get_settings_html() method.
+        """
+        # Check v2 plugins first
+        try:
+            from jupiter.core.bridge import get_bridge
+            bridge = get_bridge()
+            if bridge:
+                plugin_info = bridge.get_plugin(plugin_name)
+                if plugin_info and not plugin_info.legacy:
+                    # V2 plugins get a settings container
+                    manifest = plugin_info.manifest
+                    config_schema = getattr(manifest, 'config_schema', None)
+                    if config_schema:
+                        # Return container for auto-form - JS will generate form from schema
+                        return f'''
+                        <div id="plugin-{plugin_name}-settings" class="plugin-v2-settings" 
+                             data-plugin="{plugin_name}"
+                             data-schema='{__import__("json").dumps(config_schema)}'>
+                            <h4>{manifest.name} Settings</h4>
+                            <div class="auto-form-container"></div>
+                        </div>
+                        '''
+        except Exception as e:
+            logger.debug("Could not get v2 plugin settings HTML for %s: %s", plugin_name, e)
+        
+        # Legacy plugins
         for p in self.plugins:
             if p.name == plugin_name and self.is_enabled(p.name):
                 method = getattr(p, "get_settings_html", None)
@@ -473,6 +713,71 @@ class PluginManager:
                     result = method()
                     return str(result) if result is not None else None
         return None
+
+    def get_plugin_translations(self, plugin_name: str, lang_code: str) -> Dict[str, Any]:
+        """Get translations for a plugin in the specified language.
+        
+        Loads translations from the plugin's web/lang/{lang_code}.json file.
+        Falls back to 'en' if the requested language is not available.
+        
+        Args:
+            plugin_name: Plugin name/id
+            lang_code: Language code (e.g., 'en', 'fr')
+            
+        Returns:
+            Dict with translation key-value pairs, or empty dict if not found
+        """
+        import json
+        
+        # Check v2 plugins first
+        try:
+            from jupiter.core.bridge.bridge import Bridge
+            bridge = Bridge.get_instance()
+            if bridge:
+                plugin_info = bridge.get_plugin(plugin_name)
+                if plugin_info and not plugin_info.legacy:
+                    source_path = plugin_info.manifest.source_path
+                    if source_path:
+                        # Try requested language
+                        lang_path = source_path / "web" / "lang" / f"{lang_code}.json"
+                        if lang_path.exists():
+                            try:
+                                return json.loads(lang_path.read_text(encoding="utf-8"))
+                            except json.JSONDecodeError as e:
+                                logger.warning("Invalid JSON in %s: %s", lang_path, e)
+                        
+                        # Fallback to English
+                        if lang_code != "en":
+                            en_path = source_path / "web" / "lang" / "en.json"
+                            if en_path.exists():
+                                try:
+                                    return json.loads(en_path.read_text(encoding="utf-8"))
+                                except json.JSONDecodeError as e:
+                                    logger.warning("Invalid JSON in %s: %s", en_path, e)
+        except Exception as e:
+            logger.debug("Could not get v2 plugin translations for %s: %s", plugin_name, e)
+        
+        # Legacy plugins - try web/lang directory in plugin path
+        plugins_dir = self._get_plugins_directory()
+        plugin_dir = plugins_dir / plugin_name
+        if plugin_dir.exists():
+            lang_path = plugin_dir / "web" / "lang" / f"{lang_code}.json"
+            if lang_path.exists():
+                try:
+                    return json.loads(lang_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError as e:
+                    logger.warning("Invalid JSON in %s: %s", lang_path, e)
+            
+            # Fallback to English
+            if lang_code != "en":
+                en_path = plugin_dir / "web" / "lang" / "en.json"
+                if en_path.exists():
+                    try:
+                        return json.loads(en_path.read_text(encoding="utf-8"))
+                    except json.JSONDecodeError as e:
+                        logger.warning("Invalid JSON in %s: %s", en_path, e)
+        
+        return {}
 
     # --- Plugin Installation / Uninstallation ---
 

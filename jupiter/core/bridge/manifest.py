@@ -1,6 +1,6 @@
 """Plugin manifest parsing and validation.
 
-Version: 0.1.1
+Version: 0.1.3
 
 This module handles loading, parsing, and validating plugin.yaml manifest files.
 It provides:
@@ -8,6 +8,10 @@ It provides:
 - JSON Schema validation
 - Conversion to PluginManifest class
 - Version compatibility checking
+
+Changes:
+- 0.1.3: Added support for api.router format (FastAPI router entrypoint)
+- 0.1.2: Fixed source_path to use plugin directory instead of manifest file path
 """
 
 from __future__ import annotations
@@ -447,6 +451,19 @@ class PluginManifest(IPluginManifest):
         # Parse API contributions
         api_contributions: List[APIContribution] = []
         api_data = data.get("api", {})
+        
+        # Support for api.router format (FastAPI router entrypoint)
+        # Format: api.router: "server.api:router" with optional prefix and tags
+        if "router" in api_data:
+            api_contributions.append(APIContribution(
+                plugin_id=plugin_id,
+                entrypoint=api_data["router"],  # Store router entrypoint for later resolution
+                prefix=api_data.get("prefix", f"/plugins/{plugin_id}"),
+                tags=api_data.get("tags", [plugin_id]),
+                router=None,  # Will be resolved by bridge after module load
+            ))
+        
+        # Support for api.routes format (individual route definitions)
         for route in api_data.get("routes", []):
             api_contributions.append(APIContribution(
                 path=route["path"],
@@ -550,7 +567,8 @@ class PluginManifest(IPluginManifest):
                 details={"path": str(path)}
             )
         
-        return cls.from_dict(data, source_path=path, validate=validate)
+        # Use parent directory as source_path (the plugin directory, not the yaml file)
+        return cls.from_dict(data, source_path=path.parent, validate=validate)
     
     @classmethod
     def from_plugin_dir(cls, plugin_dir: Union[str, Path], validate: bool = True) -> "PluginManifest":

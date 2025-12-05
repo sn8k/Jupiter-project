@@ -1,0 +1,76 @@
+# Live Map Plugin Manifest v2
+# Version: 0.3.2 - Added API contribution for graph endpoint
+
+id: livemap
+name: Live Map
+version: "0.3.2"
+description: Interactive dependency graph visualization using D3.js
+type: tool
+jupiter_version: ">=1.8.0"
+
+# Metadata
+author:
+  name: Jupiter Team
+  url: https://github.com/sn8k/Jupiter-project
+license: MIT
+homepage: https://github.com/sn8k/Jupiter-project
+trust_level: official
+
+# Permissions
+permissions:
+  - fs_read
+  - emit_events
+  - register_api
+  - register_ui
+
+# Capabilities
+capabilities:
+  metrics:
+    enabled: true
+    export_format: json
+  health_check:
+    enabled: true
+    interval: 60
+  jobs:
+    enabled: false
+
+# Entrypoints
+entrypoints:
+  init: "__init__:init"
+  shutdown: "__init__:shutdown"
+
+# API contributions - FastAPI router
+api:
+  router: "server.api:router"
+  prefix: "/plugins/livemap"
+  tags:
+    - livemap
+
+# UI contributions
+ui:
+  panels:
+    - id: main
+      location: both
+      route: /plugins/livemap
+      title_key: plugin.livemap.title
+      icon: "🗺️"
+      order: 45
+      settings_section: Live Map
+  assets:
+    js:
+      - web/panels/main.js
+  i18n:
+    path: web/lang
+    languages:
+      - en
+      - fr
+
+# Configuration schema
+config:
+  defaults:
+    enabled: true
+    simplify: false
+    max_nodes: 1000
+    show_functions: false
+    link_distance: 60
+    charge_strength: -100

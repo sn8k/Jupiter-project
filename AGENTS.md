@@ -374,4 +374,5 @@ Note finale du patron :
 - mettre a jour SANS METTRE DE DATES les documentations du dossier docs (si necessaire) et README.MD
 - requirements*.txt doivent TOUJOURS ETRE A JOUR, AJOUTER SYSTEMATIQUEMENT LES REQUIREMENTS NECESSAIRES !!!!!!!!!
 - ne jamais contourner un probleme, le corriger à la source
-- jupiter doit toujours etre en mesure de s'autodiagnostiquer, si besoin, utiliser l'auto-diagnostic pour etre certain que jupiter soit parfaitement propre**
+- jupiter doit toujours etre en mesure de s'autodiagnostiquer, si besoin, utiliser l'auto-diagnostic pour etre certain que jupiter soit parfaitement propre
+- penser le code comme maintenable facilement. On ne doit pas avoir de monolythe.**

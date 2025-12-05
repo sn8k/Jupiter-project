@@ -1,5 +1,16 @@
 # Changelog - jupiter/plugins/ai_helper
 
+## [1.1.1] - Manifest Schema Compliance Fix
+
+### Fixed
+- `plugin.yaml` reformatted to comply with JSON Schema (`plugin_manifest.json`)
+- Fixed `name` and `description` (must be strings, not i18n objects)
+- Fixed `jupiter_version` format (`>=1.8.0` instead of range)
+- Fixed `permissions` format (array of strings)
+- Fixed `config` section structure (schema + defaults)
+- Plugin now correctly discovered and registered by Bridge
+- Updated `__version__` to match manifest
+
 ## [1.1.0] - Complete Bridge v2 Migration
 
 ### Added

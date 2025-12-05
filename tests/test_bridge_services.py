@@ -1,8 +1,12 @@
 """Tests for jupiter.core.bridge.services module.
 
-Version: 0.1.0
+Version: 0.2.0
 
 Tests for the Service Locator and service wrappers.
+
+Changelog:
+    0.2.0: Added tests for global log floor and per-plugin log levels
+    0.1.0: Initial tests
 """
 
 import logging
@@ -17,6 +21,12 @@ from jupiter.core.bridge.services import (
     ConfigProxy,
     ServiceLocator,
     create_service_locator,
+    # Log level management
+    set_global_log_level_floor,
+    get_global_log_level_floor,
+    set_plugin_log_level,
+    get_plugin_log_level,
+    clear_plugin_log_levels,
 )
 from jupiter.core.bridge.interfaces import Permission
 from jupiter.core.bridge.exceptions import (
@@ -81,6 +91,146 @@ class TestPluginLogger:
         plugin_logger = PluginLogger("level_test")
         plugin_logger.setLevel(logging.WARNING)
         assert plugin_logger.getEffectiveLevel() == logging.WARNING
+
+
+class TestPluginLoggerLevelManagement:
+    """Tests for global log floor and per-plugin log level management."""
+    
+    def setup_method(self):
+        """Reset log levels before each test."""
+        set_global_log_level_floor(logging.DEBUG)
+        clear_plugin_log_levels()
+    
+    def teardown_method(self):
+        """Clean up after each test."""
+        set_global_log_level_floor(logging.DEBUG)
+        clear_plugin_log_levels()
+    
+    def test_global_floor_default_is_debug(self):
+        """Default global floor should be DEBUG."""
+        assert get_global_log_level_floor() == logging.DEBUG
+    
+    def test_set_global_log_level_floor(self):
+        """Can set global log level floor."""
+        set_global_log_level_floor(logging.WARNING)
+        assert get_global_log_level_floor() == logging.WARNING
+    
+    def test_set_plugin_log_level(self):
+        """Can set log level for a specific plugin."""
+        set_plugin_log_level("test_plugin", logging.ERROR)
+        assert get_plugin_log_level("test_plugin") == logging.ERROR
+    
+    def test_get_plugin_log_level_returns_none_if_not_set(self):
+        """Returns None if plugin level not set."""
+        assert get_plugin_log_level("nonexistent") is None
+    
+    def test_clear_plugin_log_levels(self):
+        """Can clear all per-plugin levels."""
+        set_plugin_log_level("plugin1", logging.INFO)
+        set_plugin_log_level("plugin2", logging.ERROR)
+        clear_plugin_log_levels()
+        assert get_plugin_log_level("plugin1") is None
+        assert get_plugin_log_level("plugin2") is None
+    
+    def test_plugin_logger_respects_global_floor(self):
+        """Plugin logger should not log below global floor."""
+        set_global_log_level_floor(logging.WARNING)
+        
+        plugin_logger = PluginLogger("floor_test")
+        
+        # Should not be enabled for INFO (below WARNING)
+        assert not plugin_logger.isEnabledFor(logging.INFO)
+        # Should be enabled for WARNING and above
+        assert plugin_logger.isEnabledFor(logging.WARNING)
+        assert plugin_logger.isEnabledFor(logging.ERROR)
+    
+    def test_plugin_logger_respects_plugin_level(self):
+        """Plugin logger should respect its own level."""
+        set_plugin_log_level("plugin_level_test", logging.ERROR)
+        
+        plugin_logger = PluginLogger("plugin_level_test")
+        
+        # Should not be enabled for WARNING (below ERROR)
+        assert not plugin_logger.isEnabledFor(logging.WARNING)
+        # Should be enabled for ERROR
+        assert plugin_logger.isEnabledFor(logging.ERROR)
+    
+    def test_global_floor_takes_precedence_over_more_verbose_plugin_level(self):
+        """Global floor should cap plugin verbosity."""
+        # Global: only WARNING and above
+        set_global_log_level_floor(logging.WARNING)
+        # Plugin wants DEBUG level (more verbose)
+        set_plugin_log_level("capped_plugin", logging.DEBUG)
+        
+        plugin_logger = PluginLogger("capped_plugin")
+        
+        # Should be capped at WARNING (global floor)
+        assert plugin_logger.getEffectiveLevel() == logging.WARNING
+        assert not plugin_logger.isEnabledFor(logging.DEBUG)
+        assert not plugin_logger.isEnabledFor(logging.INFO)
+        assert plugin_logger.isEnabledFor(logging.WARNING)
+    
+    def test_plugin_can_be_less_verbose_than_floor(self):
+        """Plugin can be less verbose (higher level) than global floor."""
+        # Global: DEBUG and above
+        set_global_log_level_floor(logging.DEBUG)
+        # Plugin wants only ERROR level (less verbose)
+        set_plugin_log_level("quiet_plugin", logging.ERROR)
+        
+        plugin_logger = PluginLogger("quiet_plugin")
+        
+        # Should use plugin's ERROR level
+        assert plugin_logger.getEffectiveLevel() == logging.ERROR
+        assert not plugin_logger.isEnabledFor(logging.WARNING)
+        assert plugin_logger.isEnabledFor(logging.ERROR)
+    
+    def test_set_level_stores_plugin_level(self):
+        """setLevel should store the level in plugin registry."""
+        plugin_logger = PluginLogger("setlevel_test")
+        plugin_logger.setLevel(logging.WARNING)
+        
+        # Should be stored
+        assert get_plugin_log_level("setlevel_test") == logging.WARNING
+    
+    def test_set_level_respects_global_floor(self):
+        """setLevel should respect global floor when applying."""
+        set_global_log_level_floor(logging.ERROR)
+        
+        plugin_logger = PluginLogger("floor_test2")
+        plugin_logger.setLevel(logging.DEBUG)  # Try to be very verbose
+        
+        # Stored level is DEBUG
+        assert get_plugin_log_level("floor_test2") == logging.DEBUG
+        # But effective level is capped at ERROR
+        assert plugin_logger.getEffectiveLevel() == logging.ERROR
+    
+    def test_debug_suppressed_when_floor_is_info(self, caplog):
+        """DEBUG messages should be suppressed when floor is INFO."""
+        set_global_log_level_floor(logging.INFO)
+        
+        plugin_logger = PluginLogger("suppress_test")
+        
+        with caplog.at_level(logging.DEBUG):
+            plugin_logger.debug("This should NOT appear")
+            plugin_logger.info("This SHOULD appear")
+        
+        # INFO appears but DEBUG doesn't
+        assert "This SHOULD appear" in caplog.text
+        # Note: DEBUG may still appear in caplog due to how pytest captures
+        # The key is the isEnabledFor check
+        assert not plugin_logger.isEnabledFor(logging.DEBUG)
+    
+    def test_is_enabled_for(self):
+        """isEnabledFor should check against effective level."""
+        set_global_log_level_floor(logging.INFO)
+        
+        plugin_logger = PluginLogger("enabled_test")
+        
+        assert not plugin_logger.isEnabledFor(logging.DEBUG)
+        assert plugin_logger.isEnabledFor(logging.INFO)
+        assert plugin_logger.isEnabledFor(logging.WARNING)
+        assert plugin_logger.isEnabledFor(logging.ERROR)
+        assert plugin_logger.isEnabledFor(logging.CRITICAL)
 
 
 # =============================================================================

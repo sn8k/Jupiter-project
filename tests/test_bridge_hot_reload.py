@@ -48,6 +48,16 @@ def reset_singleton():
     reset_hot_reloader()
 
 
+@pytest.fixture(autouse=True)
+def mock_dev_mode():
+    """Mock developer mode as enabled by default for hot reload tests.
+    
+    Tests that specifically test dev mode behavior should override this.
+    """
+    with patch("jupiter.core.bridge.dev_mode.is_dev_mode", return_value=True):
+        yield
+
+
 @pytest.fixture
 def reloader():
     """Create a fresh HotReloader instance."""
@@ -288,12 +298,37 @@ class TestCanReload:
         assert can is False
         assert "no module" in reason
     
+    def test_can_reload_requires_dev_mode(self, reloader, mock_bridge, mock_plugin_info):
+        """Test that reload requires developer mode."""
+        reloader.set_bridge(mock_bridge)
+        mock_plugin_info.state = PluginState.READY
+        mock_bridge.get_plugin.return_value = mock_plugin_info
+        
+        with patch("jupiter.core.bridge.dev_mode.is_dev_mode", return_value=False):
+            can, reason = reloader.can_reload("test_plugin")
+        
+        assert can is False
+        assert "developer mode" in reason.lower()
+    
+    def test_can_reload_with_dev_mode_enabled(self, reloader, mock_bridge, mock_plugin_info):
+        """Test that reload works with developer mode enabled."""
+        reloader.set_bridge(mock_bridge)
+        mock_plugin_info.state = PluginState.READY
+        mock_bridge.get_plugin.return_value = mock_plugin_info
+        
+        # Dev mode is auto-mocked to True
+        can, reason = reloader.can_reload("test_plugin")
+        
+        assert can is True
+        assert "can be reloaded" in reason
+    
     def test_can_reload_ready_plugin(self, reloader, mock_bridge, mock_plugin_info):
         """Test that ready plugins can be reloaded."""
         reloader.set_bridge(mock_bridge)
         mock_plugin_info.state = PluginState.READY
         mock_bridge.get_plugin.return_value = mock_plugin_info
         
+        # Dev mode is auto-mocked to True
         can, reason = reloader.can_reload("test_plugin")
         
         assert can is True
@@ -307,11 +342,44 @@ class TestCanReload:
 class TestReloadFlow:
     """Tests for the reload flow."""
     
+    def test_reload_fails_without_dev_mode(self, reloader, mock_bridge, mock_plugin_info):
+        """Test reload fails when developer mode is disabled."""
+        reloader.set_bridge(mock_bridge)
+        mock_plugin_info.state = PluginState.READY
+        mock_bridge.get_plugin.return_value = mock_plugin_info
+        
+        with patch("jupiter.core.bridge.dev_mode.is_dev_mode", return_value=False):
+            result = reloader.reload("test_plugin")
+        
+        assert result.success is False
+        assert result.phase == "dev_mode_check"
+        assert "developer mode" in result.error.lower()
+    
+    def test_reload_skip_dev_mode_check(self, reloader, mock_bridge, mock_plugin_info):
+        """Test reload with skip_dev_mode_check bypasses dev mode."""
+        reloader.set_bridge(mock_bridge)
+        mock_plugin_info.state = PluginState.READY
+        mock_bridge.get_plugin.return_value = mock_plugin_info
+        mock_bridge._get_plugin_config.return_value = {}
+        mock_bridge.initialize.return_value = {"test_plugin": True}
+        mock_bridge.plugins_dir = Path("/fake/plugins")
+        
+        with patch("jupiter.core.bridge.dev_mode.is_dev_mode", return_value=False), \
+             patch("pathlib.Path.is_dir", return_value=True), \
+             patch("pathlib.Path.is_file", return_value=True), \
+             patch.object(reloader, "_rediscover_plugin"):
+            # Skip dev mode check should allow reload
+            result = reloader.reload("test_plugin", skip_dev_mode_check=True)
+        
+        # Should pass dev mode check and proceed (may fail later in flow)
+        assert result.phase != "dev_mode_check"
+    
     def test_reload_validation_fails(self, reloader, mock_bridge):
         """Test reload fails validation for unknown plugin."""
         reloader.set_bridge(mock_bridge)
         mock_bridge.get_plugin.return_value = None
         
+        # Dev mode is auto-mocked to True
         result = reloader.reload("unknown_plugin")
         
         assert result.success is False
@@ -322,6 +390,7 @@ class TestReloadFlow:
         """Test reload fails for blacklisted plugin."""
         reloader.set_bridge(mock_bridge)
         
+        # Dev mode is auto-mocked to True
         result = reloader.reload("bridge")
         
         assert result.success is False
@@ -333,6 +402,7 @@ class TestReloadFlow:
         mock_bridge.get_plugin.return_value = None
         
         # Force bypass validation but plugin still not found in lock phase
+        # Dev mode is auto-mocked to True
         result = reloader.reload("bridge", force=True)
         
         assert result.success is False
@@ -346,6 +416,7 @@ class TestReloadFlow:
         mock_bridge.plugins_dir = Path("/fake/plugins")
         
         # Mock plugin directory for rediscovery
+        # Dev mode is auto-mocked to True
         with patch("pathlib.Path.is_dir", return_value=True), \
              patch("pathlib.Path.is_file", return_value=True), \
              patch.object(reloader, "_rediscover_plugin"):

@@ -1,6 +1,6 @@
 """Lightweight static server for the Jupiter web UI.
 
-Version: 1.1.1 - Cache hardening and explicit no-store headers.
+Version: 1.1.2 - Inject app version into index.html at serve time.
 """
 
 from __future__ import annotations
@@ -104,7 +104,13 @@ class JupiterWebUI:
                     
                     if full_path.exists():
                         try:
-                            content = full_path.read_bytes()
+                            if fpath == "/index.html":
+                                raw = full_path.read_text(encoding="utf-8")
+                                rendered = raw.replace("{{JUPITER_VERSION}}", context.get("jupiter_version", ""))
+                                content = rendered.encode("utf-8")
+                            else:
+                                content = full_path.read_bytes()
+
                             self.send_response(200)
                             ctype = self.guess_type(str(full_path))
                             self.send_header("Content-Type", ctype)

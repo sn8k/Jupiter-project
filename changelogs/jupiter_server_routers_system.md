@@ -1,5 +1,21 @@
 # Changelog – jupiter/server/routers/system.py
 
+## Version 1.11.0 – Deprecated Legacy Livemap Endpoints
+- Deprecated legacy `/plugins/livemap/graph`, `/plugins/livemap/config` endpoints
+  - These endpoints used the old PluginManager which doesn't support Bridge v2 plugins
+  - Caused 404 errors as `PluginManager.get_plugin("livemap")` returned None
+- Livemap endpoints now served by the plugin's own API router
+  - See `jupiter/plugins/livemap/server/api.py`
+  - Mounted by Bridge v2 at `/plugins/livemap`
+- Legacy endpoints kept as comments for reference during migration period
+
+## Version 1.10.0 – Plugin Translations API
+- Added `GET /plugins/{name}/lang/{lang_code}` endpoint to serve plugin translations
+  - Loads translations from plugin's `web/lang/{lang_code}.json` file
+  - Falls back to English if requested language not available
+  - Returns empty translations dict if plugin has no lang files
+  - Supports dynamic i18n loading for v2 plugins at mount time
+
 ## Version 1.9.0 – Phase 4.3: Job Management API
 - Added `GET /jobs` endpoint to list background jobs with filters
   - Supports status filter (pending, running, completed, failed, cancelled)

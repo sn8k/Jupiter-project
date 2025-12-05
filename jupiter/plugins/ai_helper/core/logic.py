@@ -1,11 +1,18 @@
 """
-core/logic.py – Business logic for AI Helper plugin.
-Version: 1.1.0
+core/logic.py - Business logic for AI Helper plugin.
+Version: 1.2.0
 
 This module contains business logic called by CLI, API, or UI.
 It does not depend directly on FastAPI or argparse.
 
-Conforme à plugins_architecture.md v0.4.0
+Supported providers:
+- mock: Heuristic-based suggestions (default, no API needed)
+- ollama: Local LLM via Ollama (http://localhost:11434)
+- openai: OpenAI API (requires api_key)
+- anthropic: Anthropic Claude API (requires api_key)
+- azure_openai: Azure OpenAI / GitHub Models (requires api_key)
+
+Conforme a plugins_architecture.md v0.4.0
 """
 
 from typing import Any, Dict, List, Optional
@@ -52,11 +59,175 @@ def generate_suggestions(
         suggestions.extend(_generate_mock_suggestions(
             summary, allowed_types, large_threshold, func_threshold
         ))
-    # Future: Add real LLM provider implementations here
-    # elif provider == "openai":
-    #     suggestions.extend(_generate_openai_suggestions(summary, config, bridge))
+    elif provider == "ollama":
+        suggestions.extend(_generate_ollama_suggestions(summary, config, allowed_types))
+    elif provider == "openai":
+        suggestions.extend(_generate_openai_suggestions(summary, config, allowed_types))
+    elif provider == "anthropic":
+        suggestions.extend(_generate_anthropic_suggestions(summary, config, allowed_types))
+    elif provider == "azure_openai":
+        suggestions.extend(_generate_azure_openai_suggestions(summary, config, allowed_types))
+    else:
+        # Fallback to mock for unknown providers
+        suggestions.extend(_generate_mock_suggestions(
+            summary, allowed_types, large_threshold, func_threshold
+        ))
     
     return suggestions
+
+
+def _generate_ollama_suggestions(
+    summary: Dict[str, Any],
+    config: Dict[str, Any],
+    allowed_types: List[str]
+) -> List[AISuggestion]:
+    """
+    Generate suggestions using Ollama local LLM.
+    
+    Requires Ollama running locally (default: http://localhost:11434).
+    Supported models: codellama, mistral, llama2, deepseek-coder, etc.
+    """
+    import json
+    import urllib.request
+    import urllib.error
+    
+    suggestions: List[AISuggestion] = []
+    
+    ollama_url = config.get("ollama_url", "http://localhost:11434")
+    model = config.get("ollama_model", "codellama")
+    
+    # Build context from summary
+    context_parts = []
+    if "python_summary" in summary:
+        py = summary["python_summary"]
+        context_parts.append(f"Python files: {py.get('total_python_files', 0)}")
+        context_parts.append(f"Total functions: {py.get('total_functions', 0)}")
+        context_parts.append(f"Potentially unused: {py.get('total_potentially_unused_functions', 0)}")
+    
+    if "hotspots" in summary:
+        hotspots = summary["hotspots"]
+        if hotspots.get("largest_files"):
+            top_files = [f["path"] for f in hotspots["largest_files"][:3]]
+            context_parts.append(f"Largest files: {', '.join(top_files)}")
+    
+    context = "\n".join(context_parts)
+    
+    prompt = f"""You are a code analysis assistant. Based on this project summary, suggest improvements.
+Focus on: {', '.join(allowed_types)}
+
+Project Summary:
+{context}
+
+Provide 3-5 actionable suggestions in JSON format:
+[{{"path": "file or Global", "type": "refactoring|doc|security|optimization|testing|cleanup", "details": "description", "severity": "info|low|medium|high|critical"}}]
+
+Only output valid JSON array, no other text."""
+
+    try:
+        req_data = json.dumps({
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": 0.3}
+        }).encode("utf-8")
+        
+        req = urllib.request.Request(
+            f"{ollama_url}/api/generate",
+            data=req_data,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        with urllib.request.urlopen(req, timeout=60) as response:
+            result = json.loads(response.read().decode("utf-8"))
+            response_text = result.get("response", "")
+            
+            # Parse JSON from response
+            try:
+                # Try to extract JSON array from response
+                start = response_text.find("[")
+                end = response_text.rfind("]") + 1
+                if start >= 0 and end > start:
+                    json_str = response_text[start:end]
+                    parsed = json.loads(json_str)
+                    
+                    for item in parsed:
+                        if item.get("type") in allowed_types:
+                            suggestions.append(AISuggestion(
+                                path=item.get("path", "Global"),
+                                type=item.get("type", "refactoring"),
+                                details=item.get("details", ""),
+                                severity=item.get("severity", "info")
+                            ))
+            except json.JSONDecodeError:
+                # Ollama response wasn't valid JSON, add fallback suggestion
+                suggestions.append(AISuggestion(
+                    path="Global",
+                    type="doc",
+                    details=f"Ollama ({model}) analysis completed but response parsing failed.",
+                    severity="info"
+                ))
+                
+    except urllib.error.URLError as e:
+        suggestions.append(AISuggestion(
+            path="Global",
+            type="doc",
+            details=f"Ollama connection failed: {e.reason}. Is Ollama running on {ollama_url}?",
+            severity="low"
+        ))
+    except Exception as e:
+        suggestions.append(AISuggestion(
+            path="Global",
+            type="doc",
+            details=f"Ollama error: {str(e)}",
+            severity="low"
+        ))
+    
+    return suggestions
+
+
+def _generate_openai_suggestions(
+    summary: Dict[str, Any],
+    config: Dict[str, Any],
+    allowed_types: List[str]
+) -> List[AISuggestion]:
+    """Generate suggestions using OpenAI API."""
+    # Placeholder - requires openai package
+    return [AISuggestion(
+        path="Global",
+        type="doc",
+        details="OpenAI provider not yet implemented. Use 'ollama' or 'mock' for now.",
+        severity="info"
+    )]
+
+
+def _generate_anthropic_suggestions(
+    summary: Dict[str, Any],
+    config: Dict[str, Any],
+    allowed_types: List[str]
+) -> List[AISuggestion]:
+    """Generate suggestions using Anthropic Claude API."""
+    # Placeholder - requires anthropic package
+    return [AISuggestion(
+        path="Global",
+        type="doc",
+        details="Anthropic provider not yet implemented. Use 'ollama' or 'mock' for now.",
+        severity="info"
+    )]
+
+
+def _generate_azure_openai_suggestions(
+    summary: Dict[str, Any],
+    config: Dict[str, Any],
+    allowed_types: List[str]
+) -> List[AISuggestion]:
+    """Generate suggestions using Azure OpenAI API (compatible with GitHub Models)."""
+    # Placeholder - requires azure-openai package
+    return [AISuggestion(
+        path="Global",
+        type="doc",
+        details="Azure OpenAI provider not yet implemented. Use 'ollama' or 'mock' for now.",
+        severity="info"
+    )]
 
 
 def analyze_single_file(
@@ -228,15 +399,23 @@ def validate_config(config: Dict[str, Any]) -> tuple[bool, Optional[str]]:
         Tuple (is_valid, error_message).
     """
     # Validate provider
-    valid_providers = ["mock", "openai", "anthropic", "local"]
+    valid_providers = ["mock", "openai", "anthropic", "ollama", "azure_openai"]
     if "provider" in config:
         if config["provider"] not in valid_providers:
             return False, f"Invalid provider. Must be one of: {valid_providers}"
     
-    # Validate API key presence for non-mock providers
-    if config.get("provider") not in ["mock", None]:
+    # Validate API key presence for cloud providers
+    cloud_providers = ["openai", "anthropic", "azure_openai"]
+    if config.get("provider") in cloud_providers:
         if not config.get("api_key"):
-            return False, "API key required for non-mock providers"
+            return False, f"API key required for {config.get('provider')} provider"
+    
+    # Validate Ollama URL if provider is ollama
+    if config.get("provider") == "ollama":
+        if not config.get("ollama_url"):
+            # Default URL is fine, but warn if model not specified
+            if not config.get("ollama_model"):
+                return False, "Ollama model must be specified (e.g., 'codellama', 'mistral', 'llama2')"
     
     # Validate suggestion types
     valid_types = ["refactoring", "doc", "security", "optimization", "testing", "cleanup"]

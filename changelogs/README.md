@@ -1,5 +1,16 @@
 # Changelog – README.md
 
+## v1.8.49: Documentation Phase 11.2 - Bridge v2 complet
+- Mise à jour du bandeau de version en 1.8.49
+- Section "Key Capabilities" enrichie :
+  - Bridge v2 Plugin System : 1400+ tests (vs 1341+)
+  - Hot reload avec dev mode guard explicitement mentionné
+  - Error reporting ajouté à la liste
+  - Governance (whitelist/blacklist, feature flags) ajouté
+- Section "Plugin Management" enrichie :
+  - Commandes jobs ajoutées (`jobs`, `jobs <id>`, `jobs cancel <id>`)
+  - Clarification `reload` nécessite `developer_mode: true`
+
 ## v1.8.35: Version badge refresh
 - Mise à jour du bandeau de version en 1.8.35 pour rester cohérent avec `VERSION` et le manuel.
 

@@ -1,0 +1,94 @@
+{
+  "plugin.metrics_manager.title": "Metrics Manager",
+  "plugin.metrics_manager.description": "Centralized metrics observation and management",
+  
+  "metrics_manager_title": "Metrics Manager",
+  "metrics_manager_subtitle": "System & Plugin Metrics Dashboard",
+  
+  "metrics_manager_status_idle": "Ready",
+  "metrics_manager_status_collecting": "Collecting metrics...",
+  "metrics_manager_status_error": "Collection error",
+  "metrics_manager_status_healthy": "System healthy",
+  
+  "metrics_manager_refresh": "Refresh",
+  "metrics_manager_export": "Export",
+  "metrics_manager_reset": "Reset All",
+  "metrics_manager_clear_alerts": "Clear Alerts",
+  
+  "metrics_manager_system_title": "System Metrics",
+  "metrics_manager_system_uptime": "Uptime",
+  "metrics_manager_system_collected": "Metrics Collected",
+  "metrics_manager_system_unique": "Unique Metrics",
+  "metrics_manager_system_counters": "Counters Tracked",
+  
+  "metrics_manager_plugins_title": "Plugin Metrics",
+  "metrics_manager_plugins_empty": "No plugin metrics available",
+  "metrics_manager_plugins_loading": "Loading plugin metrics...",
+  
+  "metrics_manager_counters_title": "Counters",
+  "metrics_manager_counters_empty": "No counters recorded",
+  
+  "metrics_manager_gauges_title": "Gauges",
+  "metrics_manager_gauges_empty": "No gauge metrics recorded",
+  
+  "metrics_manager_history_title": "Metric History",
+  "metrics_manager_history_select": "Select a metric to view history",
+  "metrics_manager_history_points": "data points",
+  
+  "metrics_manager_alerts_title": "Active Alerts",
+  "metrics_manager_alerts_empty": "No active alerts",
+  "metrics_manager_alerts_severity_warning": "Warning",
+  "metrics_manager_alerts_severity_critical": "Critical",
+  "metrics_manager_alerts_severity_info": "Info",
+  
+  "metrics_manager_export_json": "Export JSON",
+  "metrics_manager_export_prometheus": "Export Prometheus",
+  "metrics_manager_export_success": "Metrics exported successfully",
+  
+  "metrics_manager_logs_title": "Logs",
+  "metrics_manager_logs_search": "Search logs...",
+  "metrics_manager_logs_pause": "Pause",
+  "metrics_manager_logs_resume": "Resume",
+  "metrics_manager_logs_download": "Download",
+  
+  "metrics_manager_stats_title": "Plugin Statistics",
+  "metrics_manager_stats_collections": "Collections",
+  "metrics_manager_stats_api_calls": "API Calls",
+  "metrics_manager_stats_exports": "Exports",
+  "metrics_manager_stats_errors": "Errors",
+  
+  "metrics_manager_chart_line": "Line Chart",
+  "metrics_manager_chart_bar": "Bar Chart",
+  "metrics_manager_chart_area": "Area Chart",
+  
+  "metrics_manager_time_1m": "1 minute",
+  "metrics_manager_time_5m": "5 minutes",
+  "metrics_manager_time_15m": "15 minutes",
+  "metrics_manager_time_1h": "1 hour",
+  "metrics_manager_time_custom": "Custom",
+  
+  "metrics_manager_help_title": "Help",
+  "metrics_manager_help_description": "Metrics Manager provides centralized monitoring and visualization of all Jupiter metrics.",
+  "metrics_manager_help_features": "Features",
+  "metrics_manager_help_feature_1": "Real-time system metrics monitoring",
+  "metrics_manager_help_feature_2": "Plugin health and performance tracking",
+  "metrics_manager_help_feature_3": "Metric history visualization",
+  "metrics_manager_help_feature_4": "Export to JSON or Prometheus format",
+  "metrics_manager_help_feature_5": "Configurable alert thresholds",
+  "metrics_manager_help_link": "View Documentation",
+  
+  "plugin.metrics_manager.settings.enabled": "Enable Plugin",
+  "plugin.metrics_manager.settings.enabled_desc": "Enable or disable the Metrics Manager plugin",
+  "plugin.metrics_manager.settings.refresh_interval": "Refresh Interval (ms)",
+  "plugin.metrics_manager.settings.refresh_interval_desc": "How often to refresh metrics in the UI",
+  "plugin.metrics_manager.settings.history_size": "History Size",
+  "plugin.metrics_manager.settings.history_size_desc": "Number of data points to keep per metric",
+  "plugin.metrics_manager.settings.export_format": "Default Export Format",
+  "plugin.metrics_manager.settings.export_format_desc": "Format used when exporting metrics",
+  "plugin.metrics_manager.settings.show_system_metrics": "Show System Metrics",
+  "plugin.metrics_manager.settings.show_system_metrics_desc": "Display system-level metrics",
+  "plugin.metrics_manager.settings.show_plugin_metrics": "Show Plugin Metrics",
+  "plugin.metrics_manager.settings.show_plugin_metrics_desc": "Display metrics from other plugins",
+  "plugin.metrics_manager.settings.chart_type": "Default Chart Type",
+  "plugin.metrics_manager.settings.chart_type_desc": "Default visualization for metric charts"
+}

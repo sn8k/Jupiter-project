@@ -1,4 +1,4 @@
-// Version: 1.5.1 - Enforce no-store fetch and disable browser caching for the Web UI.
+// Version: 1.7.2 - Plugin metrics endpoint fixes + API base exposure for plugins
 
 const state = {
   isScanning: false,
@@ -46,7 +46,8 @@ const state = {
     functions: { key: 'calls', dir: 'desc' }
   },
   activeProjectId: null,
-  projects: []
+  projects: [],
+  developerMode: false  // Developer mode flag for hot reload features
 };
 
 // Force all requests to bypass browser caches to avoid serving stale UI assets.
@@ -462,8 +463,30 @@ function handleApiStatusChange(isOnline) {
 }
 
 function translateUI() {
+  // Emoji pattern to detect if label already contains an icon
+  const emojiPattern = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
+  
   document.querySelectorAll("[data-i18n]").forEach((el) => {
-    el.textContent = t(el.dataset.i18n);
+    // For plugin nav buttons, handle icon and label separately
+    if (el.classList.contains('nav-btn') && el.dataset.pluginView) {
+      const iconSpan = el.querySelector('.plugin-icon');
+      const labelSpan = el.querySelector('.plugin-label');
+      if (labelSpan) {
+        const translatedLabel = t(el.dataset.i18n);
+        const labelHasEmoji = emojiPattern.test(translatedLabel);
+        
+        if (labelHasEmoji) {
+          // Translation includes emoji - clear icon span, use full translation as label
+          if (iconSpan) iconSpan.textContent = '';
+          labelSpan.textContent = translatedLabel;
+        } else {
+          // Translation has no emoji - keep existing icon
+          labelSpan.textContent = translatedLabel;
+        }
+      }
+    } else {
+      el.textContent = t(el.dataset.i18n);
+    }
   });
   renderReport(state.report);
 }
@@ -493,9 +516,8 @@ const DEFAULT_API_BASE = "http://127.0.0.1:8000";
 function inferApiBaseUrl() {
   if (state.context?.api_base_url) return state.context.api_base_url;
   const { origin } = window.location;
-  if (origin.includes(":8050")) {
-    return origin.replace(":8050", ":8000");
-  }
+  if (origin.includes(":8050")) return origin.replace(":8050", ":8000");
+  if (origin.includes(":8081")) return origin.replace(":8081", ":8000");
   return DEFAULT_API_BASE;
 }
 
@@ -522,26 +544,61 @@ async function startScan(options = {}) {
     ...options,
   };
 
+  // Use background scan by default for better UX
+  const useBackground = options.background !== false;
+
   try {
     const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
-    const response = await apiFetch(`${apiBaseUrl}/scan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    
+    if (useBackground) {
+      // Start background scan
+      const response = await apiFetch(`${apiBaseUrl}/scan/background`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`${t("scan_error_server")} (${response.status}): ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`${t("scan_error_server")} (${response.status}): ${errorText}`);
+      }
+
+      const result = await response.json();
+      state.currentScanJobId = result.job_id;
+      addLog(`${t("scan_background_started") || "Background scan started"} (Job: ${result.job_id})`);
+      
+      // Poll for completion or rely on WebSocket
+      pollScanStatus(result.job_id);
+      
+    } else {
+      // Synchronous scan (legacy behavior)
+      const response = await apiFetch(`${apiBaseUrl}/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`${t("scan_error_server")} (${response.status}): ${errorText}`);
+      }
+
+      const report = await response.json();
+      console.log("Scan report received:", report);
+      report.last_scan_timestamp = Date.now() / 1000;
+      renderReport(report);
+      addLog(t("scan_complete_log"));
+      pushLiveEvent(t("scan_button"), t("scan_live_event_complete"));
+      await loadSnapshots(true);
+      
+      // Reset UI for sync scan
+      state.isScanning = false;
+      scanButtons.forEach(btn => {
+        btn.disabled = false;
+        const textElement = btn.classList.contains('primary') ? btn : btn.querySelector('.label');
+        if(textElement) textElement.textContent = t("scan_button");
+      });
     }
-
-    const report = await response.json();
-    console.log("Scan report received:", report);
-    report.last_scan_timestamp = Date.now() / 1000;
-    renderReport(report);
-    addLog(t("scan_complete_log"));
-    pushLiveEvent(t("scan_button"), t("scan_live_event_complete"));
-    await loadSnapshots(true);
   } catch (error) {
     console.error("Error during scan:", error);
     let errorMessage = error.message;
@@ -550,7 +607,8 @@ async function startScan(options = {}) {
     }
     addLog(`${t("scan_error_log")}: ${errorMessage}`, "ERROR");
     alert(`${t("scan_failed_alert")}: ${errorMessage}`);
-  } finally {
+    
+    // Reset UI on error
     state.isScanning = false;
     scanButtons.forEach(btn => {
       btn.disabled = false;
@@ -558,6 +616,80 @@ async function startScan(options = {}) {
       if(textElement) textElement.textContent = t("scan_button");
     });
   }
+}
+
+/**
+ * Poll for background scan status until complete
+ */
+async function pollScanStatus(jobId) {
+  const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+  const scanButtons = document.querySelectorAll('[data-action="start-scan"]');
+  
+  const poll = async () => {
+    try {
+      const response = await apiFetch(`${apiBaseUrl}/scan/status/${jobId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to get scan status: ${response.status}`);
+      }
+      
+      const status = await response.json();
+      
+      // Update progress in UI
+      if (status.status === "running") {
+        const progressText = status.current_file 
+          ? `${status.progress}% - ${status.current_file}`
+          : `${status.progress}%`;
+        scanButtons.forEach(btn => {
+          const textElement = btn.classList.contains('primary') ? btn : btn.querySelector('.label');
+          if(textElement) textElement.textContent = `${t("scan_in_progress")} ${progressText}`;
+        });
+        addLog(`${t("scan_progress") || "Scan progress"}: ${status.files_processed}/${status.files_total} (${status.progress}%)`, "DEBUG");
+        
+        // Continue polling
+        setTimeout(poll, 500);
+        
+      } else if (status.status === "completed") {
+        // Scan completed - fetch the result
+        const resultResponse = await apiFetch(`${apiBaseUrl}/scan/result/${jobId}`);
+        if (resultResponse.ok) {
+          const report = await resultResponse.json();
+          report.last_scan_timestamp = Date.now() / 1000;
+          renderReport(report);
+          addLog(`${t("scan_complete_log")} (${status.duration_ms}ms)`);
+          pushLiveEvent(t("scan_button"), t("scan_live_event_complete"));
+          await loadSnapshots(true);
+        }
+        
+        // Reset UI
+        state.isScanning = false;
+        state.currentScanJobId = null;
+        scanButtons.forEach(btn => {
+          btn.disabled = false;
+          const textElement = btn.classList.contains('primary') ? btn : btn.querySelector('.label');
+          if(textElement) textElement.textContent = t("scan_button");
+        });
+        
+      } else if (status.status === "failed") {
+        throw new Error(status.error || "Scan failed");
+      }
+      
+    } catch (error) {
+      console.error("Error polling scan status:", error);
+      addLog(`${t("scan_error_log")}: ${error.message}`, "ERROR");
+      
+      // Reset UI on error
+      state.isScanning = false;
+      state.currentScanJobId = null;
+      scanButtons.forEach(btn => {
+        btn.disabled = false;
+        const textElement = btn.classList.contains('primary') ? btn : btn.querySelector('.label');
+        if(textElement) textElement.textContent = t("scan_button");
+      });
+    }
+  };
+  
+  // Start polling
+  setTimeout(poll, 200);
 }
 
 function handleAction(action, data) {
@@ -715,6 +847,9 @@ function handleAction(action, data) {
       break;
     case "restart-plugin":
       restartPlugin(data.pluginName);
+      break;
+    case "hot-reload-plugin":
+      hotReloadPlugin(data.pluginName);
       break;
     case "refresh-snapshots":
       loadSnapshots(true);
@@ -1233,6 +1368,14 @@ async function loadSettings() {
             
             // Security
             if (document.getElementById("conf-sec-allow-run")) document.getElementById("conf-sec-allow-run").checked = config.sec_allow_run !== false;
+
+            // Developer mode - store in state for hot reload features
+            state.developerMode = config.developer_mode || false;
+            
+            // Update developer mode checkbox if present
+            if (document.getElementById("conf-dev-mode")) {
+                document.getElementById("conf-dev-mode").checked = state.developerMode;
+            }
 
             // Load Users
             loadUsers();
@@ -3171,15 +3314,28 @@ function getCircuitBreakerBadge(plugin) {
  * Shows request count, error count, last activity for each plugin
  */
 async function fetchPluginMetrics(pluginName) {
-  if (!state.apiBaseUrl) return null;
-  
-  try {
-    const response = await apiFetch(`${state.apiBaseUrl}/plugins/${pluginName}/metrics`);
-    if (response.ok) {
-      return await response.json();
+  const apiBase = state.apiBaseUrl || inferApiBaseUrl();
+  if (!apiBase) return null;
+
+  const endpoints = [
+    `${apiBase}/plugins/v2/${pluginName}/metrics`
+  ];
+
+  // Legacy autodiag path as fallback
+  if (pluginName === 'autodiag') {
+    endpoints.push(`${apiBase}/api/plugins/autodiag/metrics`);
+  }
+
+  for (const url of endpoints) {
+    try {
+      const response = await apiFetch(url);
+      if (response.ok) {
+        return await response.json();
+      }
+      if (response.status === 404) continue;
+    } catch (e) {
+      console.debug(`Metrics not available for plugin ${pluginName} at ${url}:`, e.message);
     }
-  } catch (e) {
-    console.debug(`Metrics not available for plugin ${pluginName}:`, e.message);
   }
   return null;
 }
@@ -3323,6 +3479,11 @@ function renderPluginList(plugins) {
             <span class="plugin-status ${statusClass}">● ${statusText}</span>
         </div>
         <div class="plugin-actions">
+          ${state.developerMode && plugin.restartable !== false ? `
+          <button class="ghost small hot-reload-btn" data-action="hot-reload-plugin" data-plugin-name="${plugin.name}" title="${t('plugin_hot_reload_tooltip') || 'Hot reload plugin (dev mode)'}">
+              🔥
+          </button>
+          ` : ''}
           ${plugin.restartable !== false ? `
           <button class="ghost small" data-action="restart-plugin" data-plugin-name="${plugin.name}" title="${t('plugin_restart_tooltip') || 'Restart plugin'}">
               🔄
@@ -3421,6 +3582,50 @@ async function restartPlugin(name) {
     }
 }
 
+/**
+ * Hot reload a plugin (developer mode only)
+ * This reloads the plugin code from disk without a full restart.
+ */
+async function hotReloadPlugin(name) {
+    if (!state.apiBaseUrl) return;
+    
+    // Double-check developer mode
+    if (!state.developerMode) {
+        addLog(`Hot reload requires developer mode - enable it in settings`, "warning");
+        return;
+    }
+    
+    try {
+        addLog(`Hot reloading plugin ${name}...`);
+        const response = await apiFetch(`${state.apiBaseUrl}/plugins/v2/${name}/reload`, { method: "POST" });
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                addLog(`Plugin ${name} hot reloaded successfully (${result.duration_ms?.toFixed(0) || 0}ms)`);
+                if (result.old_version && result.new_version && result.old_version !== result.new_version) {
+                    addLog(`  Version changed: ${result.old_version} → ${result.new_version}`);
+                }
+                fetchPlugins(); // Refresh list
+                // Clear loaded views cache
+                pluginUIState.loadedViews.clear();
+                pluginUIState.loadedSettings.clear();
+                loadPluginMenus();
+            } else {
+                addLog(`Hot reload failed for ${name}: ${result.error || 'Unknown error'}`, "error");
+                if (result.phase) {
+                    addLog(`  Failed at phase: ${result.phase}`, "error");
+                }
+            }
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            addLog(`Failed to hot reload plugin ${name}: ${errorData.detail || response.status}`, "error");
+        }
+    } catch (e) {
+        console.error("Failed to hot reload plugin", e);
+        addLog(`Error hot reloading plugin ${name}: ${e.message}`, "error");
+    }
+}
+
 async function reloadAllPlugins() {
     if (!state.apiBaseUrl) return;
     try {
@@ -3478,11 +3683,13 @@ function openInstallPluginModal() {
     const successDiv = document.getElementById("install-plugin-success");
     const urlSection = document.getElementById("install-url-section");
     const fileSection = document.getElementById("install-file-section");
+    const permissionsDiv = document.getElementById("install-plugin-permissions");
     
     if (urlInput) urlInput.value = "";
     if (fileInput) fileInput.value = "";
     if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
     if (successDiv) { successDiv.textContent = ""; successDiv.classList.add("hidden"); }
+    if (permissionsDiv) permissionsDiv.classList.add("hidden");
     
     // Reset tabs
     if (urlSection) urlSection.classList.remove("hidden");
@@ -3503,10 +3710,178 @@ function openInstallPluginModal() {
                 urlSection.classList.add("hidden");
                 fileSection.classList.remove("hidden");
             }
+            // Hide permissions when switching tabs
+            if (permissionsDiv) permissionsDiv.classList.add("hidden");
         };
     });
     
+    // Add URL change listener to preview permissions
+    if (urlInput) {
+        urlInput.addEventListener("change", previewPluginPermissions);
+        urlInput.addEventListener("blur", previewPluginPermissions);
+    }
+    
+    // Add file change listener to preview permissions
+    if (fileInput) {
+        fileInput.addEventListener("change", previewPluginPermissionsFromFile);
+    }
+    
     modal.showModal();
+}
+
+/**
+ * Preview plugin permissions from URL
+ */
+async function previewPluginPermissions() {
+    const urlInput = document.getElementById("install-plugin-url");
+    const permissionsDiv = document.getElementById("install-plugin-permissions");
+    const permissionsList = document.getElementById("install-plugin-permissions-list");
+    
+    if (!urlInput || !permissionsDiv || !permissionsList) return;
+    
+    const url = urlInput.value.trim();
+    if (!url || !state.apiBaseUrl) {
+        permissionsDiv.classList.add("hidden");
+        return;
+    }
+    
+    try {
+        // Try to fetch plugin manifest to preview permissions
+        const response = await apiFetch(`${state.apiBaseUrl}/plugins/preview`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url })
+        });
+        
+        if (response.ok) {
+            const manifest = await response.json();
+            renderPluginPermissions(manifest, permissionsList, permissionsDiv);
+        } else {
+            // If preview not available, hide the section
+            permissionsDiv.classList.add("hidden");
+        }
+    } catch (e) {
+        console.warn("Could not preview plugin permissions:", e);
+        permissionsDiv.classList.add("hidden");
+    }
+}
+
+/**
+ * Preview plugin permissions from uploaded file
+ */
+async function previewPluginPermissionsFromFile() {
+    const fileInput = document.getElementById("install-plugin-file");
+    const permissionsDiv = document.getElementById("install-plugin-permissions");
+    const permissionsList = document.getElementById("install-plugin-permissions-list");
+    
+    if (!fileInput || !permissionsDiv || !permissionsList || !fileInput.files || !fileInput.files[0]) {
+        permissionsDiv.classList.add("hidden");
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    
+    try {
+        // Try to read manifest from ZIP file or parse permissions from .py file
+        if (file.name.endsWith(".zip") && typeof JSZip !== "undefined") {
+            const zip = await JSZip.loadAsync(file);
+            const manifestFile = zip.file(/plugin\.yaml$/i)[0] || zip.file(/plugin\.yml$/i)[0];
+            
+            if (manifestFile) {
+                const content = await manifestFile.async("text");
+                // Simple YAML parsing for permissions
+                const permissions = parsePermissionsFromYaml(content);
+                renderPluginPermissions({ permissions }, permissionsList, permissionsDiv);
+                return;
+            }
+        }
+        
+        // If we couldn't extract permissions, hide the section
+        permissionsDiv.classList.add("hidden");
+    } catch (e) {
+        console.warn("Could not preview plugin permissions from file:", e);
+        permissionsDiv.classList.add("hidden");
+    }
+}
+
+/**
+ * Parse permissions from YAML content (simple extraction)
+ */
+function parsePermissionsFromYaml(yamlContent) {
+    const permissions = [];
+    const lines = yamlContent.split('\n');
+    let inPermissions = false;
+    
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('permissions:')) {
+            inPermissions = true;
+            continue;
+        }
+        if (inPermissions) {
+            if (trimmed.startsWith('-')) {
+                const perm = trimmed.replace(/^-\s*/, '').trim();
+                if (perm) permissions.push(perm);
+            } else if (!trimmed.startsWith(' ') && trimmed !== '' && !trimmed.startsWith('#')) {
+                break;
+            }
+        }
+    }
+    
+    return permissions;
+}
+
+/**
+ * Render plugin permissions in the modal
+ */
+function renderPluginPermissions(manifest, listElement, containerElement) {
+    if (!manifest || !listElement || !containerElement) return;
+    
+    const permissions = manifest.permissions || [];
+    
+    if (permissions.length === 0) {
+        containerElement.classList.add("hidden");
+        return;
+    }
+    
+    // Permission descriptions and icons
+    const permissionInfo = {
+        'file_read': { icon: '📖', label: t('perm_file_read') || 'Read files', risk: 'low' },
+        'file_write': { icon: '✏️', label: t('perm_file_write') || 'Write files', risk: 'medium' },
+        'file_delete': { icon: '🗑️', label: t('perm_file_delete') || 'Delete files', risk: 'high' },
+        'network': { icon: '🌐', label: t('perm_network') || 'Network access', risk: 'medium' },
+        'system_exec': { icon: '⚙️', label: t('perm_system_exec') || 'Execute system commands', risk: 'high' },
+        'config_read': { icon: '⚙️', label: t('perm_config_read') || 'Read configuration', risk: 'low' },
+        'config_write': { icon: '⚙️', label: t('perm_config_write') || 'Modify configuration', risk: 'medium' },
+        'meeting_access': { icon: '🔗', label: t('perm_meeting_access') || 'Access Meeting service', risk: 'low' },
+        'emit_events': { icon: '📢', label: t('perm_emit_events') || 'Emit events', risk: 'low' },
+        'subscribe_events': { icon: '👂', label: t('perm_subscribe_events') || 'Subscribe to events', risk: 'low' }
+    };
+    
+    // Risk level colors
+    const riskColors = {
+        'low': 'var(--success)',
+        'medium': 'var(--warning)',
+        'high': 'var(--danger)'
+    };
+    
+    // Build permission list HTML
+    listElement.innerHTML = permissions.map(perm => {
+        const info = permissionInfo[perm] || { icon: '🔒', label: perm, risk: 'medium' };
+        const riskColor = riskColors[info.risk] || riskColors.medium;
+        
+        return `
+            <div class="permission-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--panel-contrast); border-radius: 6px;">
+                <span style="font-size: 1.1rem;">${info.icon}</span>
+                <span style="flex: 1;">${info.label}</span>
+                <span class="permission-risk" style="font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 4px; background: color-mix(in srgb, ${riskColor} 20%, transparent); color: ${riskColor};">
+                    ${info.risk}
+                </span>
+            </div>
+        `;
+    }).join('');
+    
+    containerElement.classList.remove("hidden");
 }
 
 /**
@@ -3813,10 +4188,39 @@ function injectPluginMenuItems() {
         btn.dataset.pluginView = plugin.name;
         btn.dataset.i18n = plugin.menu_label_key || plugin.name;
         
-        // Set icon and label
+        // Store v2 info for proper loading
+        if (plugin.v2) {
+            btn.dataset.v2 = 'true';
+            btn.dataset.route = plugin.route || '';
+        }
+        
+        // Get the translated label
+        let label = t(plugin.menu_label_key) || plugin.name;
         const icon = plugin.menu_icon || '🔌';
-        const label = t(plugin.menu_label_key) || plugin.name;
-        btn.textContent = `${icon} ${label}`;
+        
+        // Check if label already starts with an emoji (to avoid double icons)
+        // Emoji regex pattern - matches most common emojis at start of string
+        const emojiPattern = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
+        const labelHasEmoji = emojiPattern.test(label);
+        
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'plugin-icon';
+        
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'plugin-label';
+        
+        if (labelHasEmoji) {
+            // Label already has icon - use as-is, no separate icon
+            iconSpan.textContent = '';
+            labelSpan.textContent = label;
+        } else {
+            // Add icon separately
+            iconSpan.textContent = icon + ' ';
+            labelSpan.textContent = label;
+        }
+        
+        btn.appendChild(iconSpan);
+        btn.appendChild(labelSpan);
         
         // Insert before the marker
         marker.parentNode.insertBefore(btn, marker);
@@ -3862,17 +4266,129 @@ function bindPluginNavigation() {
         btn.addEventListener('click', () => {
             const viewId = btn.dataset.view;
             const pluginName = btn.dataset.pluginView;
+            const isV2 = btn.dataset.v2 === 'true';
             setView(viewId);
-            loadPluginViewContent(pluginName, viewId);
+            loadPluginViewContent(pluginName, viewId, isV2);
         });
     });
 }
 
 /**
- * Load and inject plugin view content (HTML + JS)
+ * Create a bridge object for v2 plugins
+ * This provides the interface expected by mount(container, bridge)
+ * @param {string} pluginName - The plugin ID
+ * @param {Object} pluginTranslations - Plugin-specific translations (optional)
  */
-async function loadPluginViewContent(pluginName, viewId) {
-    if (pluginUIState.loadedViews.has(pluginName)) return;
+function createPluginBridge(pluginName, pluginTranslations = {}) {
+  const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+
+    // Create a translation function that checks plugin translations first, then global
+    const pluginT = (key) => {
+        // First check plugin-specific translations
+        if (pluginTranslations[key]) {
+            return pluginTranslations[key];
+        }
+        // Fall back to global translations
+        return t(key);
+    };
+    
+    return {
+        // i18n support with plugin-aware translation
+        i18n: {
+            t: pluginT,
+            lang: state.i18n.lang,
+            // Expose raw plugin translations for advanced use
+            pluginTranslations: pluginTranslations,
+        },
+        // API calls
+        api: {
+          baseUrl: apiBaseUrl,
+          fetch: async (path, options = {}) => {
+            const url = path.startsWith('http') ? path : `${apiBaseUrl}${path}`;
+            const response = await apiFetch(url, options);
+            if (!response.ok) {
+              let detail = '';
+              try {
+                detail = await response.json();
+              } catch (err) {
+                detail = await response.text().catch(() => '');
+              }
+              const message = typeof detail === 'object' ? (detail.detail || detail.message || JSON.stringify(detail)) : detail;
+              throw new Error(message || `HTTP ${response.status}`);
+            }
+            return response;
+          },
+          get: async (path) => {
+            const response = await apiFetch(`${apiBaseUrl}${path}`);
+            if (!response.ok) {
+              const detail = await response.json().catch(() => ({}));
+              throw new Error(detail.detail || detail.message || `HTTP ${response.status}`);
+            }
+            return response.json();
+          },
+          post: async (path, data) => {
+            const response = await apiFetch(`${apiBaseUrl}${path}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
+            });
+            if (!response.ok) {
+              const detail = await response.json().catch(() => ({}));
+              throw new Error(detail.detail || detail.message || `HTTP ${response.status}`);
+            }
+            return response.json();
+          },
+        },
+        // State access (read-only for now)
+        state: {
+            get report() { return state.report; },
+            get context() { return state.context; },
+            get theme() { return state.theme; },
+            get apiBaseUrl() { return state.apiBaseUrl; },
+        },
+        // Events
+        events: {
+            on: (event, callback) => {
+                // Simple event listener for plugin use
+                window.addEventListener(`jupiter-${event}`, (e) => callback(e.detail));
+            },
+            emit: (event, data) => {
+                window.dispatchEvent(new CustomEvent(`jupiter-${event}`, { detail: data }));
+            },
+        },
+        // Plugin config
+        config: {
+            get: async () => {
+                const resp = await apiFetch(`${state.apiBaseUrl}/plugins/v2/${pluginName}/config`);
+                return resp.ok ? resp.json() : {};
+            },
+            save: async (config) => {
+                const resp = await apiFetch(`${state.apiBaseUrl}/plugins/v2/${pluginName}/config`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config),
+                });
+                return resp.ok;
+            },
+        },
+        // Logging
+        log: {
+            debug: (...args) => console.debug(`[${pluginName}]`, ...args),
+            info: (...args) => console.log(`[${pluginName}]`, ...args),
+            warn: (...args) => console.warn(`[${pluginName}]`, ...args),
+            error: (...args) => console.error(`[${pluginName}]`, ...args),
+        },
+    };
+}
+
+/**
+ * Load and inject plugin view content (HTML + JS)
+ * For v2 plugins, uses the mount(container, bridge) pattern with ES modules.
+ */
+async function loadPluginViewContent(pluginName, viewId, isV2 = false) {
+    // Use viewId as key to allow multiple panels per plugin
+    const loadKey = `${pluginName}:${viewId}`;
+    if (pluginUIState.loadedViews.has(loadKey)) return;
     
     // Use more specific selector to get the section, not the button
     const section = document.querySelector(`section.view[data-view="${viewId}"]`);
@@ -3881,7 +4397,7 @@ async function loadPluginViewContent(pluginName, viewId) {
         return;
     }
     
-    console.log(`[PluginUI] Loading view for plugin: ${pluginName}, viewId: ${viewId}`);
+    console.log(`[PluginUI] Loading view for plugin: ${pluginName}, viewId: ${viewId}, v2: ${isV2}`);
     
     try {
         const response = await apiFetch(`${state.apiBaseUrl}/plugins/${pluginName}/ui`);
@@ -3894,54 +4410,111 @@ async function loadPluginViewContent(pluginName, viewId) {
         }
         
         const data = await response.json();
-        console.log(`[PluginUI] Data received:`, { hasHtml: !!data.html, hasJs: !!data.js, htmlLength: data.html?.length, jsLength: data.js?.length });
+        console.log(`[PluginUI] Data received:`, { hasHtml: !!data.html, hasJs: !!data.js, htmlLength: data.html?.length, jsLength: data.js?.length, v2: isV2 });
         
-        // Inject HTML
-        section.innerHTML = data.html || '<p>No HTML content</p>';
+        // Inject HTML container
+        section.innerHTML = data.html || '<div class="plugin-v2-container"></div>';
         
         // Force DOM update before JS execution
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         
         // Verify elements are in DOM
-        const testElement = section.querySelector('[id]');
-        console.log(`[PluginUI] First element with id in section:`, testElement?.id || 'none');
+        const container = section.querySelector('.plugin-v2-container, [id]');
+        console.log(`[PluginUI] Container found:`, container?.className || container?.id || 'none');
         
-        // Inject and execute JS
+        // Handle JS loading
         if (data.js) {
-            try {
-                const script = document.createElement('script');
-                script.textContent = data.js;
-                document.body.appendChild(script);
-                console.log(`[PluginUI] JS injected successfully`);
-            } catch (jsError) {
-                console.error(`[PluginUI] Error executing JS:`, jsError);
+            if (isV2) {
+                // V2 plugins use ES module pattern with mount(container, bridge)
+                try {
+                    // Load plugin translations first
+                    let pluginTranslations = {};
+                    try {
+                        const langResponse = await apiFetch(`${state.apiBaseUrl}/plugins/${pluginName}/lang/${state.i18n.lang}`);
+                        if (langResponse.ok) {
+                            const langData = await langResponse.json();
+                            pluginTranslations = langData.translations || {};
+                            console.log(`[PluginUI] Loaded ${Object.keys(pluginTranslations).length} translations for ${pluginName}`);
+                        }
+                    } catch (langError) {
+                        console.debug(`[PluginUI] No translations found for ${pluginName}:`, langError.message);
+                    }
+                    
+                    // Create a blob URL from the JS content for dynamic import
+                    const blob = new Blob([data.js], { type: 'application/javascript' });
+                    const moduleUrl = URL.createObjectURL(blob);
+                    
+                    // Dynamically import the module
+                    const module = await import(moduleUrl);
+                    
+                    // Clean up the blob URL
+                    URL.revokeObjectURL(moduleUrl);
+                    
+                    // Find mount target (prefer .plugin-v2-container)
+                    const mountTarget = section.querySelector('.plugin-v2-container') || 
+                                        section.querySelector(`#plugin-${pluginName}-container`) ||
+                                        section;
+                    
+                    // Create bridge with plugin translations and call mount
+                    if (typeof module.mount === 'function') {
+                        const bridge = createPluginBridge(pluginName, pluginTranslations);
+                        console.log(`[PluginUI] Calling v2 mount() for ${pluginName}`);
+                        module.mount(mountTarget, bridge);
+                    } else {
+                        console.warn(`[PluginUI] v2 module does not export mount(): ${pluginName}`);
+                        // Fallback: maybe it has default export or init
+                        if (module.default && typeof module.default === 'function') {
+                            module.default(mountTarget, createPluginBridge(pluginName, pluginTranslations));
+                        }
+                    }
+                    
+                    console.log(`[PluginUI] v2 JS module loaded successfully`);
+                } catch (moduleError) {
+                    console.error(`[PluginUI] Error loading v2 module:`, moduleError);
+                    // Fallback to legacy injection
+                    console.log(`[PluginUI] Falling back to legacy script injection`);
+                    const script = document.createElement('script');
+                    script.textContent = data.js;
+                    document.body.appendChild(script);
+                }
+            } else {
+                // Legacy plugins: inject as script tag
+                try {
+                    const script = document.createElement('script');
+                    script.textContent = data.js;
+                    document.body.appendChild(script);
+                    console.log(`[PluginUI] Legacy JS injected successfully`);
+                } catch (jsError) {
+                    console.error(`[PluginUI] Error executing JS:`, jsError);
+                }
             }
         }
         
         // Apply i18n to new content
         translateUI();
         
-        // Initialize the plugin view after HTML and JS are ready
-        // Uses requestAnimationFrame to ensure DOM is fully updated
-        requestAnimationFrame(() => {
-            const initFnName = `${pluginName.replace(/-/g, '_')}View`;
-            if (window[initFnName] && typeof window[initFnName].init === 'function') {
-                console.log(`[PluginUI] Calling ${initFnName}.init()`);
-                window[initFnName].init();
-            } else {
-                // Try common naming patterns
-                const patterns = ['pylanceView', 'webhookView'];
-                for (const pattern of patterns) {
-                    if (window[pattern] && typeof window[pattern].init === 'function') {
-                        console.log(`[PluginUI] Calling ${pattern}.init()`);
-                        window[pattern].init();
-                        break;
+        // For legacy plugins, try to call init function
+        if (!isV2) {
+            requestAnimationFrame(() => {
+                const initFnName = `${pluginName.replace(/-/g, '_')}View`;
+                if (window[initFnName] && typeof window[initFnName].init === 'function') {
+                    console.log(`[PluginUI] Calling ${initFnName}.init()`);
+                    window[initFnName].init();
+                } else {
+                    // Try common naming patterns
+                    const patterns = ['pylanceView', 'webhookView'];
+                    for (const pattern of patterns) {
+                        if (window[pattern] && typeof window[pattern].init === 'function') {
+                            console.log(`[PluginUI] Calling ${pattern}.init()`);
+                            window[pattern].init();
+                            break;
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
         
-        pluginUIState.loadedViews.add(pluginName);
+        pluginUIState.loadedViews.add(loadKey);
         console.log(`[PluginUI] View loaded successfully for ${pluginName}`);
         
     } catch (e) {
@@ -3955,26 +4528,62 @@ async function loadPluginViewContent(pluginName, viewId) {
  */
 async function loadPluginSettings() {
     const container = document.getElementById('plugin-settings-container');
-    if (!container) return;
+    if (!container) {
+        console.warn("[PluginUI] plugin-settings-container not found");
+        return;
+    }
+    
+    // Check if we have API base URL and token
+    if (!state.apiBaseUrl) {
+        console.warn("[PluginUI] No API base URL, skipping settings load");
+        return;
+    }
+    
+    // Always reload settings plugins list when opening settings page
+    try {
+        const settingsResp = await apiFetch(`${state.apiBaseUrl}/plugins/settings`);
+        if (settingsResp.ok) {
+            pluginUIState.settingsPlugins = await settingsResp.json();
+            console.log(`[PluginUI] Loaded ${pluginUIState.settingsPlugins.length} settings plugins from API`);
+        } else {
+            console.warn("[PluginUI] Failed to load settings plugins, status:", settingsResp.status);
+        }
+    } catch (e) {
+        console.error("[PluginUI] Failed to load settings plugins list:", e);
+        // Don't return - try to use any cached plugins
+    }
+    
+    if (pluginUIState.settingsPlugins.length === 0) {
+        console.log("[PluginUI] No settings plugins to display");
+        return;
+    }
     
     // Clear previous settings
     container.innerHTML = '';
-  pluginUIState.loadedSettings.clear();
+    pluginUIState.loadedSettings.clear();
+    
+    console.log(`[PluginUI] Loading settings for ${pluginUIState.settingsPlugins.length} plugins`);
     
     for (const plugin of pluginUIState.settingsPlugins) {
+        console.log(`[PluginUI] Loading settings for ${plugin.name} (v2=${plugin.v2}, has_config=${plugin.has_config_schema})`);
         try {
             const response = await apiFetch(`${state.apiBaseUrl}/plugins/${plugin.name}/settings-ui`);
             if (!response.ok) continue;
             
             const data = await response.json();
             
-      if (data.html) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'plugin-settings-card';
-        wrapper.dataset.pluginSettings = plugin.name;
-        wrapper.innerHTML = data.html;
-        container.appendChild(wrapper);
-      }
+            if (data.html) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'plugin-settings-card';
+                wrapper.dataset.pluginSettings = plugin.name;
+                wrapper.innerHTML = data.html;
+                container.appendChild(wrapper);
+                
+                // For v2 plugins with config schema, initialize auto-form
+                if (plugin.v2 && plugin.has_config_schema) {
+                    await initializeV2SettingsForm(wrapper, plugin.name);
+                }
+            }
             
             // Inject and execute JS
             if (data.js) {
@@ -3992,6 +4601,153 @@ async function loadPluginSettings() {
     
     // Apply i18n to new content
     translateUI();
+}
+
+/**
+ * Initialize auto-generated settings form for v2 plugins
+ */
+async function initializeV2SettingsForm(container, pluginName) {
+    console.log(`[PluginUI] initializeV2SettingsForm for ${pluginName}`);
+    const settingsDiv = container.querySelector('.plugin-v2-settings');
+    if (!settingsDiv) {
+        console.warn(`[PluginUI] No .plugin-v2-settings found for ${pluginName}`);
+        return;
+    }
+    
+    const schema = settingsDiv.dataset.schema;
+    if (!schema) {
+        console.warn(`[PluginUI] No data-schema found for ${pluginName}`);
+        return;
+    }
+    
+    console.log(`[PluginUI] Schema for ${pluginName}:`, schema.substring(0, 100) + '...');
+    
+    try {
+        const schemaObj = JSON.parse(schema);
+        const formContainer = settingsDiv.querySelector('.auto-form-container');
+        if (!formContainer) {
+            console.warn(`[PluginUI] No .auto-form-container found for ${pluginName}`);
+            return;
+        }
+        
+        // Get current config
+        console.log(`[PluginUI] Fetching config for ${pluginName}...`);
+        const configResp = await apiFetch(`${state.apiBaseUrl}/plugins/v2/${pluginName}/config`);
+        let currentConfig = {};
+        if (configResp.ok) {
+            const configData = await configResp.json();
+            currentConfig = configData.config || {};
+            console.log(`[PluginUI] Got config for ${pluginName}:`, currentConfig);
+        } else {
+            console.warn(`[PluginUI] Failed to get config for ${pluginName}, status:`, configResp.status);
+        }
+        
+        // Generate form from schema
+        const formHtml = generateFormFromSchema(schemaObj, currentConfig, pluginName);
+        console.log(`[PluginUI] Generated form HTML for ${pluginName}, length:`, formHtml.length);
+        formContainer.innerHTML = formHtml;
+        
+        // Add save handler
+        const saveBtn = formContainer.querySelector('.settings-save-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => saveV2PluginSettings(pluginName, formContainer));
+        }
+        
+        console.log(`[PluginUI] V2 settings form initialized for ${pluginName}`);
+        
+    } catch (e) {
+        console.error(`[PluginUI] Failed to init v2 settings form for ${pluginName}:`, e);
+    }
+}
+
+/**
+ * Generate HTML form from JSON schema
+ */
+function generateFormFromSchema(schema, values, pluginName) {
+    if (!schema.properties) return '<p>No configurable properties</p>';
+    
+    let html = '<div class="settings-form">';
+    
+    for (const [key, prop] of Object.entries(schema.properties)) {
+        const value = values[key] !== undefined ? values[key] : (prop.default !== undefined ? prop.default : '');
+        const inputId = `${pluginName}-${key}`;
+        
+        html += `<div class="form-group">`;
+        html += `<label for="${inputId}">${prop.title || key}</label>`;
+        
+        if (prop.type === 'boolean') {
+            html += `<input type="checkbox" id="${inputId}" name="${key}" ${value ? 'checked' : ''}>`;
+        } else if (prop.type === 'integer' || prop.type === 'number') {
+            html += `<input type="number" id="${inputId}" name="${key}" value="${value}">`;
+        } else if (prop.enum) {
+            html += `<select id="${inputId}" name="${key}">`;
+            for (const opt of prop.enum) {
+                html += `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`;
+            }
+            html += `</select>`;
+        } else if (prop.type === 'array') {
+            // Simple array input as comma-separated
+            const arrValue = Array.isArray(value) ? value.join(', ') : '';
+            html += `<input type="text" id="${inputId}" name="${key}" value="${arrValue}" placeholder="comma-separated values">`;
+        } else {
+            // Default: text input
+            const inputType = key.toLowerCase().includes('password') || key.toLowerCase().includes('key') ? 'password' : 'text';
+            html += `<input type="${inputType}" id="${inputId}" name="${key}" value="${value}">`;
+        }
+        
+        if (prop.description) {
+            html += `<small class="form-help">${prop.description}</small>`;
+        }
+        
+        html += `</div>`;
+    }
+    
+    html += `<button type="button" class="settings-save-btn primary-btn">${t('save') || 'Save'}</button>`;
+    html += '</div>';
+    
+    return html;
+}
+
+/**
+ * Save v2 plugin settings
+ */
+async function saveV2PluginSettings(pluginName, formContainer) {
+    const inputs = formContainer.querySelectorAll('input, select');
+    const config = {};
+    
+    inputs.forEach(input => {
+        const name = input.name;
+        if (!name) return;
+        
+        if (input.type === 'checkbox') {
+            config[name] = input.checked;
+        } else if (input.type === 'number') {
+            config[name] = parseFloat(input.value) || 0;
+        } else if (input.value.includes(',')) {
+            // Might be an array
+            config[name] = input.value.split(',').map(s => s.trim()).filter(s => s);
+        } else {
+            config[name] = input.value;
+        }
+    });
+    
+    try {
+        const resp = await apiFetch(`${state.apiBaseUrl}/plugins/v2/${pluginName}/config`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config }),
+        });
+        
+        if (resp.ok) {
+            showToast(t('settings_saved') || 'Settings saved');
+        } else {
+            const err = await resp.json();
+            showToast(t('error') + ': ' + (err.detail || 'Save failed'), 'error');
+        }
+    } catch (e) {
+        console.error(`[PluginUI] Failed to save settings for ${pluginName}:`, e);
+        showToast(t('error') + ': ' + e.message, 'error');
+    }
 }
 
 // --- Projects Management ---
@@ -5106,8 +5862,11 @@ function setView(view) {
     // Plugin view - handled by loadPluginViewContent in bindPluginNavigation
     const pluginSection = document.querySelector(`section.view[data-view="${view}"]`);
     const pluginName = pluginSection?.dataset?.pluginName;
+    // Get v2 flag from the nav button
+    const navBtn = document.querySelector(`.nav-btn[data-view="${view}"]`);
+    const isV2 = navBtn?.dataset?.v2 === 'true';
     if (pluginName) {
-      loadPluginViewContent(pluginName, view);
+      loadPluginViewContent(pluginName, view, isV2);
     }
   }
 }
@@ -5427,7 +6186,14 @@ function connectWebSocket() {
             state.watch.phase = "scanning";
             state.watch.progress = 0;
             state.watch.filesScanned = 0;
-            addWatchEvent("SCAN", `Scan démarré: ${payload.root || ""}`, "success");
+            
+            // Handle background scan indicator
+            if (payload.background && payload.job_id) {
+              state.currentScanJobId = payload.job_id;
+              addWatchEvent("SCAN", `Background scan started (Job: ${payload.job_id})`, "success");
+            } else {
+              addWatchEvent("SCAN", `Scan démarré: ${payload.root || ""}`, "success");
+            }
             updateWatchProgress(0, "Scan en cours...");
             break;
           }
@@ -5437,6 +6203,19 @@ function connectWebSocket() {
             state.watch.phase = payload.phase || "scanning";
             state.watch.progress = payload.percent || 0;
             state.watch.totalEvents++;
+            
+            // Update scan button text if background scan
+            if (payload.job_id && state.isScanning) {
+              const scanButtons = document.querySelectorAll('[data-action="start-scan"]');
+              const progressText = payload.current_file 
+                ? `${payload.percent}% - ${payload.current_file}`
+                : `${payload.percent}%`;
+              scanButtons.forEach(btn => {
+                const textElement = btn.classList.contains('primary') ? btn : btn.querySelector('.label');
+                if(textElement) textElement.textContent = `${t("scan_in_progress")} ${progressText}`;
+              });
+            }
+            
             updateWatchProgress(payload.percent, `Phase: ${payload.phase || "scanning"}`);
             break;
           }
@@ -5482,7 +6261,42 @@ function connectWebSocket() {
             const payload = parsed.payload || {};
             state.watch.phase = "completed";
             state.watch.progress = 100;
-            addWatchEvent("SCAN", `Terminé: ${payload.file_count || 0} fichiers`, "success");
+            
+            // Handle background scan completion via WebSocket
+            if (payload.background && payload.job_id && state.currentScanJobId === payload.job_id) {
+              addWatchEvent("SCAN", `Background scan terminé: ${payload.file_count || 0} fichiers (${payload.duration_ms}ms)`, "success");
+              
+              // Fetch and render the result
+              (async () => {
+                try {
+                  const apiBaseUrl = state.apiBaseUrl || inferApiBaseUrl();
+                  const resultResponse = await apiFetch(`${apiBaseUrl}/scan/result/${payload.job_id}`);
+                  if (resultResponse.ok) {
+                    const report = await resultResponse.json();
+                    report.last_scan_timestamp = Date.now() / 1000;
+                    renderReport(report);
+                    addLog(`${t("scan_complete_log")} (${payload.duration_ms}ms)`);
+                    pushLiveEvent(t("scan_button"), t("scan_live_event_complete"));
+                    await loadSnapshots(true);
+                  }
+                } catch (e) {
+                  console.error("Failed to fetch background scan result:", e);
+                }
+                
+                // Reset UI
+                state.isScanning = false;
+                state.currentScanJobId = null;
+                const scanButtons = document.querySelectorAll('[data-action="start-scan"]');
+                scanButtons.forEach(btn => {
+                  btn.disabled = false;
+                  const textElement = btn.classList.contains('primary') ? btn : btn.querySelector('.label');
+                  if(textElement) textElement.textContent = t("scan_button");
+                });
+              })();
+            } else {
+              addWatchEvent("SCAN", `Terminé: ${payload.file_count || 0} fichiers`, "success");
+            }
+            
             updateWatchProgress(100, "Scan terminé");
             updateWatchStats();
             
@@ -6070,6 +6884,9 @@ async function init() {
   renderDiagnostics(state.report);
   renderStatusBadges(state.report);
   
+  // Start loading plugin menus early (non-blocking)
+  const pluginMenusPromise = loadPluginMenus();
+  
   await loadContext();
   const versionLabel = state.context?.jupiter_version ? `v${state.context.jupiter_version}` : "v—";
   addLog(`App initialized ${versionLabel}`, "INFO");
@@ -6077,9 +6894,15 @@ async function init() {
   if (!state.report) {
     await loadCachedReport(); // Fallback if no project was active
   }
-  await fetchBackends(); // Fetch backends early
-  await refreshApiEndpoints(); // Fetch API endpoints (may be missing from cached report)
-  await loadPluginMenus(); // Load dynamic plugin menu items
+  
+  // Run these in parallel for faster startup
+  await Promise.all([
+    fetchBackends(),
+    refreshApiEndpoints(),
+    pluginMenusPromise, // Ensure plugin menus are loaded
+  ]);
+  
+  // These can run without blocking
   fetchMeetingStatus();
   fetchWatchStatus(); // Fetch watch state to sync button with server
   connectWebSocket();

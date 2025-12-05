@@ -1,4 +1,70 @@
-# Changelog – jupiter/plugins/livemap.py
+# Changelog – jupiter/plugins/livemap/
+
+## [0.3.2] - Added API Router for Graph Endpoint
+
+### Fixed
+- Fixed 404 error when loading graph in WebUI
+- The `/plugins/livemap/graph` endpoint was relying on deprecated PluginManager
+- Added proper Bridge v2 API contribution with FastAPI router
+
+### Added
+- `server/__init__.py` - Server module initialization
+- `server/api.py` - FastAPI router with `/graph`, `/config` endpoints
+- API router is now registered via Bridge v2 plugin system
+
+### Changed
+- Updated `plugin.yaml` to declare `api.router` contribution
+- Router mounted at `/plugins/livemap` prefix (matches existing JS calls)
+- Updated version to 0.3.2
+
+### Technical Details
+- The graph endpoint now uses `jupiter.plugins.livemap.build_graph()` directly
+- Fallback to connector scan if cache is empty
+- Proper error handling with HTTPException
+
+---
+
+## [0.3.1] - plugin.yaml Schema Compliance Fix
+
+### Fixed
+- Rewrote `plugin.yaml` for JSON schema compliance
+- Added required `type: tool` field
+- Added required `jupiter_version: ">=1.8.0"` field
+- Proper `capabilities` object structure (was array)
+- Proper `ui.panels` array structure
+- Proper `entrypoints` object (init, shutdown only)
+- Proper `config.defaults` object
+
+---
+
+## [0.3.0] - Migrated to Bridge v2 Structure
+
+### Changed
+- Migrated from legacy `jupiter/core/graph.py` and `jupiter/plugins/livemap.py` to Bridge v2 plugin structure
+- Split into `__init__.py` (lifecycle), `core/graph.py` (logic), `web/ui.py` (templates)
+- Added `plugin.yaml` manifest with complete metadata
+- Uses `bridge.services.get_logger()` for logging
+- UI type: `both` (sidebar + settings)
+
+### Added
+- `plugin.yaml` manifest v0.3.0 with full Bridge v2 metadata
+- `core/graph.py` with `GraphNode`, `GraphEdge`, `DependencyGraph`, `GraphBuilder` classes
+- `core/__init__.py` module exports
+- `web/ui.py` with D3.js-based interactive visualization
+- `web/lang/en.json` and `web/lang/fr.json` i18n files
+
+### Technical Details
+- Plugin ID: `livemap`
+- View ID: `livemap`
+- Interactive D3.js force-directed graph
+- Node coloring by file type (py=green, js/ts=blue, etc.)
+- Zoom, pan, and node selection features
+
+### Deprecation
+- `jupiter/core/graph.py` is now deprecated and shows warning
+- Legacy import path still works via shim for backward compatibility
+
+---
 
 ## v0.3.0 (2024-12-03)
 

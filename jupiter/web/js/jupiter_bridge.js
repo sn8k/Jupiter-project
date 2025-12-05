@@ -1,7 +1,7 @@
 /**
  * Jupiter Bridge - Frontend API for Plugin Development
  * 
- * Version: 0.1.0
+ * Version: 0.1.2
  * 
  * Provides a unified API for plugins to interact with Jupiter's
  * frontend and backend services. Exposed as window.jupiterBridge.
@@ -20,7 +20,7 @@
 (function(global) {
     'use strict';
 
-    const VERSION = '0.1.0';
+    const VERSION = '0.1.2';
 
     // =============================================================================
     // INTERNAL STATE
@@ -39,11 +39,44 @@
         requestIdCounter: 0
     };
 
+    /**
+     * Infer the API base URL when none is provided.
+     * - Prefer explicit options
+     * - Then global.state.apiBaseUrl if the page injected it
+     * - Otherwise map the GUI port (8050) to the API port (8000)
+     */
+    function inferApiBaseUrl(options = {}) {
+        if (options.apiBaseUrl) return options.apiBaseUrl;
+        if (global.state?.apiBaseUrl) return global.state.apiBaseUrl;
+
+        try {
+            const { protocol, hostname, port } = window.location;
+            const normalizedPort = port || (protocol === 'https:' ? '443' : '80');
+
+            // GUI runs on 8050; API is on 8000. Also treat diag 8081 as API 8000.
+            const apiPort = (normalizedPort === '8050' || normalizedPort === '8081')
+                ? '8000'
+                : normalizedPort;
+
+            return `${protocol}//${hostname}${apiPort ? `:${apiPort}` : ''}`;
+        } catch (err) {
+            console.warn('[JupiterBridge] Failed to infer apiBaseUrl, falling back to http://127.0.0.1:8000', err);
+            return 'http://127.0.0.1:8000';
+        }
+    }
+
     // =============================================================================
     // API MODULE
     // =============================================================================
 
     const api = {
+        /**
+         * Expose resolved API base URL for consumers (e.g., SSE/EventSource).
+         */
+        get baseUrl() {
+            return bridgeState.apiBaseUrl;
+        },
+
         /**
          * Make a GET request
          */
@@ -486,6 +519,7 @@
 
         /**
          * Show a notification
+         * Uses global showNotification from app.js when available
          * @private
          */
         _show(type, message, options = {}) {
@@ -494,38 +528,18 @@
                 global.addLog(message, type.toUpperCase());
             }
 
-            // Create toast notification
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.innerHTML = `
-                <span class="toast-icon">${this._getIcon(type)}</span>
-                <span class="toast-message">${escapeHtml(message)}</span>
-                <button class="toast-close" onclick="this.parentElement.remove()">×</button>
-            `;
-
-            // Get or create toast container
-            let container = document.getElementById('toast-container');
-            if (!container) {
-                container = document.createElement('div');
-                container.id = 'toast-container';
-                container.className = 'toast-container';
-                document.body.appendChild(container);
+            // Use global showNotification from app.js if available (unified notification system)
+            if (typeof window.showNotification === 'function') {
+                return window.showNotification(message, type, {
+                    icon: this._getIcon(type),
+                    duration: options.duration || 5000,
+                    ...options
+                });
             }
 
-            container.appendChild(toast);
-
-            // Auto-dismiss
-            const duration = options.duration || 5000;
-            if (duration > 0) {
-                setTimeout(() => {
-                    if (toast.parentElement) {
-                        toast.classList.add('toast-fade-out');
-                        setTimeout(() => toast.remove(), 300);
-                    }
-                }, duration);
-            }
-
-            return toast;
+            // Fallback: log to console if notification system not available
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            return null;
         },
 
         /**
@@ -815,7 +829,13 @@
          * Get plugin metrics
          */
         async metrics(pluginId) {
-            return api.get(`/plugins/${pluginId}/metrics`);
+            // Legacy path kept for autodiag (separate server)
+            if (pluginId === 'autodiag') {
+                return api.get('/api/plugins/autodiag/metrics');
+            }
+
+            // Bridge v2 metrics endpoint
+            return api.get(`/plugins/v2/${pluginId}/metrics`);
         },
 
         /**
@@ -887,9 +907,7 @@
         }
 
         // Set API base URL
-        bridgeState.apiBaseUrl = options.apiBaseUrl 
-            || global.state?.apiBaseUrl 
-            || `${window.location.protocol}//${window.location.host}`;
+        bridgeState.apiBaseUrl = inferApiBaseUrl(options);
 
         // Set token if available
         bridgeState.token = options.token 

@@ -1,7 +1,7 @@
 """
 Configuration loading and models for Jupiter.
 
-Version: 1.3.0
+Version: 1.4.0
 """
 
 from __future__ import annotations
@@ -230,6 +230,7 @@ class JupiterConfig:
     project_api: Optional[ProjectApiConfig] = None
     autodiag: AutodiagConfig = field(default_factory=AutodiagConfig)
     project_root: Path = field(default_factory=Path.cwd)
+    developer_mode: bool = False  # Enable developer mode features (hot reload, etc.)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> JupiterConfig:
@@ -288,6 +289,7 @@ class JupiterConfig:
             backends=backends,
             project_api=project_api,
             autodiag=autodiag,
+            developer_mode=data.get("developer_mode", False),
         )
 
 

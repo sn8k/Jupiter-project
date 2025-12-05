@@ -1,0 +1,13 @@
+# Bridge Configuration
+# Default settings for the Bridge infrastructure
+
+developer_mode: false
+allow_unsigned_plugins: false
+hot_reload_enabled: false
+verbose_logging: false
+plugin_timeout: 30
+health_check_interval: 60
+max_concurrent_jobs: 5
+governance_mode: disabled
+metrics_collection: true
+circuit_breaker_threshold: 5

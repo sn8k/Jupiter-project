@@ -1,0 +1,42 @@
+# Metrics Manager Plugin Configuration
+# Version: 1.0.0
+# Default settings for the Metrics Manager plugin
+
+# Enable or disable the plugin
+enabled: true
+
+# Refresh interval in milliseconds (how often UI refreshes)
+refresh_interval: 5000
+
+# Number of data points to keep per metric
+history_size: 100
+
+# Default export format (json or prometheus)
+export_format: json
+
+# Display options
+show_system_metrics: true
+show_plugin_metrics: true
+
+# Default chart visualization type (line, bar, area)
+chart_type: line
+
+# Alert thresholds
+alert_thresholds:
+  # Warning threshold for error rate (0-1, e.g., 0.05 = 5%)
+  error_rate_warn: 0.05
+  # Critical threshold for error rate
+  error_rate_critical: 0.15
+  # Warning threshold for response time in milliseconds
+  response_time_warn: 1000
+  # Critical threshold for response time in milliseconds
+  response_time_critical: 5000
+
+# Logging configuration
+logging:
+  # Log level for this plugin (DEBUG, INFO, WARNING, ERROR)
+  level: INFO
+  # Maximum log file size in bytes before rotation
+  max_size: 1048576
+  # Number of backup log files to keep
+  backup_count: 3

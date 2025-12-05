@@ -1,5 +1,16 @@
 # Changelog – Manual.md
 
+## v1.8.49: Documentation Phase 11.2 - Commandes plugins
+- Mise à jour de l'en-tête du manuel vers la version 1.8.49
+- Mention de l'architecture Bridge v2
+- Ajout des commandes de gestion des jobs plugins (`jobs`, `jobs <id>`, `jobs cancel <id>`)
+- Nouvelle section "Mode développeur" expliquant :
+  - Hot Reload : rechargement de plugins sans redémarrer Jupiter
+  - Plugins non signés acceptés sans confirmation
+  - Logs verbeux (DEBUG par défaut)
+  - Endpoints debug supplémentaires
+- Clarification : hot reload nécessite `developer_mode: true` dans `global_config.yaml`
+
 ## v1.8.35: Version badge refresh
 - Mise à jour de l'en-tête du manuel vers la version 1.8.35 pour rester aligné avec `VERSION` et le README.
 

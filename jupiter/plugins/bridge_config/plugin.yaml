@@ -1,0 +1,146 @@
+# Bridge Configuration Plugin Manifest v2
+# Exposes Bridge settings for WebUI configuration
+# Version: 1.0.0
+
+id: bridge_config
+name: Bridge Configuration
+version: 1.0.0
+description: Configuration panel for the Jupiter Plugin Bridge infrastructure
+type: system
+jupiter_version: ">=1.8.0"
+
+# Metadata
+author:
+  name: Jupiter Team
+  url: https://github.com/sn8k/Jupiter-project
+license: MIT
+homepage: https://github.com/sn8k/Jupiter-project
+trust_level: official
+
+# Permissions (system plugin needs broad access)
+permissions:
+  - fs_read
+  - emit_events
+  - register_api
+  - register_ui
+
+# Capabilities
+capabilities:
+  metrics:
+    enabled: true
+    export_format: json
+  health_check:
+    enabled: true
+    interval: 60
+
+# Entrypoints
+entrypoints:
+  init: "__init__:init"
+  shutdown: "__init__:shutdown"
+  health: "__init__:health"
+  metrics: "__init__:metrics"
+
+# API contributions
+api:
+  router: "server.api:router"
+  prefix: /bridge_config
+  tags:
+    - bridge
+    - configuration
+
+# UI contributions
+ui:
+  panels:
+    - id: settings
+      location: settings
+      route: /plugins/bridge_config/settings
+      title_key: plugin.bridge_config.title
+      icon: "🔧"
+      order: 5
+  assets:
+    js:
+      - web/panels/main.js
+  i18n:
+    path: web/lang
+    languages:
+      - en
+      - fr
+
+# Configuration schema for auto-UI generation
+config:
+  schema:
+    type: object
+    properties:
+      developer_mode:
+        type: boolean
+        title: Developer Mode
+        description: Enable developer mode with relaxed security and hot reload
+        default: false
+      allow_unsigned_plugins:
+        type: boolean
+        title: Allow Unsigned Plugins
+        description: Allow loading plugins without signature verification (requires dev mode)
+        default: false
+      hot_reload_enabled:
+        type: boolean
+        title: Hot Reload
+        description: Enable automatic plugin reloading on file changes
+        default: false
+      verbose_logging:
+        type: boolean
+        title: Verbose Logging
+        description: Enable detailed debug logging for the Bridge
+        default: false
+      plugin_timeout:
+        type: integer
+        title: Plugin Timeout (seconds)
+        description: Default timeout for plugin operations
+        minimum: 5
+        maximum: 300
+        default: 30
+      health_check_interval:
+        type: integer
+        title: Health Check Interval (seconds)
+        description: Interval between plugin health checks
+        minimum: 10
+        maximum: 600
+        default: 60
+      max_concurrent_jobs:
+        type: integer
+        title: Max Concurrent Jobs
+        description: Maximum number of concurrent plugin jobs
+        minimum: 1
+        maximum: 20
+        default: 5
+      governance_mode:
+        type: string
+        title: Governance Mode
+        description: Plugin filtering mode (whitelist/blacklist/disabled)
+        enum:
+          - disabled
+          - whitelist
+          - blacklist
+        default: disabled
+      metrics_collection:
+        type: boolean
+        title: Metrics Collection
+        description: Enable metrics collection for plugins
+        default: true
+      circuit_breaker_threshold:
+        type: integer
+        title: Circuit Breaker Threshold
+        description: Number of failures before circuit breaker opens
+        minimum: 1
+        maximum: 20
+        default: 5
+  defaults:
+    developer_mode: false
+    allow_unsigned_plugins: false
+    hot_reload_enabled: false
+    verbose_logging: false
+    plugin_timeout: 30
+    health_check_interval: 60
+    max_concurrent_jobs: 5
+    governance_mode: disabled
+    metrics_collection: true
+    circuit_breaker_threshold: 5

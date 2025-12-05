@@ -1,6 +1,17 @@
 # Architecture des plugins Jupiter
 
-Version : 0.4.0 (2025-12-03)
+Version : 0.6.0 (2025-12-04)
+
+**Status d'implémentation** : Bridge v2 implémenté avec 1400+ tests
+- ✅ Phase 0-4 : Infrastructure, Bridge core, CLI/API registries complètes
+- ✅ Phase 5 : WebUI contributions (panels, settings, i18n, logs, jobs)
+- ✅ Phase 6 : Adaptateur legacy + ai_helper migré
+- ✅ Phase 7 : Permissions, signatures, circuit breaker, monitoring, gouvernance
+- ✅ Phase 8 : Hot reload avec dev mode guard, dev mode, notifications, usage stats, error reports
+- ✅ Phase 9 : CLI install/uninstall/update/check-updates (marketplace foundation)
+- ✅ Phase 11.1 : Tests d'intégration complets (22 tests: install, usage, update, failure, jobs, hot reload, API)
+- 🔄 Phase 6.3 : Migration des plugins restants (code_quality, livemap, autodiag)
+- 🔄 Phase 10 : Actions distantes Meeting (conditionnel)
 
 Ce document décrit le modèle actuel des plugins dans Jupiter et propose une refonte pour distinguer clairement les plugins système des plugins outils, aligner la WebUI autour d'un « réceptacle » de plugins, et introduire un plugin système unifié « Bridge » pour relier la CLI, la WebUI et les plugins.
 
@@ -88,7 +99,14 @@ Le but final sera d'alleger la "base" (app.js surtout) afin de simplifier la mai
 - Introduire un conteneur de plugins dans la WebUI :
   - Une zone « Plugins » dynamique où les plugins outils montent des panneaux, des menus et des vues.
   - Contrat UI standard : métadonnées (`name`, `icon`, clés i18n), routes, panneaux et hooks d'événements.
-  - i18n : les plugins fournissent des fragments `lang/<locale>.json` fusionnés au runtime ; pas de textes codés en dur.
+  - i18n : les plugins fournissent des fragments `lang/<locale>.json` chargés dynamiquement au mount ; pas de textes codés en dur.
+
+- **Chargement dynamique des traductions (implémenté)** :
+  - Chaque plugin stocke ses traductions dans `web/lang/{locale}.json`
+  - L'API expose `GET /plugins/{name}/lang/{lang_code}` pour servir ces traductions
+  - `loadPluginViewContent()` charge les traductions avant le mount du plugin
+  - Le bridge fournit `i18n.t()` qui cherche d'abord dans les traductions du plugin, puis dans les globales
+  - Les fichiers de traduction principaux (`jupiter/web/lang/*.json`) ne contiennent que les clés de menu (`plugin.*.title`)
 
 - Types de contributions UI (déclarées dans le manifest) :
   ```yaml

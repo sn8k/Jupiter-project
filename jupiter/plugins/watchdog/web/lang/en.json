@@ -1,0 +1,23 @@
+{
+    "watchdog_eyebrow": "Development",
+    "watchdog_title": "Plugin Watchdog",
+    "watchdog_description": "Automatically reload plugins when their source files are modified. Useful during plugin development to avoid restarting Jupiter.",
+    "watchdog_status_monitoring": "Monitoring",
+    "watchdog_status_files": "Watched Files",
+    "watchdog_status_reloads": "Reloads",
+    "watchdog_status_last": "Last Reload",
+    "watchdog_enabled": "Enable Plugin Watchdog",
+    "watchdog_enabled_hint": "Start monitoring plugin files for changes.",
+    "watchdog_auto_reload": "Auto-reload on change",
+    "watchdog_auto_reload_hint": "Automatically reload plugins when changes are detected.",
+    "watchdog_interval": "Check Interval (seconds)",
+    "watchdog_interval_hint": "How often to check for file changes.",
+    "watchdog_force_check": "🔍 Force Check Now",
+    "watchdog_refresh_status": "🔄 Refresh Status",
+    "watchdog_save": "💾 Save Watchdog Settings",
+    "watchdog_watched_files": "Watched Files",
+    "watchdog_no_files": "No files being watched",
+    "watchdog_saved": "Watchdog settings saved",
+    "watchdog_save_error": "Error saving settings",
+    "watchdog_view": "Watchdog"
+}

@@ -1,5 +1,8 @@
 # Changelog - jupiter/web/index.html
 
+## Version 1.0.3 - Backend-injected version placeholders
+- Replaced hardcoded `app.js?v=...` and footer badge with `{{JUPITER_VERSION}}` placeholders injected at serve time so the UI shows the running build version.
+
 ## 2025-12-03 - Cache-control hardening
 - Added no-store/no-cache meta tags and a version comment to prevent browsers from caching the HTML shell.
 - Kept the HTML shell authoritative so `styles.css` and `app.js` are always reloaded fresh.

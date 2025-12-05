@@ -1,0 +1,19 @@
+{
+    "notifications_title": "Notifications",
+    "notifications_enabled_label": "Enable Notifications",
+    "notifications_url_label": "Webhook URL",
+    "notifications_url_placeholder": "https://your-webhook.example.com/notify",
+    "notifications_url_help": "Leave empty to use local notifications only (displayed in the UI).",
+    "notifications_events_label": "Events to Notify",
+    "notifications_event_scan": "Scan Complete",
+    "notifications_event_analysis": "Analysis Complete",
+    "notifications_event_quality": "Quality Alerts",
+    "notifications_event_api": "API Connected",
+    "notifications_save": "Save",
+    "notifications_test": "Test Notification",
+    "notifications_settings": "Notification Settings",
+    "notifications_save_success": "Settings saved!",
+    "notifications_save_error": "Failed to save settings",
+    "notifications_test_success": "Test notification dispatched",
+    "notifications_test_error": "Failed to trigger test notification"
+}

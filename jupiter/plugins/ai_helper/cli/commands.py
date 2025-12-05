@@ -120,15 +120,23 @@ def cmd_suggest(args):
     """
     try:
         from jupiter.plugins import ai_helper
-        from jupiter.core.scanner import scan_project
-        from jupiter.core.analyzer import analyze_project
+        from jupiter.core import ProjectScanner, ProjectAnalyzer, ScanReport
+        from jupiter.core.state import load_last_root
+        from pathlib import Path
         
         # Run scan and analyze to get data
         print("[AI Helper] Running project analysis...")
-        scan_report = scan_project()
-        ai_helper.on_scan(scan_report)
+        root = load_last_root() or Path.cwd()
+        scanner = ProjectScanner(root)
+        scan_report = ScanReport.from_files(root=root, files=scanner.iter_files())
         
-        summary = analyze_project(scan_report)
+        # Convert to dict format for hook
+        report_dict = scan_report.to_dict()
+        ai_helper.on_scan(report_dict)
+        
+        analyzer = ProjectAnalyzer(root=root)
+        summary_obj = analyzer.summarize(scan_report.files)
+        summary = summary_obj.to_dict() if hasattr(summary_obj, 'to_dict') else vars(summary_obj)
         ai_helper.on_analyze(summary)
         
         suggestions = ai_helper.get_suggestions()

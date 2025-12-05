@@ -1,5 +1,27 @@
 # Changelog - jupiter/core/bridge/hot_reload.py
 
+## Version 0.2.0
+
+### Added
+- Developer mode guard: hot reload now requires `developer_mode: true` to be enabled
+- `can_reload()` checks dev mode status as first validation step
+- `reload()` checks dev mode before proceeding with any operations
+- New parameter `skip_dev_mode_check` for testing/internal bypass
+- Clear error messages when dev mode is disabled
+
+### Changed
+- Updated `reload()` signature to include `skip_dev_mode_check: bool = False`
+- Updated `reload_plugin()` convenience function signature
+- Updated documentation to reflect dev mode requirement
+
+### Tests
+- Added 4 new tests for dev mode guard functionality:
+  - `test_can_reload_requires_dev_mode`
+  - `test_reload_fails_without_dev_mode`
+  - `test_skip_dev_mode_check`
+  - `test_can_reload_checks_dev_mode_first`
+- Total tests: 61
+
 ## Version 0.1.0
 
 ### Added

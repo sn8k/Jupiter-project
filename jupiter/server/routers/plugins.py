@@ -1,6 +1,6 @@
 """Plugin routes using the Bridge v2 system.
 
-Version: 0.3.0 - Added WebSocket logs streaming
+Version: 0.4.0 - Added hot reload endpoint
 
 Exposes REST API endpoints for:
 - Listing plugins (/plugins)
@@ -8,8 +8,9 @@ Exposes REST API endpoints for:
 - Plugin health check (/plugins/{id}/health)
 - Plugin metrics (/plugins/{id}/metrics)
 - Plugin logs (/plugins/{id}/logs)
-- Plugin logs WebSocket (/plugins/{id}/logs/stream) [NEW]
+- Plugin logs WebSocket (/plugins/{id}/logs/stream)
 - Plugin configuration (/plugins/{id}/config)
+- Plugin hot reload (/plugins/{id}/reload) [NEW]
 - Bridge status (/plugins/v2/status)
 - UI/CLI/API manifests
 
@@ -1129,4 +1130,119 @@ async def reset_plugin_settings(request: Request, plugin_id: str) -> Dict[str, A
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reset settings: {str(e)}",
+        )
+
+
+# =============================================================================
+# Hot Reload Endpoint (Developer Mode Only)
+# =============================================================================
+
+class HotReloadResponse(BaseModel):
+    """Response model for hot reload operation."""
+    success: bool
+    plugin_id: str
+    duration_ms: float = 0.0
+    phase: str = "completed"
+    error: Optional[str] = None
+    warnings: List[str] = []
+    old_version: Optional[str] = None
+    new_version: Optional[str] = None
+    contributions_reloaded: bool = False
+
+
+@router.post("/{plugin_id}/reload", response_model=HotReloadResponse, dependencies=[Depends(require_admin)])
+async def hot_reload_plugin(request: Request, plugin_id: str) -> HotReloadResponse:
+    """Hot reload a plugin without restarting the server.
+    
+    Requires developer_mode to be enabled in the configuration.
+    
+    This endpoint:
+    1. Verifies developer_mode is enabled
+    2. Gracefully unloads the plugin
+    3. Reloads the plugin module from disk
+    4. Re-initializes the plugin with fresh state
+    
+    Args:
+        plugin_id: Plugin identifier
+        
+    Returns:
+        HotReloadResponse with reload result details
+        
+    Raises:
+        HTTPException 403: If developer_mode is not enabled
+        HTTPException 404: If plugin not found
+        HTTPException 500: If reload fails
+    """
+    from jupiter.core.state import load_last_root
+    from jupiter.config.config import load_config
+    from jupiter.core.bridge.hot_reload import get_hot_reloader
+    
+    # Check developer mode is enabled
+    try:
+        project_root = load_last_root()
+        if project_root:
+            config = load_config(project_root)
+            if not config.developer_mode:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Hot reload requires developer_mode to be enabled in configuration",
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No active project",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Could not check developer_mode: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Hot reload requires developer_mode to be enabled",
+        )
+    
+    # Get bridge and verify plugin exists
+    bridge = get_bridge(request)
+    
+    if not bridge:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Bridge v2 not available",
+        )
+    
+    info = bridge.get_plugin(plugin_id)
+    
+    if not info:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin '{plugin_id}' not found",
+        )
+    
+    # Perform hot reload
+    try:
+        reloader = get_hot_reloader()
+        result = reloader.reload(plugin_id)
+        
+        logger.info(
+            "Hot reload for plugin %s: success=%s, duration=%.1fms",
+            plugin_id, result.success, result.duration_ms
+        )
+        
+        return HotReloadResponse(
+            success=result.success,
+            plugin_id=result.plugin_id,
+            duration_ms=result.duration_ms,
+            phase=result.phase,
+            error=result.error,
+            warnings=result.warnings,
+            old_version=result.old_version,
+            new_version=result.new_version,
+            contributions_reloaded=result.contributions_reloaded,
+        )
+        
+    except Exception as e:
+        logger.error("Failed to hot reload plugin %s: %s", plugin_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Hot reload failed: {str(e)}",
         )

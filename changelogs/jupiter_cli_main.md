@@ -1,5 +1,22 @@
 # Changelog – jupiter/cli/main.py
 
+## Version 1.6.0 - Phase 9 Marketplace Commands
+- Added plugin marketplace commands:
+  - `jupiter plugins update <id>` : Update a plugin to a new version
+    - `--source` : Update source (URL or path)
+    - `--force` : Force update even if at latest version
+    - `--install-deps` : Install Python dependencies
+    - `--no-backup` : Skip creating backup of current version
+  - `jupiter plugins check-updates` : Check for available plugin updates
+    - `--json` : Output as JSON
+- Enhanced `jupiter plugins install`:
+  - `--install-deps` : Install Python dependencies from requirements.txt
+  - `--dry-run` : Simulate installation without making changes
+- Added handlers to `CLI_HANDLERS` registry:
+  - `plugins_update`, `plugins_check_updates`
+- Update supports backup/rollback on failure
+- Import `handle_plugins_update`, `handle_plugins_check_updates`
+
 ## Version 1.5.0 - Phase 7.2 Plugin Signing Commands
 - Added plugin signing commands:
   - `jupiter plugins sign <path>` : Sign a plugin with cryptographic signature

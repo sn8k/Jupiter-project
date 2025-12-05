@@ -1,5 +1,55 @@
 # Changelog - AI Helper Plugin
 
+## [1.3.0] - Ollama Support & CSS Fix
+
+### Added
+- **Ollama Provider Support**: Full integration with local LLM via Ollama
+  - Connect to local Ollama instance (default: http://localhost:11434)
+  - Support for codellama, mistral, llama2, deepseek-coder models
+  - JSON-based suggestion extraction from LLM responses
+  - Configurable via `ollama_url` and `ollama_model` settings
+
+- **Provider Architecture**: Extensible provider system
+  - `mock`: Heuristic-based suggestions (default, no API needed)
+  - `ollama`: Local LLM via Ollama (free, private)
+  - `openai`: OpenAI API (placeholder, requires api_key)
+  - `anthropic`: Anthropic Claude API (placeholder, requires api_key)
+  - `azure_openai`: Azure OpenAI / GitHub Models (placeholder, requires api_key)
+
+### Fixed
+- **CSS Status Indicator Overflow**: "Analyse terminée" text now stays within bounds
+  - Added `overflow: hidden`, `text-overflow: ellipsis` to `.status-text`
+  - Added `max-width: 100%` and `flex-shrink: 0` to `.status-indicator`
+  - Improved responsive behavior for mobile (full width on small screens)
+  - Fixed `.status-dot` min-width to prevent shrinking
+
+### Changed
+- Updated `core/logic.py` to v1.2.0 with provider routing
+- Updated `web/panels/main.js` to v1.3.0 with improved CSS
+- Config validation now supports Ollama-specific settings
+
+## [1.2.0] - CSS Fix for WebUI Panel
+
+### Fixed
+- **Inline CSS Injection**: The WebUI panel was displaying without styles because no CSS file was loaded
+  - Added inline CSS in `main.js` that injects styles dynamically
+  - Styles now match the Jupiter dark theme design system
+  - Responsive layout with mobile breakpoints
+
+### Added
+- **Complete Plugin CSS**: Comprehensive styling for all panel elements:
+  - `.ai-helper-plugin` container with flex layout
+  - Control section with buttons and status indicator
+  - Info grid with provider/enabled status
+  - Suggestions list with severity color coding
+  - Logs panel with controls and streaming output
+  - Statistics grid with execution metrics
+  - Help sidebar with documentation
+
+### Changed
+- `web/panels/main.js` version bumped to 1.2.0
+- CSS injected via `<style>` tag on mount (no external file dependency)
+
 ## [1.1.0] - Complete Bridge v2 Migration
 
 ### Added

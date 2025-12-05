@@ -1,6 +1,6 @@
 """Jupiter Plugin Bridge - Core Infrastructure.
 
-Version: 0.23.0 - Added alerting system for threshold-based notifications
+Version: 0.24.0 - Added per-plugin log levels with global floor
 
 The Bridge is the central component of Jupiter's plugin architecture v2.
 It provides:
@@ -22,6 +22,7 @@ It provides:
 - Usage statistics tracking
 - Error reporting and diagnostics
 - Alerting: threshold-based notifications for metrics
+- Per-plugin log level configuration with global floor
 
 This package contains:
 - interfaces.py: ABC interfaces for plugin contracts
@@ -47,9 +48,10 @@ This package contains:
 - usage_stats.py: Plugin usage statistics tracking
 - error_report.py: Error reporting and diagnostics
 - alerting.py: Threshold-based alerting system
+- services.py: Per-plugin log level configuration with global floor
 """
 
-__version__ = "0.23.0"
+__version__ = "0.24.0"
 
 from jupiter.core.bridge.exceptions import (
     BridgeError,
@@ -103,6 +105,12 @@ from jupiter.core.bridge.services import (
     ConfigProxy,
     ServiceLocator,
     create_service_locator,
+    # Log level management
+    set_global_log_level_floor,
+    get_global_log_level_floor,
+    set_plugin_log_level,
+    get_plugin_log_level,
+    clear_plugin_log_levels,
 )
 
 from jupiter.core.bridge.plugin_config import (
@@ -401,6 +409,12 @@ __all__ = [
     "SecureRunner",
     "ConfigProxy",
     "create_service_locator",
+    # Log level management
+    "set_global_log_level_floor",
+    "get_global_log_level_floor",
+    "set_plugin_log_level",
+    "get_plugin_log_level",
+    "clear_plugin_log_levels",
     # Plugin Config
     "PluginConfigManager",
     "ProjectPluginRegistry",

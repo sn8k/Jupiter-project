@@ -8,8 +8,10 @@
  * - Live preview of changes
  * - Reset to defaults functionality
  * - Import/Export settings
+ * - Hot Reload button (developer mode only)
+ * - Dry-run mode to test settings without applying
  * 
- * @version 0.2.0
+ * @version 0.4.0
  * @module jupiter/web/js/plugin_settings_frame
  */
 
@@ -116,6 +118,10 @@
                             <span data-i18n="debug_mode">Debug Mode</span>
                         </label>
                         <span class="debug-timer"></span>
+                        <button class="btn btn-sm btn-secondary hot-reload-btn" data-action="hot-reload" title="Hot Reload Plugin">
+                            <span class="icon">🔃</span>
+                            <span data-i18n="hot_reload">Hot Reload</span>
+                        </button>
                     </div>
                     
                     <div class="settings-tabs">
@@ -139,6 +145,7 @@
                         </div>
                         <div class="footer-actions">
                             <button class="btn btn-secondary" data-action="cancel" data-i18n="cancel">Cancel</button>
+                            <button class="btn btn-ghost" data-action="dry-run" data-i18n="dry_run" title="Test settings without applying">🧪 Dry Run</button>
                             <button class="btn btn-primary" data-action="save" data-i18n="save">Save</button>
                         </div>
                     </div>
@@ -155,6 +162,7 @@
                 debugBar: this.container.querySelector('.settings-debug-bar'),
                 debugToggle: this.container.querySelector('.debug-toggle'),
                 debugTimer: this.container.querySelector('.debug-timer'),
+                hotReloadBtn: this.container.querySelector('.hot-reload-btn'),
                 tabList: this.container.querySelector('.tab-list'),
                 formContainer: this.container.querySelector('.settings-form-container'),
                 preview: this.container.querySelector('.settings-preview'),
@@ -166,7 +174,8 @@
                 exportBtn: this.container.querySelector('[data-action="export"]'),
                 resetBtn: this.container.querySelector('[data-action="reset"]'),
                 checkUpdateBtn: this.container.querySelector('[data-action="check-update"]'),
-                viewChangelogBtn: this.container.querySelector('[data-action="view-changelog"]')
+                viewChangelogBtn: this.container.querySelector('[data-action="view-changelog"]'),
+                dryRunBtn: this.container.querySelector('[data-action="dry-run"]')
             };
         }
 
@@ -195,6 +204,12 @@
             
             // View changelog button
             this.elements.viewChangelogBtn?.addEventListener('click', () => this.viewChangelog());
+            
+            // Hot reload button (developer mode only)
+            this.elements.hotReloadBtn?.addEventListener('click', () => this.hotReloadPlugin());
+            
+            // Dry run button
+            this.elements.dryRunBtn?.addEventListener('click', () => this.dryRunSave());
             
             // Debug toggle
             this.elements.debugToggle?.addEventListener('change', (e) => this.toggleDebugMode(e.target.checked));
@@ -674,6 +689,143 @@
         }
 
         /**
+         * Dry-run save - test settings without actually applying them
+         * Validates settings and checks for potential issues without persisting.
+         * @returns {Promise<Object>} Dry-run result with validation status
+         */
+        async dryRunSave() {
+            if (!this.activePlugin) {
+                this._showError('No plugin loaded');
+                return { success: false, error: 'no_plugin' };
+            }
+            
+            // Show loading state
+            if (this.elements.dryRunBtn) {
+                this.elements.dryRunBtn.disabled = true;
+                this.elements.dryRunBtn.innerHTML = '<span class="icon spinner">⏳</span> Testing...';
+            }
+            
+            try {
+                // Step 1: Client-side validation
+                const validation = this._validate();
+                if (!validation.valid) {
+                    this._showValidationErrors(validation.errors);
+                    this._showDryRunResult({
+                        success: false,
+                        phase: 'validation',
+                        errors: validation.errors
+                    });
+                    return { success: false, phase: 'validation', errors: validation.errors };
+                }
+                
+                // Step 2: Server-side dry-run
+                const response = await fetch(
+                    `${this.apiBase}/plugins/${this.activePlugin.id}/settings/dry-run`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.currentSettings)
+                    }
+                );
+                
+                if (!response.ok) {
+                    // Fallback: if dry-run endpoint doesn't exist, just do validation
+                    if (response.status === 404) {
+                        this._showDryRunResult({
+                            success: true,
+                            phase: 'validation_only',
+                            message: 'Settings validated successfully (dry-run not supported by this plugin)'
+                        });
+                        return { success: true, phase: 'validation_only' };
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                this._showDryRunResult(result);
+                
+                return result;
+                
+            } catch (error) {
+                console.error('[PluginSettingsFrame] Dry-run failed:', error);
+                this._showError(`Dry-run failed: ${error.message}`);
+                return { success: false, error: error.message };
+            } finally {
+                // Reset button state
+                if (this.elements.dryRunBtn) {
+                    this.elements.dryRunBtn.disabled = false;
+                    this.elements.dryRunBtn.innerHTML = '🧪 Dry Run';
+                }
+            }
+        }
+
+        /**
+         * Show dry-run result in a modal or toast
+         * @private
+         */
+        _showDryRunResult(result) {
+            const isSuccess = result.success !== false;
+            const title = isSuccess ? '✅ Dry Run Successful' : '❌ Dry Run Failed';
+            
+            let content = '';
+            
+            if (result.errors && result.errors.length > 0) {
+                content += '<h4>Validation Errors:</h4><ul>';
+                result.errors.forEach(err => {
+                    content += `<li><strong>${err.field || 'Error'}:</strong> ${err.message}</li>`;
+                });
+                content += '</ul>';
+            }
+            
+            if (result.warnings && result.warnings.length > 0) {
+                content += '<h4>⚠️ Warnings:</h4><ul>';
+                result.warnings.forEach(warn => {
+                    content += `<li>${warn}</li>`;
+                });
+                content += '</ul>';
+            }
+            
+            if (result.impact) {
+                content += '<h4>📊 Impact Analysis:</h4>';
+                content += `<pre>${JSON.stringify(result.impact, null, 2)}</pre>`;
+            }
+            
+            if (result.message) {
+                content += `<p>${result.message}</p>`;
+            }
+            
+            if (!content) {
+                content = isSuccess 
+                    ? '<p>Settings are valid and can be saved.</p>'
+                    : '<p>Settings validation failed.</p>';
+            }
+            
+            // Show in modal
+            if (window.jupiterBridge?.modal?.show) {
+                window.jupiterBridge.modal.show({
+                    title: title,
+                    content: content,
+                    size: 'medium',
+                    buttons: [
+                        { label: 'Close', action: 'close', class: 'btn-secondary' },
+                        ...(isSuccess ? [{ 
+                            label: 'Save Now', 
+                            action: () => this.save(), 
+                            class: 'btn-primary' 
+                        }] : [])
+                    ]
+                });
+            } else {
+                // Fallback alert
+                if (isSuccess) {
+                    this._showSuccess(result.message || 'Settings are valid and ready to save');
+                } else {
+                    this._showError(result.message || 'Dry run found issues');
+                }
+            }
+        }
+
+        /**
          * Cancel changes
          */
         cancel() {
@@ -1026,6 +1178,74 @@
                 this._showChangelogModal(pluginId, changelog);
             } catch (error) {
                 this._showError(`Failed to load changelog: ${error.message}`);
+            }
+        }
+
+        /**
+         * Hot reload plugin (developer mode only)
+         * Reloads the plugin without restarting the server.
+         * Only available when developer_mode is enabled.
+         */
+        async hotReloadPlugin() {
+            if (!this.activePlugin) {
+                this._showError('No plugin loaded');
+                return;
+            }
+
+            const pluginId = this.activePlugin.id;
+            
+            // Confirm hot reload
+            const confirmMsg = window.jupiterBridge?.i18n?.t('hot_reload_confirm') 
+                || `Hot reload plugin "${pluginId}"? This will reload the plugin without restarting the server.`;
+            
+            if (!confirm(confirmMsg)) {
+                return { cancelled: true };
+            }
+            
+            // Show loading state
+            if (this.elements.hotReloadBtn) {
+                this.elements.hotReloadBtn.disabled = true;
+                this.elements.hotReloadBtn.innerHTML = '<span class="icon spinner">⏳</span> Reloading...';
+            }
+            
+            try {
+                // Use jupiterBridge if available
+                let result;
+                if (window.jupiterBridge?.plugins?.reload) {
+                    result = await window.jupiterBridge.plugins.reload(pluginId);
+                } else {
+                    // API endpoint is at /plugins/v2/{plugin_id}/reload
+                    const response = await fetch(`${this.apiBase}/plugins/v2/${pluginId}/reload`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    result = await response.json();
+                }
+                
+                if (result.success) {
+                    const message = window.jupiterBridge?.i18n?.t('hot_reload_success') 
+                        || `Plugin "${pluginId}" reloaded successfully`;
+                    this._showSuccess(message + (result.duration ? ` (${result.duration}ms)` : ''));
+                    
+                    // Refresh plugin info to get updated state
+                    await this.loadPlugin(pluginId);
+                } else if (result.error === 'dev_mode_required') {
+                    this._showError('Hot reload requires developer mode to be enabled');
+                } else {
+                    this._showError(`Hot reload failed: ${result.error || 'Unknown error'}`);
+                }
+                
+                return result;
+            } catch (error) {
+                this._showError(`Failed to hot reload plugin: ${error.message}`);
+                return { success: false, error: error.message };
+            } finally {
+                // Reset button state
+                if (this.elements.hotReloadBtn) {
+                    this.elements.hotReloadBtn.disabled = false;
+                    const labelText = window.jupiterBridge?.i18n?.t('hot_reload') || 'Hot Reload';
+                    this.elements.hotReloadBtn.innerHTML = `<span class="icon">🔃</span> <span>${labelText}</span>`;
+                }
             }
         }
 

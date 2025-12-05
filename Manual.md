@@ -1,6 +1,6 @@
-# Manuel utilisateur — Jupiter (v1.8.35)
+# Manuel utilisateur — Jupiter (v1.8.49)
 
-Ce manuel explique comment installer, configurer et utiliser Jupiter via l’interface Web et la CLI. Il reflète l’état actuel du code (CLI, API FastAPI, Web UI et plugins).
+Ce manuel explique comment installer, configurer et utiliser Jupiter via l'interface Web et la CLI. Il reflète l'état actuel du code (CLI, API FastAPI, Web UI et plugins Bridge v2).
 
 > Note roadmap : la transition vers un stockage SQL géré automatiquement (init/migrations/backup) est planifiée dans `TODOs/sql_migration_roadmap.md`. Les workflows actuels restent supportés en mode fichier pendant la migration.
 
@@ -60,11 +60,68 @@ python -m jupiter.cli.main watch [root]
 python -m jupiter.cli.main meeting check-license [root] [--json]
 python -m jupiter.cli.main autodiag [root] [--api-url URL] [--diag-url URL] [--skip-cli] [--skip-api] [--skip-plugins] [--timeout SECONDS]
 python -m jupiter.cli.main update <source> [--force]
+python -m jupiter.cli.main plugins <subcommand> [args]
 ```
 
 (*) `--ignore` peut être spécifié plusieurs fois pour ignorer plusieurs patterns.
 
 `scan`, `analyze` et `ci` partagent le même pipeline (plugins, cache, snapshots) pour assurer un comportement uniforme.
+
+## Gestion des plugins (CLI)
+
+Jupiter offre une gestion complète des plugins via la CLI :
+
+```bash
+# Lister les plugins installés
+jupiter plugins list [--json]
+
+# Informations sur un plugin
+jupiter plugins info <id> [--json]
+
+# Activer/Désactiver un plugin
+jupiter plugins enable <id>
+jupiter plugins disable <id>
+
+# Statut du système Bridge
+jupiter plugins status [--json]
+
+# Installation de plugins
+jupiter plugins install <source> [--force] [--install-deps] [--dry-run]
+# <source> peut être : chemin local, URL ZIP, URL Git (.git)
+
+# Mise à jour de plugins
+jupiter plugins update <id> [--source URL] [--force] [--install-deps] [--no-backup]
+jupiter plugins check-updates [--json]
+
+# Désinstallation
+jupiter plugins uninstall <id> [--force]
+
+# Création de plugin (scaffold)
+jupiter plugins scaffold <id> [--output DIR]
+
+# Hot reload (mode développeur uniquement)
+jupiter plugins reload <id>
+
+# Signature et vérification
+jupiter plugins sign <path> [--signer-id ID] [--signer-name NAME] [--trust-level LEVEL]
+jupiter plugins verify <path> [--require-level LEVEL]
+
+# Gestion des jobs (tâches longues)
+jupiter plugins jobs [--json]                 # Lister les jobs actifs
+jupiter plugins jobs <job_id>                 # Détails d'un job
+jupiter plugins jobs cancel <job_id>          # Annuler un job
+```
+
+## Mode développeur
+
+Le mode développeur (`developer_mode: true` dans `global_config.yaml`) active des fonctionnalités avancées :
+
+- **Hot Reload** : rechargement de plugins sans redémarrer Jupiter
+- **Plugins non signés** : acceptés sans confirmation
+- **Logs verbeux** : niveau DEBUG par défaut
+- **Endpoints debug** : routes de diagnostic supplémentaires
+
+**Note** : Le hot reload (`jupiter plugins reload <id>`) nécessite le mode développeur. En production, cette commande échoue avec un message explicatif.
 
 ## Snapshots & cache
 

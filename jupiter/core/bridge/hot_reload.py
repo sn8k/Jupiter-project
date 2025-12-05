@@ -1,6 +1,6 @@
 """Jupiter Plugin Bridge - Hot Reload System.
 
-Version: 0.1.0
+Version: 0.2.0
 
 Provides dynamic plugin reloading without restarting Jupiter.
 Allows developers to iterate quickly during plugin development.
@@ -11,6 +11,7 @@ Features:
 - Re-initialize plugin with fresh state
 - Preserve registered services and event subscriptions
 - Emit reload events for UI notification
+- Developer mode guard (reload only allowed when dev mode is enabled)
 
 Usage:
     from jupiter.core.bridge.hot_reload import reload_plugin, get_hot_reloader
@@ -182,6 +183,11 @@ class HotReloader:
         Returns:
             Tuple of (can_reload, reason)
         """
+        # Check developer mode first
+        from jupiter.core.bridge.dev_mode import is_dev_mode
+        if not is_dev_mode():
+            return False, "Hot reload requires developer mode to be enabled"
+        
         # Check blacklist
         if plugin_id in self._blacklist:
             return False, f"Plugin '{plugin_id}' is a core plugin and cannot be reloaded"
@@ -210,22 +216,26 @@ class HotReloader:
         self, 
         plugin_id: str,
         force: bool = False,
-        preserve_config: bool = True
+        preserve_config: bool = True,
+        skip_dev_mode_check: bool = False
     ) -> ReloadResult:
         """Reload a plugin.
         
         Performs:
-        1. Validation checks
-        2. Shutdown existing instance
-        3. Unload module from sys.modules
-        4. Re-import module
-        5. Re-initialize plugin
-        6. Re-register contributions
+        1. Developer mode validation (unless bypassed)
+        2. Plugin-specific validation checks
+        3. Shutdown existing instance
+        4. Unload module from sys.modules
+        5. Re-import module
+        6. Re-initialize plugin
+        7. Re-register contributions
         
         Args:
             plugin_id: Plugin to reload
-            force: If True, skip some validation checks
+            force: If True, skip some validation checks (not dev mode)
             preserve_config: If True, preserve plugin config across reload
+            skip_dev_mode_check: If True, allow reload even without dev mode
+                               (for internal/testing use only)
             
         Returns:
             ReloadResult with operation status
@@ -234,7 +244,19 @@ class HotReloader:
         warnings: List[str] = []
         old_version: Optional[str] = None
         
-        # Check if reload is allowed
+        # Always check developer mode unless explicitly bypassed
+        if not skip_dev_mode_check:
+            from jupiter.core.bridge.dev_mode import is_dev_mode
+            if not is_dev_mode():
+                return ReloadResult(
+                    success=False,
+                    plugin_id=plugin_id,
+                    phase="dev_mode_check",
+                    error="Hot reload requires developer mode to be enabled. "
+                          "Set developer_mode: true in your jupiter config.",
+                )
+        
+        # Check if reload is allowed (plugin-specific checks)
         if not force:
             can_reload, reason = self.can_reload(plugin_id)
             if not can_reload:
@@ -689,21 +711,28 @@ def reset_hot_reloader() -> None:
 def reload_plugin(
     plugin_id: str,
     force: bool = False,
-    preserve_config: bool = True
+    preserve_config: bool = True,
+    skip_dev_mode_check: bool = False
 ) -> ReloadResult:
     """Reload a plugin.
     
     Convenience function that uses the singleton HotReloader.
     
+    Note: Hot reload requires developer mode to be enabled unless
+    skip_dev_mode_check is True (for internal/testing use only).
+    
     Args:
         plugin_id: Plugin to reload
-        force: Skip validation checks
+        force: Skip plugin-specific validation checks
         preserve_config: Preserve plugin config across reload
+        skip_dev_mode_check: Skip developer mode verification (testing only)
         
     Returns:
         ReloadResult with operation status
     """
-    return get_hot_reloader().reload(plugin_id, force, preserve_config)
+    return get_hot_reloader().reload(
+        plugin_id, force, preserve_config, skip_dev_mode_check
+    )
 
 
 def can_reload_plugin(plugin_id: str) -> tuple[bool, str]:

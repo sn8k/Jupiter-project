@@ -1,14 +1,14 @@
 """
 Example Plugin – v2 Architecture Reference
-Version: 0.3.0
+Version: 0.4.0
 
 Ce module est un modèle de documentation pour illustrer la structure
 d'un plugin Jupiter v2. Il n'est pas destiné à être exécuté en production.
 
-Conforme à plugins_architecture.md v0.4.0
+Conforme à plugins_architecture.md v0.6.0
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 # Statistiques d'utilisation (collectées par le plugin)
 _stats = {

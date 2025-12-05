@@ -2,6 +2,34 @@
 
 Ce fichier documente les modifications apportées au module de commandes CLI pour les plugins.
 
+## [0.5.0] - Phase 9: Marketplace Commands
+
+### Ajouté
+- **`_install_plugin_dependencies(plugin_path)`** : Installation des dépendances Python
+  - Exécute `pip install -r requirements.txt` du plugin
+  - Gestion des erreurs avec warning (non bloquant)
+
+- **`handle_plugins_update(args)`** : Mise à jour de plugins
+  - Création de backup avant mise à jour (sauf `--no-backup`)
+  - Rollback automatique en cas d'échec
+  - Vérification de signature sur la nouvelle version
+  - Support de `--source` pour source personnalisée
+  - Support de `--install-deps` pour dépendances Python
+  - Comparaison de versions avec option `--force`
+
+- **`handle_plugins_check_updates(args)`** : Vérification des mises à jour
+  - Liste tous les plugins avec leurs versions
+  - Affiche la source de mise à jour si disponible
+  - Support `--json` pour sortie machine
+  - Note: Nécessite un registre/marketplace pour détection automatique
+
+### Modifié
+- **`handle_plugins_install(args)`** :
+  - Support `--install-deps` : Installe les dépendances Python
+  - Support `--dry-run` : Simule l'installation sans modifier le système
+  - Affiche la présence de requirements.txt
+  - Mode dry-run avec indicateur [DRY RUN] dans les messages
+
 ## [0.4.0] - Phase 7.2: Vérification de signature à l'installation
 
 ### Ajouté

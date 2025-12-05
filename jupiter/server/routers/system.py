@@ -1,7 +1,7 @@
 """
 System router for Jupiter API.
 
-Version: 1.9.0
+Version: 1.11.0 - Deprecated legacy livemap endpoints (migrated to plugin router)
 """
 from typing import Dict, Any, List, Optional, cast
 import inspect
@@ -316,6 +316,7 @@ async def get_config(request: Request) -> ConfigModel:
             api_connector=None,
             api_app_var=None,
             api_path=None,
+            developer_mode=False,
         )
     
     return ConfigModel(
@@ -342,6 +343,7 @@ async def get_config(request: Request) -> ConfigModel:
         api_connector=config.project_api.connector if config.project_api else None,
         api_app_var=config.project_api.app_var if config.project_api else None,
         api_path=config.project_api.path if config.project_api else None,
+        developer_mode=config.developer_mode,
     )
 
 
@@ -374,6 +376,7 @@ async def update_config(request: Request, new_config: ConfigModel, role: str = D
     current_config.performance.max_graph_nodes = new_config.perf_max_graph_nodes
     
     current_config.security.allow_run = new_config.sec_allow_run
+    current_config.developer_mode = new_config.developer_mode
 
     if not current_config.project_api:
         current_config.project_api = ProjectApiConfig()
@@ -447,6 +450,8 @@ async def patch_config(request: Request, partial_config: PartialConfigModel, rol
         current_config.performance.max_graph_nodes = updates["perf_max_graph_nodes"]
     if "sec_allow_run" in updates:
         current_config.security.allow_run = updates["sec_allow_run"]
+    if "developer_mode" in updates:
+        current_config.developer_mode = updates["developer_mode"]
     
     if not current_config.project_api:
         current_config.project_api = ProjectApiConfig()
@@ -822,97 +827,25 @@ async def recheck_manual_duplication_links(request: Request, payload: Optional[D
 
 
 # --- Live Map Plugin Endpoints ---
+# DEPRECATED: These legacy endpoints have been migrated to the livemap plugin's own API router.
+# The plugin now provides its own routes via jupiter/plugins/livemap/server/api.py
+# mounted at /plugins/livemap by the Bridge v2 system.
+# Kept commented for reference during migration period.
 
-@router.get("/plugins/livemap/graph", dependencies=[Depends(verify_token)])
-async def get_livemap_graph(request: Request, simplify: bool = False, max_nodes: int = 1000) -> Dict[str, Any]:
-    """Generate a dependency graph for the Live Map visualization.
-    
-    Args:
-        simplify: If True, group by directory instead of showing individual files.
-        max_nodes: Maximum number of nodes before auto-simplification.
-        
-    Returns:
-        Graph data with nodes and links for D3.js visualization.
-    """
-    from jupiter.core.cache import CacheManager
-    
-    pm: PluginManager = request.app.state.plugin_manager
-    plugin = pm.get_plugin("livemap")
-    
-    if not plugin or not pm.is_enabled("livemap"):
-        raise HTTPException(status_code=404, detail="Live Map plugin not available")
-    
-    # Try cached scan first
-    root = request.app.state.root_path
-    cache_manager = CacheManager(root)
-    last_scan = cache_manager.load_last_scan()
-    
-    if not last_scan or "files" not in last_scan:
-        # Try scanning via connector
-        connector = request.app.state.project_manager.get_default_connector()
-        if not connector:
-            raise HTTPException(status_code=500, detail="No project connector available")
-        try:
-            last_scan = await connector.scan({})
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to get scan data: {str(e)}")
-    
-    plugin_obj = cast(Any, plugin)
-    try:
-        graph = plugin_obj.build_graph(last_scan["files"], simplify=simplify, max_nodes=max_nodes)
-        return graph.to_dict()
-    except Exception as e:
-        logger.error("LiveMap graph generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Graph generation failed: {str(e)}")
+# @router.get("/plugins/livemap/graph", dependencies=[Depends(verify_token)])
+# async def get_livemap_graph(request: Request, simplify: bool = False, max_nodes: int = 1000) -> Dict[str, Any]:
+#     """DEPRECATED: Use /plugins/livemap/graph from the livemap plugin router instead."""
+#     pass
 
+# @router.get("/plugins/livemap/config", dependencies=[Depends(verify_token)])
+# async def get_livemap_config(request: Request) -> Dict[str, Any]:
+#     """DEPRECATED: Use /plugins/livemap/config from the livemap plugin router instead."""
+#     pass
 
-@router.get("/plugins/livemap/config", dependencies=[Depends(verify_token)])
-async def get_livemap_config(request: Request) -> Dict[str, Any]:
-    """Get Live Map plugin configuration."""
-    pm: PluginManager = request.app.state.plugin_manager
-    plugin = pm.get_plugin("livemap")
-    
-    if not plugin:
-        raise HTTPException(status_code=404, detail="Live Map plugin not found")
-    
-    plugin_obj = cast(Any, plugin)
-    if hasattr(plugin_obj, "get_config"):
-        return plugin_obj.get_config()
-    
-    return {
-        "enabled": pm.is_enabled("livemap"),
-        "simplify": getattr(plugin_obj, "simplify", False),
-        "max_nodes": getattr(plugin_obj, "max_nodes", 1000),
-        "show_functions": getattr(plugin_obj, "show_functions", False),
-        "link_distance": getattr(plugin_obj, "link_distance", 60),
-        "charge_strength": getattr(plugin_obj, "charge_strength", -100),
-    }
-
-
-@router.post("/plugins/livemap/config", dependencies=[Depends(verify_token)])
-async def save_livemap_config(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Save Live Map plugin configuration."""
-    pm: PluginManager = request.app.state.plugin_manager
-    plugin = pm.get_plugin("livemap")
-    
-    if not plugin:
-        raise HTTPException(status_code=404, detail="Live Map plugin not found")
-    
-    plugin_obj = cast(Any, plugin)
-    
-    # Apply configuration
-    if hasattr(plugin_obj, "configure"):
-        plugin_obj.configure(payload)
-    
-    # Toggle enabled state
-    if "enabled" in payload:
-        if payload["enabled"]:
-            pm.enable_plugin("livemap")
-        else:
-            pm.disable_plugin("livemap")
-    
-    logger.info("LiveMap configuration updated: %s", payload)
-    return {"status": "ok", "config": plugin_obj.get_config() if hasattr(plugin_obj, "get_config") else payload}
+# @router.post("/plugins/livemap/config", dependencies=[Depends(verify_token)])
+# async def save_livemap_config(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
+#     """DEPRECATED: Use /plugins/livemap/config from the livemap plugin router instead."""
+#     pass
 
 
 # --- Plugin Watchdog Endpoints ---
@@ -1152,6 +1085,31 @@ async def get_plugin_ui(request: Request, name: str, role: str = Depends(verify_
         "name": name,
         "html": html or "",
         "js": js or "",
+    }
+
+
+@router.get("/plugins/{name}/lang/{lang_code}")
+async def get_plugin_translations(request: Request, name: str, lang_code: str, role: str = Depends(verify_token)) -> Dict[str, Any]:
+    """Get translations for a plugin in the specified language.
+    
+    Loads translations from the plugin's web/lang/{lang_code}.json file.
+    Falls back to 'en' if the requested language is not available.
+    
+    Args:
+        name: Plugin name/id
+        lang_code: Language code (e.g., 'en', 'fr')
+        
+    Returns:
+        Dict with translations or empty dict if not found
+    """
+    pm: PluginManager = request.app.state.plugin_manager
+    
+    translations = pm.get_plugin_translations(name, lang_code)
+    
+    return {
+        "plugin": name,
+        "lang": lang_code,
+        "translations": translations,
     }
 
 

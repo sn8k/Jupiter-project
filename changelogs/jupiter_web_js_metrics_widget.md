@@ -14,3 +14,7 @@
 - Configurable refresh interval
 - Integration with jupiterBridge API
 - Gradient-filled sparklines matching dark theme
+
+## v0.1.1
+- Infer API base to hit the API port (8000) when GUI/diag ports are used.
+- Fetch metrics from `/metrics` and `/metrics/bridge` instead of invalid `/plugins` path.

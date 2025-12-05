@@ -1,7 +1,7 @@
 """
 Command line entrypoint for Jupiter.
 
-Version: 1.5.0 - Added plugins sign/verify commands
+Version: 1.6.0 - Added plugins update and check-updates commands
 """
 
 from __future__ import annotations
@@ -41,6 +41,8 @@ from jupiter.cli.plugin_commands import (
     handle_plugins_status,
     handle_plugins_install,
     handle_plugins_uninstall,
+    handle_plugins_update,
+    handle_plugins_check_updates,
     handle_plugins_scaffold,
     handle_plugins_reload,
     handle_plugins_sign,
@@ -79,6 +81,8 @@ CLI_HANDLERS: Dict[str, Any] = {
     "plugins_status": handle_plugins_status,
     "plugins_install": handle_plugins_install,
     "plugins_uninstall": handle_plugins_uninstall,
+    "plugins_update": handle_plugins_update,
+    "plugins_check_updates": handle_plugins_check_updates,
     "plugins_scaffold": handle_plugins_scaffold,
     "plugins_reload": handle_plugins_reload,
     "plugins_sign": handle_plugins_sign,
@@ -337,10 +341,22 @@ def build_parser() -> argparse.ArgumentParser:
     plugins_install = plugins_sub.add_parser("install", help="Install a plugin from URL/path")
     plugins_install.add_argument("source", help="Plugin source: local path, ZIP URL, or Git URL")
     plugins_install.add_argument("--force", "-f", action="store_true", help="Overwrite existing plugin")
+    plugins_install.add_argument("--install-deps", action="store_true", help="Install Python dependencies from plugin's requirements.txt")
+    plugins_install.add_argument("--dry-run", action="store_true", help="Simulate installation without making changes")
     
     plugins_uninstall = plugins_sub.add_parser("uninstall", help="Uninstall a plugin")
     plugins_uninstall.add_argument("plugin_id", help="Plugin identifier")
     plugins_uninstall.add_argument("--force", "-f", action="store_true", help="Skip confirmation")
+    
+    plugins_update = plugins_sub.add_parser("update", help="Update a plugin to a new version")
+    plugins_update.add_argument("plugin_id", help="Plugin identifier")
+    plugins_update.add_argument("--source", help="Update source (URL or path). If not provided, uses original source.")
+    plugins_update.add_argument("--force", "-f", action="store_true", help="Force update even if already at latest")
+    plugins_update.add_argument("--install-deps", action="store_true", help="Install Python dependencies from plugin's requirements.txt")
+    plugins_update.add_argument("--no-backup", action="store_true", help="Skip creating backup of current version")
+    
+    plugins_check_updates = plugins_sub.add_parser("check-updates", help="Check for available plugin updates")
+    plugins_check_updates.add_argument("--json", action="store_true", help="Output as JSON")
     
     plugins_scaffold = plugins_sub.add_parser("scaffold", help="Generate a new plugin skeleton")
     plugins_scaffold.add_argument("plugin_id", help="Plugin identifier (used as directory name)")
@@ -528,6 +544,10 @@ def main() -> None:
             handle_plugins_install(args)
         elif args.plugins_command == "uninstall":
             handle_plugins_uninstall(args)
+        elif args.plugins_command == "update":
+            handle_plugins_update(args)
+        elif args.plugins_command == "check-updates":
+            handle_plugins_check_updates(args)
         elif args.plugins_command == "scaffold":
             handle_plugins_scaffold(args)
         elif args.plugins_command == "reload":

@@ -1,6 +1,31 @@
-# Changelog – jupiter/plugins/watchdog_plugin.py
+# Changelog – jupiter/plugins/watchdog/
 
-## v1.0.2 (2024-12-03)
+## v1.0.1 – plugin.yaml Schema Compliance Fix
+
+### Fixed
+- Rewrote `plugin.yaml` for JSON schema compliance
+- Added required `type: tool` field
+- Added required `jupiter_version: ">=1.8.0"` field
+- Proper `capabilities` object structure (was array)
+- Proper `ui.panels` array structure
+- Proper `entrypoints` object
+- Proper `config.defaults` object
+
+---
+
+## v1.0.0 – Migration Bridge v2
+- **Migration vers Bridge v2**: Structure plugin.yaml + modules
+- **Lifecycle**: `init(bridge)`, `shutdown()`, `health()`, `metrics()`, `reset_settings()`
+- **Monitoring**: Thread de surveillance avec `_monitor_loop()`, `_check_for_changes()`
+- **Reload**: `_trigger_reload()` avec support callback et plugin_manager
+- **API**: `force_check()`, `get_status()`, `get_config()`, `configure()`
+- **UI**: Module web avec `get_settings_html()`, `get_settings_js()` dans `web/ui.py`
+- **i18n**: Fichiers de traduction `en.json` et `fr.json`
+- **Backward Compat**: Classe `PluginWatchdog` pour PluginManager legacy
+
+---
+
+## v1.0.2 (Legacy)
 
 **Fixed serialization error in get_status().**
 
@@ -11,7 +36,7 @@
 
 ---
 
-## v1.0.1 (2024-12-03)
+## v1.0.1 (Legacy)
 
 **Fixed settings panel API connectivity.**
 
@@ -22,12 +47,12 @@
 - All fetch calls now include proper Authorization headers
 
 ### Notes
-- This fixes the "Error saving settings" issue when using the GUI served on port 8050
+- This fixes the "Error saving settings" issue when using the GUI served on port 8000
 - API requests now correctly target port 8000 instead of relative URLs
 
 ---
 
-## v1.0.0 (2024-12-02)
+## v1.0.0 (Legacy)
 
 **Initial release – Plugin Watchdog for development.**
 

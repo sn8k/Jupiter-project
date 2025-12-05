@@ -1,6 +1,6 @@
 """
 server/api.py – API routes for AI Helper plugin.
-Version: 1.1.0
+Version: 1.1.1
 
 FastAPI router exposing standard plugin endpoints plus AI-specific functionality.
 Conforme à plugins_architecture.md v0.4.0
@@ -20,14 +20,13 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 # Bridge reference (injected via register_api_contribution)
 _bridge = None
 
-# Router with plugin prefix
-router = APIRouter(prefix="/ai_helper", tags=["ai_helper"])
+# Router without prefix (prefix is added by server when mounting)
+router = APIRouter(tags=["ai_helper"])
 
 
 # =============================================================================
 # STANDARD PLUGIN ENDPOINTS
 # =============================================================================
-
 @router.get("/")
 async def root() -> Dict[str, Any]:
     """
@@ -105,6 +104,7 @@ async def stream_logs():
     async def generate():
         """Server-Sent Events generator for log streaming."""
         try:
+            assert _bridge is not None  # Already checked above
             log_path = Path(_bridge.services.get_log_dir()) / "ai_helper.log"
             last_pos = 0
             
@@ -175,7 +175,7 @@ async def list_jobs() -> List[Dict[str, Any]]:
 
 
 @router.post("/jobs")
-async def create_job(params: Dict[str, Any] = None) -> Dict[str, Any]:
+async def create_job(params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Submit a new analysis job.
     

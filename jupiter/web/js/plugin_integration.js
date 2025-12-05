@@ -5,7 +5,7 @@
  * This module initializes the plugin system, connects to the backend,
  * and provides the glue code between new modules and existing UI.
  * 
- * @version 0.1.0
+ * @version 0.2.0
  * @module jupiter/web/js/plugin_integration
  */
 
@@ -143,6 +143,9 @@
 
             // Hook into settings view
             this._hookSettingsView();
+
+            // Initialize UX utils integration
+            this._integrateUxUtils();
         }
 
         /**
@@ -151,31 +154,228 @@
          */
         _hookSettingsView() {
             const settingsContainer = document.getElementById('plugin-settings-container');
-            if (!settingsContainer || !window.PluginSettingsFrame) return;
+            if (!settingsContainer) return;
 
-            // Create settings frame for each plugin that has settings
+            // Get plugins with settings
             const pluginsWithSettings = this.plugins.filter(p => 
                 p.manifest?.settings_schema || p.ui_contribution?.settings_schema
             );
 
-            for (const plugin of pluginsWithSettings) {
-                const frameContainer = document.createElement('div');
-                frameContainer.id = `plugin-settings-${plugin.id}`;
-                frameContainer.className = 'plugin-settings-section';
-                settingsContainer.appendChild(frameContainer);
+            // Don't add anything if no plugins have settings
+            if (pluginsWithSettings.length === 0) {
+                settingsContainer.style.display = 'none';
+                return;
+            }
 
-                const frame = new window.PluginSettingsFrame({
-                    apiBase: this.bridge?.apiBase || '/api/v1',
-                    autoForm: window.AutoForm ? new window.AutoForm() : null,
-                    onSettingsSave: (settings) => {
-                        console.log(`[PluginIntegration] Settings saved for ${plugin.id}`);
-                        this._notifySettingsSaved(plugin.id, settings);
-                    }
+            settingsContainer.style.display = '';
+
+            // Create header section for plugin settings
+            if (!settingsContainer.querySelector('.plugin-settings-header')) {
+                const header = document.createElement('section');
+                header.className = 'panel settings-section plugin-settings-header';
+                header.innerHTML = `
+                    <header>
+                        <h3 data-i18n="settings_plugins_title">🧩 Plugin Settings</h3>
+                        <p class="muted small" data-i18n="settings_plugins_subtitle">Configure individual plugin settings below.</p>
+                    </header>
+                    <div class="plugin-settings-selector">
+                        <label for="plugin-settings-select" data-i18n="settings_plugin_select">Select plugin:</label>
+                        <select id="plugin-settings-select">
+                            <option value="" data-i18n="settings_plugin_none">-- Select a plugin --</option>
+                        </select>
+                    </div>
+                `;
+                settingsContainer.appendChild(header);
+
+                // Populate select
+                const select = header.querySelector('#plugin-settings-select');
+                pluginsWithSettings.forEach(plugin => {
+                    const option = document.createElement('option');
+                    option.value = plugin.id;
+                    option.textContent = plugin.manifest?.name || plugin.id;
+                    select.appendChild(option);
                 });
-                frame.init(frameContainer);
-                frame.loadPlugin(plugin.id).catch(e => 
-                    console.warn(`[PluginIntegration] Could not load settings for ${plugin.id}:`, e)
-                );
+
+                // Handle selection
+                select.addEventListener('change', (e) => {
+                    this._showPluginSettings(e.target.value, settingsContainer);
+                });
+            }
+
+            // Create container for plugin settings frame
+            if (!settingsContainer.querySelector('.plugin-settings-frame-wrapper')) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'plugin-settings-frame-wrapper';
+                wrapper.style.display = 'none';
+                settingsContainer.appendChild(wrapper);
+            }
+
+            // Initialize PluginSettingsFrame if available
+            if (window.PluginSettingsFrame) {
+                const wrapper = settingsContainer.querySelector('.plugin-settings-frame-wrapper');
+                if (!wrapper.dataset.initialized) {
+                    this.settingsFrame = new window.PluginSettingsFrame({
+                        apiBase: this.bridge?.apiBase || '/api/v1',
+                        autoForm: window.AutoForm ? new window.AutoForm() : null,
+                        onSettingsSave: (settings) => {
+                            const select = settingsContainer.querySelector('#plugin-settings-select');
+                            const pluginId = select?.value;
+                            if (pluginId) {
+                                console.log(`[PluginIntegration] Settings saved for ${pluginId}`);
+                                this._notifySettingsSaved(pluginId, settings);
+                            }
+                        }
+                    });
+                    this.settingsFrame.init(wrapper);
+                    wrapper.dataset.initialized = 'true';
+                }
+            }
+        }
+
+        /**
+         * Show settings for a specific plugin
+         * @private
+         */
+        _showPluginSettings(pluginId, container) {
+            const wrapper = container.querySelector('.plugin-settings-frame-wrapper');
+            if (!wrapper || !this.settingsFrame) return;
+
+            if (!pluginId) {
+                wrapper.style.display = 'none';
+                return;
+            }
+
+            wrapper.style.display = '';
+            this.settingsFrame.loadPlugin(pluginId).catch(e => 
+                console.warn(`[PluginIntegration] Could not load settings for ${pluginId}:`, e)
+            );
+        }
+
+        /**
+         * Integrate UX utilities into existing components
+         * @private
+         */
+        _integrateUxUtils() {
+            if (!window.jupiterUxUtils) {
+                console.log('[PluginIntegration] UX utils not loaded, skipping integration');
+                return;
+            }
+
+            const ux = window.jupiterUxUtils;
+
+            // Enhance scan progress bars with ux_utils
+            this._enhanceScanProgress(ux);
+
+            // Add skeleton loaders to plugin containers
+            this._addSkeletonLoaders(ux);
+
+            // Enhance status badges
+            this._enhanceStatusBadges(ux);
+
+            console.log('[PluginIntegration] UX utils integrated');
+        }
+
+        /**
+         * Enhance scan progress indicators
+         * @private
+         */
+        _enhanceScanProgress(ux) {
+            // Hook into scan progress updates to use enhanced progress bar
+            const originalProgress = document.getElementById('watch-progress-bar');
+            if (originalProgress) {
+                // Add step progress for scan phases
+                const watchPanel = document.getElementById('watch-panel');
+                if (watchPanel && !watchPanel.querySelector('.scan-step-progress')) {
+                    const stepContainer = document.createElement('div');
+                    stepContainer.className = 'scan-step-progress';
+                    stepContainer.style.marginBottom = '1rem';
+                    stepContainer.style.display = 'none'; // Hidden by default
+                    
+                    const stepProgress = ux.createStepProgress({
+                        steps: ['Initialize', 'Scanning', 'Analyzing', 'Complete'],
+                        current: 0
+                    });
+                    stepContainer.appendChild(stepProgress);
+                    
+                    // Insert before progress bar
+                    const progressDiv = document.getElementById('watch-progress');
+                    if (progressDiv) {
+                        progressDiv.parentNode.insertBefore(stepContainer, progressDiv);
+                    }
+                    
+                    // Store reference for updates
+                    this._scanStepProgress = stepProgress;
+                    this._scanStepContainer = stepContainer;
+                }
+            }
+        }
+
+        /**
+         * Add skeleton loaders to plugin containers
+         * @private
+         */
+        _addSkeletonLoaders(ux) {
+            // Add skeleton to plugin views container when loading
+            const pluginViewsContainer = document.getElementById('plugin-views-container');
+            if (pluginViewsContainer) {
+                const skeleton = document.createElement('div');
+                skeleton.id = 'plugin-loading-skeleton';
+                skeleton.className = 'plugin-loading-skeleton hidden';
+                skeleton.style.padding = '1rem';
+                
+                // Create a card-like skeleton
+                skeleton.appendChild(ux.createSkeleton({ type: 'rectangle', height: '60px' }));
+                skeleton.appendChild(document.createElement('br'));
+                skeleton.appendChild(ux.createSkeleton({ type: 'text', lines: 3 }));
+                skeleton.appendChild(document.createElement('br'));
+                skeleton.appendChild(ux.createSkeleton({ type: 'rectangle', height: '200px' }));
+                
+                pluginViewsContainer.appendChild(skeleton);
+            }
+        }
+
+        /**
+         * Enhance status badges with UX utils
+         * @private
+         */
+        _enhanceStatusBadges(ux) {
+            // Create a helper for dynamic badge creation
+            window.createJupiterBadge = (status, label) => {
+                return ux.createTaskStatus(status, label);
+            };
+            
+            // Provide helper for progress indicators
+            window.createJupiterProgress = (options = {}) => {
+                if (options.type === 'ring') {
+                    return ux.createProgressRing(options);
+                } else if (options.type === 'steps') {
+                    return ux.createStepProgress(options);
+                }
+                return ux.createProgressBar(options);
+            };
+        }
+
+        /**
+         * Update scan step progress
+         * @param {number} step - Step index (0-3)
+         */
+        updateScanStep(step) {
+            if (this._scanStepProgress) {
+                this._scanStepProgress.setStep(step);
+            }
+            if (this._scanStepContainer) {
+                this._scanStepContainer.style.display = step >= 0 && step < 4 ? '' : 'none';
+            }
+        }
+
+        /**
+         * Show loading skeleton for plugins
+         * @param {boolean} show - Show or hide
+         */
+        showPluginLoadingSkeleton(show) {
+            const skeleton = document.getElementById('plugin-loading-skeleton');
+            if (skeleton) {
+                skeleton.classList.toggle('hidden', !show);
             }
         }
 

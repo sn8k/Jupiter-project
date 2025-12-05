@@ -9,12 +9,28 @@
  * - Historical data with mini charts
  * - Plugin-specific and system-wide metrics
  * 
- * @version 0.1.0
+ * @version 0.1.1
  * @module jupiter/web/js/metrics_widget
  */
 
 (function(window) {
     'use strict';
+
+    // Derive API base URL, mapping GUI port 8050/8081 to API port 8000
+    function inferApiBase(options = {}) {
+        if (options.apiBase) return options.apiBase;
+        if (window.state?.apiBaseUrl) return window.state.apiBaseUrl;
+
+        try {
+            const { protocol, hostname, port } = window.location;
+            const normalizedPort = port || (protocol === 'https:' ? '443' : '80');
+            const apiPort = (normalizedPort === '8050' || normalizedPort === '8081') ? '8000' : normalizedPort;
+            return `${protocol}//${hostname}${apiPort ? `:${apiPort}` : ''}/api/v1`;
+        } catch (err) {
+            console.warn('[MetricsWidget] Falling back to http://127.0.0.1:8000/api/v1', err);
+            return 'http://127.0.0.1:8000/api/v1';
+        }
+    }
 
     /**
      * Metrics Widget for Jupiter
@@ -27,7 +43,8 @@
          * @param {boolean} [options.autoRefresh=true] - Enable auto-refresh
          */
         constructor(options = {}) {
-            this.apiBase = options.apiBase || '/api/v1';
+            const inferredBase = inferApiBase(options);
+            this.apiBase = inferredBase.replace(/\/$/, '');
             this.refreshInterval = options.refreshInterval || 5000;
             this.autoRefresh = options.autoRefresh !== false;
             
@@ -198,7 +215,7 @@
             try {
                 const scope = this.elements.scopeSelect?.value || 'system';
                 const endpoint = scope === 'plugins' 
-                    ? `${this.apiBase}/plugins/metrics`
+                    ? `${this.apiBase}/metrics/bridge`
                     : `${this.apiBase}/metrics`;
                 
                 const response = await fetch(endpoint);
@@ -355,7 +372,7 @@
             if (metrics[key] !== undefined) return metrics[key];
             
             // Try common prefixes
-            for (const prefix of ['gauge_', 'counter_', 'histogram_']) {
+            for (const prefix of ['gauge_', 'counter_', 'histogram_', 'system_', 'plugins_']) {
                 if (metrics[prefix + key] !== undefined) {
                     return metrics[prefix + key];
                 }

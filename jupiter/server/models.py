@@ -1,4 +1,7 @@
-"""Pydantic models for Jupiter API requests and responses."""
+"""Pydantic models for Jupiter API requests and responses.
+
+Version: 1.1.0
+"""
 
 from __future__ import annotations
 
@@ -291,6 +294,8 @@ class ConfigModel(BaseModel):
     api_connector: Optional[str] = None
     api_app_var: Optional[str] = None
     api_path: Optional[str] = None
+    # Developer mode
+    developer_mode: bool = False
 
 
 class PartialConfigModel(BaseModel):
@@ -321,6 +326,8 @@ class PartialConfigModel(BaseModel):
     api_connector: Optional[str] = None
     api_app_var: Optional[str] = None
     api_path: Optional[str] = None
+    # Developer mode
+    developer_mode: Optional[bool] = None
 
 
 class RawConfigModel(BaseModel):

@@ -1,5 +1,29 @@
 # Changelog - jupiter/core/bridge/legacy_adapter.py
 
+## Version 0.2.0
+
+### Deprecated
+- **Module-level deprecation**: This entire module is now deprecated
+  - Will be removed in Jupiter 2.0.0
+  - All built-in plugins migrated to Bridge v2 manifests (plugin.yaml)
+  - See docs/PLUGIN_MIGRATION_GUIDE.md for migration instructions
+- `is_legacy_plugin()` - Marked deprecated, emits DeprecationWarning
+- `is_legacy_ui_plugin()` - Marked deprecated, emits DeprecationWarning
+- `LegacyAdapter` class - Marked deprecated, emits DeprecationWarning on init
+- `LegacyPluginWrapper` class - Marked deprecated, emits DeprecationWarning on init
+- Deprecation warning emitted on module import
+
+### Changed
+- Updated docstrings with `.. deprecated::` notices
+- Added `warnings` import
+- All deprecation warnings include reference to migration guide
+
+### Notes
+- Module retained for third-party legacy plugin compatibility
+- Recommended to migrate all plugins to Bridge v2 before Jupiter 2.0.0
+
+---
+
 ## Version 0.1.0
 
 ### Added

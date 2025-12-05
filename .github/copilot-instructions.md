@@ -2,6 +2,10 @@
 
 These guidelines are for AI coding agents working inside this repository. They summarize the essential architecture, workflows, and project‑specific conventions. For full details, see `AGENTS.md` (French) and `docs/architecture.md`.
 
+** this file must be kept up to date with project changes. **
+** AGENTS.md has the last word in case of conflicts. **
+** always check the "docs/" folder for full documentation **
+
 ## 1. Scope & Priorities
 - Focus on the **Python backend**, **CLI**, **server API**, and **analysis/scan tools**. Frontend (`jupiter/web`) is secondary.
 - Do **not** implement deployment logic or destructive operations; prefer code that a human will run.

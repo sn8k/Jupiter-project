@@ -1,6 +1,6 @@
 """Jupiter Plugin Bridge - Core Singleton.
 
-Version: 0.3.0 - Added ready() method for WebUI publication
+Version: 0.3.1 - Added _resolve_api_router for v2 plugin router support
 
 The Bridge is the central orchestrator for Jupiter's plugin system v2.
 It manages:
@@ -711,6 +711,67 @@ class Bridge:
             services = self._create_service_locator(info.manifest.id)
             info.instance.init(services)
     
+    def _resolve_api_router(
+        self, info: PluginInfo, api_contrib: APIContribution
+    ) -> Optional[APIContribution]:
+        """Resolve a router entrypoint string to an actual FastAPI router.
+        
+        Args:
+            info: Plugin info containing the loaded module
+            api_contrib: API contribution with router entrypoint string
+            
+        Returns:
+            New APIContribution with resolved router, or None on failure
+        """
+        entrypoint = api_contrib.entrypoint
+        plugin_id = api_contrib.plugin_id
+        
+        if not entrypoint or ":" not in entrypoint:
+            logger.warning(
+                "Invalid router entrypoint format for %s: %s (expected 'module:attr')",
+                plugin_id, entrypoint
+            )
+            return None
+        
+        module_path, attr_name = entrypoint.rsplit(":", 1)
+        
+        try:
+            # Build the full module path
+            full_module_path = f"jupiter.plugins.{plugin_id}.{module_path}"
+            
+            # Import the module
+            router_module = importlib.import_module(full_module_path)
+            
+            # Get the router attribute
+            router = getattr(router_module, attr_name, None)
+            if router is None:
+                logger.warning(
+                    "Router attribute '%s' not found in module '%s' for plugin %s",
+                    attr_name, full_module_path, plugin_id
+                )
+                return None
+            
+            # Create a new APIContribution with the resolved router
+            return APIContribution(
+                plugin_id=plugin_id,
+                router=router,
+                prefix=api_contrib.prefix,
+                tags=api_contrib.tags,
+            )
+            
+        except ImportError as e:
+            logger.warning(
+                "Failed to import router module '%s' for plugin %s: %s",
+                full_module_path, plugin_id, e
+            )
+            return None
+        except Exception as e:
+            logger.warning(
+                "Failed to resolve router for plugin %s: %s",
+                plugin_id, e
+            )
+            return None
+
     def _register_contributions(self, info: PluginInfo) -> None:
         """Register CLI/API/UI contributions from a plugin."""
         manifest = info.manifest
@@ -723,9 +784,17 @@ class Bridge:
             logger.debug("Registered CLI: %s", key)
         
         for api in manifest.api_contributions:
-            key = f"{plugin_id}.{api.path}"
-            self._api_contributions[key] = api
-            logger.debug("Registered API: %s", key)
+            # Resolve router entrypoint if this is a router-based contribution
+            if api.plugin_id and api.entrypoint and api.router is None:
+                resolved_api = self._resolve_api_router(info, api)
+                if resolved_api:
+                    key = f"{plugin_id}.api"
+                    self._api_contributions[key] = resolved_api
+                    logger.debug("Registered API router: %s at %s", key, resolved_api.prefix)
+            else:
+                key = f"{plugin_id}.{api.path}"
+                self._api_contributions[key] = api
+                logger.debug("Registered API: %s", key)
         
         for ui in manifest.ui_contributions:
             key = f"{plugin_id}.{ui.id}"

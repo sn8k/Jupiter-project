@@ -1,4 +1,104 @@
-# Changelog – jupiter/plugins/autodiag_plugin.py
+# Changelog – jupiter/plugins/autodiag/
+
+## [1.4.0] - Router Fix and JavaScript/HTML Synchronization
+
+### Fixed
+- **Router resolution failure**: FastAPI rejected `Union[Dict[str, Any], JSONResponse]` return type
+  - Error: "Invalid args for response field! Hint: check that Union[...] is a valid Pydantic field type"
+  - Solution: Changed `update_report()` to use `response_model=None` decorator
+  - This fix allows the plugin API router to be properly mounted at `/api/plugins/autodiag/`
+- **JS Element IDs**: Synchronized all JavaScript functions with correct HTML element IDs
+- **Tab switching**: `switchTab()` now properly shows/hides `.tab-content` with `hidden` class
+- **Scenario filtering**: `filterScenarios()` now queries `#autodiag-scenarios-body tr[data-status]` (table rows instead of divs)
+- **Server status**: `checkDiagServerHealth()` now uses `#autodiag-status-dot` and `#autodiag-server-status-text`
+
+### Added
+- `bindQuickSettings()` function for sidebar quick settings toggles
+- Quick settings localStorage persistence (skip CLI, skip API, skip plugins)
+- Tab badge count updates in `renderScenarios()`, `renderFalsePositives()`, `renderTrulyUnused()`
+- Load confidence data button event binding
+
+### Changed
+- `renderScenarios()`: Now renders table rows (`<tr>`) with 6 columns instead of div items
+- `renderFalsePositives()`: Now renders table rows with 4 columns
+- `renderTrulyUnused()`: Uses `.function-grid` and `.function-card` pattern
+- `updateUI()`: Shows stats dashboard and tabs on data load, calculates accuracy rate
+- Removed unused `renderSummary()` function
+- `server/api.py`: Removed `Union` from imports, using `response_model=None` pattern
+
+---
+
+## [1.3.0] - 2-Column Layout with Sidebar
+
+### Added
+- **2-column layout**: Main content area + 320px sidebar
+- **Quick Settings panel**: Toggle options for skipping CLI/API/plugins tests
+- **How to Use panel**: 4-step guide with icons
+- **Confidence Legend panel**: Explains Used/Likely/Possibly/Unused badges
+- **Server Status panel**: Live status indicator with URL
+- **Plugin API router**: `server/api.py` with `/state` and `/report` endpoints
+- **Complete translations**: 50+ new i18n keys in en.json and fr.json
+
+### Changed
+- HTML structure: `<div class="autodiag-wrapper">` → `<div class="autodiag-main">` + `<aside class="autodiag-sidebar">`
+- Scenarios display: Full table with columns (name, type, status, duration, error, functions)
+- CSS: ~700 lines with grid layout, sidebar panels, legend badges
+
+---
+
+## [1.2.0] - Fixed API URLs and Added Inline CSS
+
+### Fixed
+- **API endpoint URLs**: Changed `/run` to `/diag/run` and `/health` to `/diag/health` (the autodiag router has `/diag` prefix)
+- POST /run endpoint now correctly reaches the autodiag server
+
+### Added
+- **Inline CSS injection**: Complete CSS styles injected via JavaScript at initialization
+- Follows same pattern as ai_helper plugin for consistency
+- Dark theme compatible with CSS variables fallbacks
+
+### Technical Details
+- CSS ID: `autodiag-plugin-styles`
+- Styles cover: status cards, tabs, panels, scenario list, function list, confidence table, progress bars
+- Uses CSS scoping via `.autodiag-container` prefix
+
+---
+
+## [1.1.1] - plugin.yaml Schema Compliance Fix
+
+### Fixed
+- Rewrote `plugin.yaml` for JSON schema compliance
+- Added required `type: tool` field
+- Added required `jupiter_version: ">=1.8.0"` field
+- Proper `capabilities` object structure (was array)
+- Proper `ui.panels` array structure
+- Proper `entrypoints` object (init, shutdown only)
+- Proper `config.defaults` object
+
+---
+
+## [1.1.0] - Migrated to Bridge v2 Structure
+
+### Changed
+- Migrated from legacy single-file plugin to Bridge v2 modular structure
+- Split into `__init__.py` (lifecycle), `web/ui.py` (templates), `web/lang/` (i18n)
+- Added `plugin.yaml` manifest with complete metadata
+- Uses `bridge.services.get_logger()` for logging
+- UI type: `both` (sidebar + settings)
+
+### Added
+- `plugin.yaml` manifest v1.1.0 with full Bridge v2 metadata
+- `web/ui.py` with `get_ui_html()`, `get_ui_css()`, `get_ui_js()`, `get_settings_html()`, `get_settings_js()`
+- `web/lang/en.json` and `web/lang/fr.json` i18n files
+- `AutodiagPluginState` dataclass for state management
+
+### Technical Details
+- Plugin ID: `autodiag`
+- View ID: `autodiag`
+- Default port: 8081 (configurable)
+- Communicates with separate autodiag server for false-positive detection
+
+---
 
 ## [1.5.0] – 2025-12-02
 

@@ -1,12 +1,12 @@
 # Plugin Modèle v2 – Documentation
 
-Ce dossier contient un **plugin modèle** illustrant l'architecture v2 des plugins Jupiter, telle que décrite dans `docs/plugins_architecture.md` (v0.4.0).
+Ce dossier contient un **plugin modèle** illustrant l'architecture v2 des plugins Jupiter, telle que décrite dans `docs/plugins_architecture.md` (v0.6.0).
 
 > **Note** : Ce plugin n'est pas destiné à être exécuté dans Jupiter. Il sert uniquement de référence pour le développement de nouveaux plugins.
 
 ## Version
 
-**0.3.0** – Conforme à plugins_architecture.md v0.4.0
+**0.4.0** – Conforme à plugins_architecture.md v0.6.0
 
 ## Structure
 
@@ -37,7 +37,7 @@ docs/plugin_model/
 └── README.md             # Ce fichier
 ```
 
-## Points clés v0.4.0
+## Points clés v0.6.0
 
 ### 1. Types de plugins (§3.1)
 
@@ -54,6 +54,8 @@ Le manifest inclut :
 - **entrypoints** explicites : évite l'exécution de code arbitraire pour découvrir les hooks.
 - **capabilities.jobs** : timeout et concurrence pour tâches longues (§10.6).
 - **permissions** granulaires : `fs_read`, `fs_write`, `run_commands`, `network_outbound`, `access_meeting`.
+- **capabilities.health** : configuration du healthcheck.
+- **capabilities.metrics** : export des métriques (JSON ou Prometheus).
 
 ### 3. Bridge comme Service Locator (§3.3.1)
 
@@ -65,6 +67,7 @@ def init(bridge):
     config = bridge.services.get_config("example_plugin")
     runner = bridge.services.get_runner()
     events = bridge.services.get_event_bus()
+    history = bridge.services.get_history()
 ```
 
 ### 4. Scope global vs projet (§3.1.1)
@@ -78,6 +81,7 @@ def init(bridge):
 Si `config_schema.schema` est défini → formulaire auto-généré dans Settings.
 Si `capabilities.metrics.enabled: true` → carte de stats auto-générée.
 Composant de logs partagé injecté automatiquement.
+Panneau d'aide contextuel disponible (F1 ou ?).
 
 ### 6. Jobs asynchrones (§10.6)
 
@@ -114,25 +118,50 @@ En mode développeur (`developer_mode: true`), les plugins peuvent être recharg
 jupiter plugins reload example_plugin
 ```
 
+Ou via le bouton "Hot Reload" dans le cadre développeur de la WebUI.
+
 ### 8. Panneau WebUI – §9
 
 - Zone d'aide à droite obligatoire.
 - Logs temps réel avec recherche/pause/téléchargement.
-- Statistiques d'utilisation.
+- Logs centralisé avec filtrage multi-plugin.
+- Statistiques d'utilisation avec sparklines.
 - Exports fichier/IA.
+- Progress indicators (ring, bar, steps).
+- Skeleton loaders.
 
 ### 9. Cadre Settings – §9
 
 - Auto-ajouté via Bridge si `capabilities.ui.settings_frame: true`.
 - Affichage de la version du plugin.
 - Boutons check/update.
-- Mode debug, notifications, changelog, reset.
+- Mode debug avec désactivation auto configurable.
+- Bouton dry-run pour tester la configuration.
+- Notifications, changelog, reset.
+- Import/export des réglages.
 
 ### 10. Sécurité – §3.6, §3.9
 
-- Permissions déclarées dans le manifest.
+- Permissions déclarées dans le manifest, affichées lors de l'installation.
 - Appels runner médiés par le Bridge.
-- Signature optionnelle pour distribution.
+- Signature optionnelle pour distribution avec trust levels.
+- Circuit breaker pour plugins défaillants.
+- Rate limiting par plugin.
+- Gouvernance via whitelist/blacklist.
+
+### 11. Monitoring – §7.4
+
+- Audit logging de toutes les actions sensibles.
+- Timeout management configurable.
+- Usage statistics (exécutions, durée moyenne, taux succès/échec).
+- Rapport d'erreur intégré avec anonymisation.
+
+### 12. Notifications – §8.3
+
+- Types : info, success, warning, error, action_required.
+- Priorités : LOW, NORMAL, HIGH, URGENT.
+- Canaux : TOAST, BADGE, ALERT, SILENT.
+- Muting global et par plugin.
 
 ## Utilisation
 
@@ -161,7 +190,35 @@ Pour créer un nouveau plugin v2 :
 
 10. (Optionnel) Signer le plugin avec `jupiter plugins sign`.
 
+## Commandes CLI utiles
+
+```bash
+# Installation
+jupiter plugins install ./my_plugin
+jupiter plugins install https://example.com/plugin.zip
+
+# Gestion
+jupiter plugins list
+jupiter plugins info my_plugin
+jupiter plugins enable my_plugin
+jupiter plugins disable my_plugin
+
+# Développement
+jupiter plugins reload my_plugin          # Hot reload (dev mode)
+jupiter plugins scaffold my_plugin --with-ui
+
+# Sécurité
+jupiter plugins sign ./my_plugin --signer-id me
+jupiter plugins verify ./my_plugin --require-level verified
+
+# Mise à jour
+jupiter plugins check-updates
+jupiter plugins update my_plugin
+jupiter plugins uninstall my_plugin
+```
+
 ## Références
 
-- [Architecture des plugins Jupiter](../plugins_architecture.md) – v0.4.0
-- [Guide développeur](../dev_guide.md)
+- [Architecture des plugins Jupiter](../plugins_architecture.md) – v0.6.0
+- [Guide de migration v1 → v2](../PLUGIN_MIGRATION_GUIDE.md)
+- [Guide développeur](../PLUGIN_DEVELOPER_GUIDE.md)

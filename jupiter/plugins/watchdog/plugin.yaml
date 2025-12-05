@@ -1,0 +1,68 @@
+# Watchdog Plugin Manifest v2
+# Version: 1.0.0 - Fixed manifest schema compliance
+
+id: watchdog
+name: Watchdog
+version: "1.0.1"
+description: Auto-reload plugins when their files are modified. Development tool for plugin developers.
+type: tool
+jupiter_version: ">=1.8.0"
+
+# Metadata
+author:
+  name: Jupiter Team
+  url: https://github.com/sn8k/Jupiter-project
+license: MIT
+homepage: https://github.com/sn8k/Jupiter-project
+trust_level: official
+
+# Permissions
+permissions:
+  - fs_read
+  - emit_events
+  - register_ui
+
+# Capabilities
+capabilities:
+  metrics:
+    enabled: true
+    export_format: json
+  health_check:
+    enabled: true
+    interval: 60
+  jobs:
+    enabled: false
+
+# Entrypoints
+entrypoints:
+  init: "__init__:init"
+  shutdown: "__init__:shutdown"
+  health: "__init__:health"
+  metrics: "__init__:metrics"
+
+# UI contributions
+ui:
+  panels:
+    - id: settings
+      location: settings
+      route: /plugins/watchdog
+      title_key: plugin.watchdog.title
+      icon: "👁️"
+      order: 999
+      settings_section: Plugin Watchdog
+  assets:
+    js:
+      - web/panels/settings.js
+  i18n:
+    path: web/lang
+    languages:
+      - en
+      - fr
+
+# Configuration schema
+config:
+  defaults:
+    enabled: false
+    check_interval: 2.0
+    auto_reload: true
+    watch_external: false

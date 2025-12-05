@@ -1,5 +1,16 @@
 # Changelog – jupiter/web/styles.css
 
+## v1.3.0 - Central Logs & Permissions UI
+
+### Added
+- `.central-logs-panel`: Central logs panel container with dark theme
+- `.central-logs-filters`: Filter bar with grid layout (plugin, level, time, search)
+- `.central-logs-content`: Scrollable logs area with monospace font
+- `.logs-mini-panel`: Compact log panel for injection in plugin pages
+- `.permissions-list`: Grid layout for permission items display
+- `.permission-item`: Permission card with icon, name, description
+- `.permission-sensitive`: Warning styling for sensitive permissions
+
 ## Plugin Activity Widget Styles (Phase 4.2.1)
 
 ### Added

@@ -277,7 +277,8 @@ class TestManifestFromYaml:
         manifest = PluginManifest.from_yaml(temp_manifest_file, validate=False)
         
         assert manifest.id == "test_plugin"
-        assert manifest.source_path == temp_manifest_file
+        # source_path is now the plugin directory (parent of yaml file), not the yaml file itself
+        assert manifest.source_path == temp_manifest_file.parent
     
     def test_file_not_found(self):
         """Should raise ManifestError for missing file."""

@@ -1,4 +1,57 @@
-# Changelog – jupiter/plugins/code_quality.py
+# Changelog – jupiter/plugins/code_quality/
+
+## [0.8.2] - plugin.yaml Schema Compliance Fix
+
+### Fixed
+- Rewrote `plugin.yaml` for JSON schema compliance
+- Added required `type: tool` field
+- Added required `jupiter_version: ">=1.8.0"` field
+- Proper `capabilities` object structure (was array)
+- Proper `ui.panels` array structure
+- Proper `entrypoints` object (init, shutdown only)
+- Proper `config.defaults` object
+
+---
+
+## [0.8.1] - Migrated to Bridge v2 Structure
+
+### Changed
+- Migrated from legacy single-file `jupiter/plugins/code_quality.py` to Bridge v2 modular structure
+- Split into:
+  - `__init__.py` - Plugin lifecycle and API
+  - `core/models.py` - Data classes (QualityIssue, FileQualityReport, QualitySummary, ManualDuplicationLink)
+  - `core/analyzer.py` - CodeQualityAnalyzer class
+  - `web/ui.py` - HTML/CSS/JS templates
+  - `web/lang/` - i18n files
+- Added `plugin.yaml` manifest with complete metadata
+- Uses `bridge.services.get_logger()` for logging
+- UI type: `both` (sidebar + settings)
+
+### Added
+- `plugin.yaml` manifest v0.8.1 with full Bridge v2 metadata
+- `core/models.py` with dataclasses:
+  - `QualityIssue` - Single quality issue
+  - `FileQualityReport` - Per-file report
+  - `QualitySummary` - Overall project summary
+  - `ManualLinkOccurrence` - Duplication link occurrence
+  - `ManualDuplicationLink` - User-defined duplication cluster
+- `core/analyzer.py` with `CodeQualityAnalyzer` class
+- `web/ui.py` with:
+  - Dashboard with score circle and metrics
+  - Tabbed interface (Dashboard, Issues, Files, Duplication, Recommendations)
+  - Manual duplication linking UI
+  - Settings panel with threshold configuration
+- `web/lang/en.json` and `web/lang/fr.json` i18n files
+
+### Technical Details
+- Plugin ID: `code_quality`
+- View ID: `code_quality`
+- Integrates with `jupiter.core.quality.complexity` and `jupiter.core.quality.duplication`
+- Complexity thresholds: low=10, moderate=20, high=30, very_high=50
+- Duplication thresholds: acceptable=3%, warning=5%, high=10%
+- Manual duplication links stored in `.jupiter/manual_duplication_links.json`
+
+---
 
 ## 2025-12-02 – Settings persistence & UX polish
 

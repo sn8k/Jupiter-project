@@ -1,5 +1,40 @@
 # Changelog – jupiter/web/app.js
 
+## Version 1.7.0 – Dynamic Plugin Translations
+### Added
+- `createPluginBridge(pluginName, pluginTranslations)`: Now accepts plugin-specific translations
+  - The bridge's `i18n.t()` function checks plugin translations first, then falls back to global
+  - Exposes `i18n.pluginTranslations` for advanced plugin use
+
+### Changed
+- `loadPluginViewContent()`: Now fetches plugin translations before mounting v2 plugins
+  - Calls `/plugins/{name}/lang/{lang}` API to get plugin-specific translations
+  - Passes translations to `createPluginBridge()`
+  - Logs number of translations loaded for debugging
+
+### Architecture
+- Implements dynamic i18n loading as described in `docs/plugins_architecture.md`
+- Each plugin manages its own translations in `web/lang/` directory
+- Main lang files only contain menu/title keys for plugins
+
+## Version 1.6.3
+### Fixed
+- **Critical**: Fixed syntax error in `initializeV2SettingsForm()` - extra closing brace `}` was breaking JavaScript execution
+- V2 plugin settings panels now properly display with auto-generated forms
+- Added comprehensive logging for debugging settings form initialization
+
+## Version 1.6.2
+### Changed
+- `loadPluginSettings()`: Improved error handling and logging
+  - Now always reloads settings plugins list when opening settings page
+  - Added check for API base URL before making requests
+  - Better console logging for debugging settings panel issues
+
+## Version 1.6.1
+### Fixed
+- Plugin settings loading for v2 plugins
+- V2 auto-form generation from JSON schema
+
 ## Plugin Activity Widgets (Phase 4.2.1)
 
 ### Added
@@ -77,6 +112,16 @@
 - `loadPluginSettings()` vide désormais le conteneur actuel avant de demander aux plugins leurs cartes de configuration, ce qui évite les résidus d'UI quand on recharge la page ou qu'on active un autre projet.
 - Les cartes retournées par les plugins sont injectées dans un wrapper `.plugin-settings-card` afin d'aligner leur style avec la nouvelle grille Settings.
 - Le wiring du formulaire API projet et de l'upload ZIP passe par `setupProjectApiConnectorForm()` / `setupUpdateFileUpload()` appelés dans `init()`, supprimant le `DOMContentLoaded` isolé qui cassait la compilation TypeScript et l'exécution du thème.
+
+## Version 1.7.1 – Plugin metrics routing
+### Fixed
+- `fetchPluginMetrics` now targets `/plugins/v2/{plugin}/metrics` (keeps legacy autodiag path) instead of `/plugins/{plugin}/metrics`, eliminating 404s on the plugins page.
+- `inferApiBaseUrl` also maps diag port 8081 to API port 8000 to avoid wrong-host calls in multi-port setups.
+
+## Version 1.7.2 – Plugin bridge base URL & metrics fallback
+### Fixed
+- `createPluginBridge` now exposes `api.baseUrl`, hardens `fetch/get/post` error handling, and infers API host/port (including 8050/8081 → 8000) for plugin consumers like SSE streams.
+- Plugin activity metrics request `/plugins/v2/{id}/metrics` first, with legacy autodiag fallback, avoiding 404s and swallowing of bad responses.
 
 
 

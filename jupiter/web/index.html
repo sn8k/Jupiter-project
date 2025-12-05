@@ -54,7 +54,7 @@
           <span id="plugin-menu-marker" style="display:none;"></span>
           <button class="nav-btn" data-view="settings" data-i18n="settings_view">⚙️ Paramètres</button>
           <button class="nav-btn" data-view="plugins" data-i18n="plugins_view">🧩 Plugins</button>
-          <button class="nav-btn" data-view="suggestions" data-i18n="suggestions_view">🤖 Suggestions IA</button>
+          <!-- Suggestions IA is now handled by ai_helper plugin (v2) -->
         </nav>
 
         <main class="content">
@@ -995,23 +995,7 @@ api:
           <!-- Dynamic plugin view container - populated by plugins with sidebar UI -->
           <div id="plugin-views-container"></div>
 
-          <section class="view hidden" data-view="suggestions" aria-label="Vue Suggestions IA">
-            <header class="view-header">
-              <div>
-                <h2 data-i18n="suggestions_title">Suggestions IA</h2>
-                <p class="muted" data-i18n="suggestions_subtitle">Propositions d'amélioration et de refactoring.</p>
-              </div>
-              <div class="actions">
-                 <button class="secondary" data-action="refresh-suggestions" data-i18n="refresh">Actualiser</button>
-                 <button class="secondary" data-action="export-suggestions" data-i18n="export_report">Exporter Rapport</button>
-              </div>
-            </header>
-            <div class="panel">
-               <div id="suggestions-list" class="list-group">
-                  <p class="muted">Aucune suggestion pour le moment. Lancez une analyse.</p>
-               </div>
-            </div>
-          </section>
+          <!-- Legacy Suggestions IA section removed - now handled by ai_helper plugin -->
 
           <section class="view hidden" data-view="projects" aria-label="Vue Projets">
             <!-- Active Project Section (with API Config) -->
@@ -1219,8 +1203,8 @@ api:
     <script src="js/data_export.js?v=0.1.0"></script>
     <script src="js/ux_utils.js?v=0.1.0"></script>
     <!-- Main Application -->
-    <script type="module" src="app.js?v=1.0.2"></script>
-    <div style="position: fixed; bottom: 5px; right: 5px; font-size: 10px; color: var(--text-muted); opacity: 0.5;">v1.0.2</div>
+    <script type="module" src="app.js?v={{JUPITER_VERSION}}"></script>
+    <div style="position: fixed; bottom: 5px; right: 5px; font-size: 10px; color: var(--text-muted); opacity: 0.5;">v{{JUPITER_VERSION}}</div>
 
     <!-- Modals -->
     <div id="scan-modal" class="modal-overlay hidden">
@@ -1430,6 +1414,20 @@ api:
               <input type="file" id="install-plugin-file" accept=".zip,.py" style="flex: 1;" />
             </div>
             <p class="small muted" data-i18n="plugins_install_file_hint">Sélectionnez un fichier ZIP ou .py.</p>
+          </div>
+
+          <!-- Plugin Permissions Preview (shown after manifest fetch) -->
+          <div id="install-plugin-permissions" class="form-group hidden" style="margin-top: 1rem; padding: 1rem; background: var(--bg-subtle); border-radius: 8px; border: 1px solid var(--border);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <span style="font-size: 1.2rem;">🔒</span>
+              <h4 style="margin: 0;" data-i18n="plugins_install_permissions_title">Permissions demandées</h4>
+            </div>
+            <div id="install-plugin-permissions-list" class="permissions-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
+              <!-- Permissions will be dynamically inserted here -->
+            </div>
+            <p class="small muted" style="margin-top: 0.75rem;" data-i18n="plugins_install_permissions_hint">
+              Ces permissions seront accordées au plugin lors de l'installation.
+            </p>
           </div>
 
           <div id="install-plugin-error" class="error hidden" style="margin-top: 1rem; color: var(--text-error);"></div>

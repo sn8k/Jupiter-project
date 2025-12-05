@@ -1,5 +1,18 @@
 # Changelog – jupiter/web/lang/fr.json
 
+## Plugin i18n Architecture Change
+
+### Changed
+- Plugin-specific translations are now loaded dynamically from each plugin's `web/lang/` directory
+- Main lang files only contain menu/title keys for plugins (`plugin.*.title`, `plugin.*.suggestions_panel`)
+- Removed duplicate ai_helper translations that now live in `jupiter/plugins/ai_helper/web/lang/fr.json`
+
+### Rationale
+- Follows the architecture described in `docs/plugins_architecture.md`
+- Each plugin owns its translations
+- No duplication between main app and plugins
+- Translations loaded at plugin mount time via `/plugins/{name}/lang/{lang}` API
+
 ## Plugin Activity Widget i18n (Phase 4.2.1)
 
 ### Ajouté

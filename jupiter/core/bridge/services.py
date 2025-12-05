@@ -1,6 +1,6 @@
 """Service Locator for Jupiter Plugin Bridge.
 
-Version: 0.2.0
+Version: 0.3.0
 
 This module provides secure, scoped access to Jupiter's core services
 for plugins. Each service is wrapped to enforce permissions and provide
@@ -26,6 +26,11 @@ Usage:
     
     config = services.get_config()
     print(config.get("api_key"))
+
+Changelog:
+    0.3.0: Added global log level floor and per-plugin log level configuration
+    0.2.0: Added PluginConfigManager integration
+    0.1.0: Initial release with basic services
 """
 
 from __future__ import annotations
@@ -50,12 +55,64 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Global log level floor - plugins cannot log below this level
+_GLOBAL_LOG_LEVEL_FLOOR: int = logging.DEBUG
+# Per-plugin log levels
+_PLUGIN_LOG_LEVELS: Dict[str, int] = {}
+
+
+def set_global_log_level_floor(level: int) -> None:
+    """Set the global minimum log level for all plugins.
+    
+    Plugins cannot log more verbosely than this level.
+    For example, if floor is WARNING, plugin DEBUG/INFO logs are suppressed.
+    
+    Args:
+        level: Logging level (e.g., logging.INFO, logging.WARNING)
+    """
+    global _GLOBAL_LOG_LEVEL_FLOOR
+    _GLOBAL_LOG_LEVEL_FLOOR = level
+
+
+def get_global_log_level_floor() -> int:
+    """Get the current global log level floor."""
+    return _GLOBAL_LOG_LEVEL_FLOOR
+
+
+def set_plugin_log_level(plugin_id: str, level: int) -> None:
+    """Set the log level for a specific plugin.
+    
+    This is capped by the global floor - plugin cannot be more verbose
+    than the global setting.
+    
+    Args:
+        plugin_id: Plugin identifier
+        level: Logging level for this plugin
+    """
+    _PLUGIN_LOG_LEVELS[plugin_id] = level
+
+
+def get_plugin_log_level(plugin_id: str) -> Optional[int]:
+    """Get the configured log level for a plugin, or None if not set."""
+    return _PLUGIN_LOG_LEVELS.get(plugin_id)
+
+
+def clear_plugin_log_levels() -> None:
+    """Clear all per-plugin log level settings."""
+    _PLUGIN_LOG_LEVELS.clear()
+
 
 class PluginLogger:
     """Logger wrapper that prefixes all messages with plugin ID.
     
     This provides consistent logging format across all plugins and
     makes it easy to filter logs by plugin.
+    
+    Features:
+    - All messages prefixed with [plugin:<plugin_id>]
+    - Respects global log level floor (plugin cannot be more verbose)
+    - Supports per-plugin log level configuration
+    - Effective level = max(global_floor, plugin_level)
     """
     
     def __init__(self, plugin_id: str, base_logger: Optional[logging.Logger] = None):
@@ -67,6 +124,10 @@ class PluginLogger:
         """
         self._plugin_id = plugin_id
         self._logger = base_logger or logging.getLogger(f"jupiter.plugins.{plugin_id}")
+        # Apply plugin-specific level if configured
+        plugin_level = get_plugin_log_level(plugin_id)
+        if plugin_level is not None:
+            self._apply_effective_level(plugin_level)
     
     @property
     def plugin_id(self) -> str:
@@ -75,31 +136,90 @@ class PluginLogger:
     def _format_msg(self, msg: str) -> str:
         return f"[plugin:{self._plugin_id}] {msg}"
     
+    def _get_effective_level(self) -> int:
+        """Calculate effective log level respecting global floor.
+        
+        Returns:
+            max(global_floor, plugin_level) - ensures plugin isn't more verbose than allowed
+        """
+        global_floor = get_global_log_level_floor()
+        plugin_level = get_plugin_log_level(self._plugin_id)
+        
+        if plugin_level is None:
+            return global_floor
+        
+        # Plugin cannot be more verbose than the global floor
+        return max(global_floor, plugin_level)
+    
+    def _should_log(self, level: int) -> bool:
+        """Check if a message at given level should be logged.
+        
+        Args:
+            level: The logging level of the message
+            
+        Returns:
+            True if message should be logged
+        """
+        return level >= self._get_effective_level()
+    
+    def _apply_effective_level(self, level: int) -> None:
+        """Apply the effective level, respecting global floor."""
+        effective = max(get_global_log_level_floor(), level)
+        self._logger.setLevel(effective)
+    
     def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._logger.debug(self._format_msg(msg), *args, **kwargs)
+        if self._should_log(logging.DEBUG):
+            self._logger.debug(self._format_msg(msg), *args, **kwargs)
     
     def info(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._logger.info(self._format_msg(msg), *args, **kwargs)
+        if self._should_log(logging.INFO):
+            self._logger.info(self._format_msg(msg), *args, **kwargs)
     
     def warning(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._logger.warning(self._format_msg(msg), *args, **kwargs)
+        if self._should_log(logging.WARNING):
+            self._logger.warning(self._format_msg(msg), *args, **kwargs)
     
     def error(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._logger.error(self._format_msg(msg), *args, **kwargs)
+        if self._should_log(logging.ERROR):
+            self._logger.error(self._format_msg(msg), *args, **kwargs)
     
     def critical(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._logger.critical(self._format_msg(msg), *args, **kwargs)
+        if self._should_log(logging.CRITICAL):
+            self._logger.critical(self._format_msg(msg), *args, **kwargs)
     
     def exception(self, msg: str, *args: Any, **kwargs: Any) -> None:
-        self._logger.exception(self._format_msg(msg), *args, **kwargs)
+        # Exception logging always includes traceback, should respect level for ERROR
+        if self._should_log(logging.ERROR):
+            self._logger.exception(self._format_msg(msg), *args, **kwargs)
     
     def setLevel(self, level: int) -> None:
-        """Set the logging level for this plugin."""
-        self._logger.setLevel(level)
+        """Set the logging level for this plugin.
+        
+        Note: This is capped by the global floor - you cannot make
+        the plugin more verbose than the global setting.
+        
+        Args:
+            level: Desired logging level
+        """
+        # Store the plugin-specific level
+        set_plugin_log_level(self._plugin_id, level)
+        # Apply effective level (respecting floor)
+        self._apply_effective_level(level)
     
     def getEffectiveLevel(self) -> int:
-        """Get the effective logging level."""
-        return self._logger.getEffectiveLevel()
+        """Get the effective logging level (considering global floor)."""
+        return self._get_effective_level()
+    
+    def isEnabledFor(self, level: int) -> bool:
+        """Check if logging is enabled for a given level.
+        
+        Args:
+            level: Logging level to check
+            
+        Returns:
+            True if messages at this level would be logged
+        """
+        return self._should_log(level)
 
 
 class SecureRunner:

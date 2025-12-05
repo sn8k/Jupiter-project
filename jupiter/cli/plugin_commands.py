@@ -1,6 +1,6 @@
 """CLI command handlers for plugin management.
 
-Version: 0.4.0 - Added signature verification at install
+Version: 0.5.0 - Added update, check-updates, install-deps and dry-run
 
 Provides handlers for:
 - jupiter plugins list
@@ -8,8 +8,10 @@ Provides handlers for:
 - jupiter plugins enable <id>
 - jupiter plugins disable <id>
 - jupiter plugins status
-- jupiter plugins install <source>
+- jupiter plugins install <source> [--install-deps] [--dry-run]
 - jupiter plugins uninstall <id>
+- jupiter plugins update <id> [--source] [--install-deps] [--no-backup]
+- jupiter plugins check-updates
 - jupiter plugins scaffold <id>
 - jupiter plugins reload <id>
 - jupiter plugins sign <path>
@@ -608,6 +610,38 @@ def _verify_plugin_signature(plugin_path: Path, force: bool = False) -> bool:
         return True
 
 
+def _install_plugin_dependencies(plugin_path: Path) -> bool:
+    """Install Python dependencies from plugin's requirements.txt.
+    
+    Args:
+        plugin_path: Path to the plugin directory
+        
+    Returns:
+        True if dependencies were installed, False otherwise
+    """
+    import subprocess
+    
+    requirements_file = plugin_path / "requirements.txt"
+    if not requirements_file.exists():
+        return False
+    
+    print("  📦 Installing dependencies from requirements.txt...")
+    
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        print("  ✅ Dependencies installed successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"  ⚠️ Warning: Failed to install dependencies: {e.stderr}")
+        logger.warning("Failed to install plugin dependencies: %s", e.stderr)
+        return False
+
+
 def handle_plugins_install(args: argparse.Namespace) -> None:
     """Handle `jupiter plugins install <source>` command.
     
@@ -615,16 +649,23 @@ def handle_plugins_install(args: argparse.Namespace) -> None:
     - Local path (directory or ZIP file)
     - HTTP/HTTPS URL to ZIP file
     - Git repository URL
+    
+    Options:
+    - --install-deps: Install Python dependencies from requirements.txt
+    - --dry-run: Simulate installation without making changes
     """
     source = args.source
     force = getattr(args, 'force', False)
+    install_deps = getattr(args, 'install_deps', False)
+    dry_run = getattr(args, 'dry_run', False)
     
     plugins_dir = _get_plugins_dir()
     
-    if not plugins_dir.exists():
+    if not plugins_dir.exists() and not dry_run:
         plugins_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"📦 Installing plugin from: {source}")
+    mode_str = "[DRY RUN] " if dry_run else ""
+    print(f"{mode_str}📦 Installing plugin from: {source}")
     
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -663,6 +704,18 @@ def handle_plugins_install(args: argparse.Namespace) -> None:
             print(f"  Name: {plugin_name}")
             print(f"  Version: {plugin_version}")
             
+            # Check for dependencies
+            requirements_file = plugin_path / "requirements.txt"
+            if requirements_file.exists():
+                print(f"  📋 Found requirements.txt")
+                if install_deps:
+                    if dry_run:
+                        print(f"  {mode_str}Would install dependencies")
+                    else:
+                        _install_plugin_dependencies(plugin_path)
+                else:
+                    print(f"     Use --install-deps to install dependencies")
+            
             # Verify signature
             signature_result = _verify_plugin_signature(plugin_path, force)
             if signature_result is False:
@@ -674,16 +727,26 @@ def handle_plugins_install(args: argparse.Namespace) -> None:
             dest_path = plugins_dir / plugin_id
             if dest_path.exists():
                 if force:
-                    print(f"  ⚠️ Plugin already exists, overwriting (--force)")
-                    shutil.rmtree(dest_path)
+                    print(f"  ⚠️ Plugin already exists, {'would overwrite' if dry_run else 'overwriting'} (--force)")
+                    if not dry_run:
+                        shutil.rmtree(dest_path)
                 else:
                     print(f"❌ Plugin '{plugin_id}' already installed at {dest_path}")
                     print(f"   Use --force to overwrite")
                     sys.exit(1)
             
+            if dry_run:
+                print(f"\n{mode_str}✅ Plugin '{plugin_id}' would be installed to {dest_path}")
+                print(f"   Run without --dry-run to install")
+                return
+            
             # Copy to plugins directory
             if plugin_path.resolve() != dest_path.resolve():
                 shutil.copytree(plugin_path, dest_path)
+            
+            # Install dependencies after copying (if --install-deps)
+            if install_deps:
+                _install_plugin_dependencies(dest_path)
             
             print(f"✅ Plugin '{plugin_id}' installed to {dest_path}")
             print(f"   Restart Jupiter to load the plugin")
@@ -1103,3 +1166,229 @@ def handle_plugins_verify(args: argparse.Namespace) -> None:
         print(f"❌ Verification failed: {e}", file=sys.stderr)
         logger.exception("Plugin verification failed")
         sys.exit(1)
+
+
+def handle_plugins_update(args: argparse.Namespace) -> None:
+    """Handle `jupiter plugins update <id>` command.
+    
+    Updates a plugin to a new version. If --source is provided, uses that as
+    the update source. Otherwise, looks for update source in plugin metadata.
+    
+    Features:
+    - Creates backup before update (unless --no-backup)
+    - Supports rollback on failure
+    - Optional dependency installation (--install-deps)
+    """
+    import json
+    from datetime import datetime
+    
+    plugin_id = args.plugin_id
+    source = getattr(args, 'source', None)
+    force = getattr(args, 'force', False)
+    install_deps = getattr(args, 'install_deps', False)
+    no_backup = getattr(args, 'no_backup', False)
+    
+    bridge = get_bridge()
+    plugins_dir = _get_plugins_dir()
+    
+    # Check if plugin exists
+    info = bridge.get_plugin(plugin_id) if bridge else None
+    plugin_path = plugins_dir / plugin_id
+    
+    if not plugin_path.exists() and not info:
+        print(f"❌ Plugin '{plugin_id}' not found", file=sys.stderr)
+        sys.exit(1)
+    
+    # Prevent updating core plugins
+    if info and info.manifest.plugin_type.value == "core":
+        print(f"❌ Cannot update core plugin '{plugin_id}'", file=sys.stderr)
+        sys.exit(1)
+    
+    # Get current version
+    current_version = "unknown"
+    if info:
+        current_version = info.manifest.version
+    elif plugin_path.exists():
+        manifest_path = plugin_path / "manifest.json"
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, 'r', encoding='utf-8') as f:
+                    manifest = json.load(f)
+                current_version = manifest.get('version', 'unknown')
+            except Exception:
+                pass
+    
+    print(f"🔄 Updating plugin '{plugin_id}' (current: v{current_version})")
+    
+    # If no source provided, try to get from manifest metadata
+    if not source:
+        if plugin_path.exists():
+            manifest_path = plugin_path / "manifest.json"
+            if manifest_path.exists():
+                try:
+                    with open(manifest_path, 'r', encoding='utf-8') as f:
+                        manifest = json.load(f)
+                    source = manifest.get('repository') or manifest.get('homepage')
+                except Exception:
+                    pass
+        
+        if not source:
+            print(f"❌ No update source provided and none found in manifest", file=sys.stderr)
+            print(f"   Use --source <url|path> to specify update source")
+            sys.exit(1)
+    
+    print(f"  Source: {source}")
+    
+    # Create backup
+    backup_path = None
+    if not no_backup and plugin_path.exists():
+        backup_dir = plugins_dir / ".backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = backup_dir / f"{plugin_id}_{timestamp}"
+        print(f"  💾 Creating backup at {backup_path}")
+        try:
+            shutil.copytree(plugin_path, backup_path)
+        except Exception as e:
+            print(f"  ⚠️ Warning: Failed to create backup: {e}")
+            backup_path = None
+    
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            
+            # Determine source type and get plugin directory
+            if source.startswith(('http://', 'https://')):
+                if source.endswith('.git'):
+                    new_plugin_path = _clone_git_repo(source, tmp_path)
+                else:
+                    zip_file = _download_from_url(source, tmp_path)
+                    new_plugin_path = _extract_zip(zip_file, tmp_path)
+            elif Path(source).exists():
+                local_path = Path(source)
+                if local_path.is_dir():
+                    new_plugin_path = local_path
+                elif local_path.suffix == '.zip':
+                    new_plugin_path = _extract_zip(local_path, tmp_path)
+                else:
+                    raise RuntimeError(f"Unsupported source type: {source}")
+            else:
+                raise RuntimeError(f"Source not found: {source}")
+            
+            # Validate new manifest
+            new_manifest = _validate_plugin_manifest(new_plugin_path)
+            new_version = new_manifest['version']
+            
+            # Check version
+            if new_version == current_version and not force:
+                print(f"  ℹ️ Already at version {current_version}")
+                print(f"     Use --force to reinstall")
+                return
+            
+            print(f"  New version: v{new_version}")
+            
+            # Verify signature
+            signature_result = _verify_plugin_signature(new_plugin_path, force)
+            if signature_result is False:
+                print("Update cancelled")
+                sys.exit(1)
+            
+            # Remove old version
+            if plugin_path.exists():
+                shutil.rmtree(plugin_path)
+            
+            # Install new version
+            shutil.copytree(new_plugin_path, plugin_path)
+            
+            # Install dependencies if requested
+            if install_deps:
+                _install_plugin_dependencies(plugin_path)
+            
+            print(f"✅ Plugin '{plugin_id}' updated to v{new_version}")
+            print(f"   Restart Jupiter to load the updated plugin")
+            
+            # Clean up backup on success (optional)
+            # Keep backup for now for safety
+            if backup_path:
+                print(f"   Backup saved at {backup_path}")
+            
+    except Exception as e:
+        print(f"❌ Update failed: {e}", file=sys.stderr)
+        logger.exception("Plugin update failed")
+        
+        # Rollback on failure
+        if backup_path and backup_path.exists():
+            print(f"  🔄 Rolling back to previous version...")
+            try:
+                if plugin_path.exists():
+                    shutil.rmtree(plugin_path)
+                shutil.copytree(backup_path, plugin_path)
+                print(f"  ✅ Rollback successful")
+            except Exception as rollback_error:
+                print(f"  ❌ Rollback failed: {rollback_error}", file=sys.stderr)
+        
+        sys.exit(1)
+
+
+def handle_plugins_check_updates(args: argparse.Namespace) -> None:
+    """Handle `jupiter plugins check-updates` command.
+    
+    Checks for available updates for all installed plugins.
+    This is a placeholder - actual implementation would need a registry/marketplace.
+    """
+    import json
+    
+    as_json = getattr(args, 'json', False)
+    
+    bridge = get_bridge()
+    plugins_dir = _get_plugins_dir()
+    
+    if not bridge:
+        print("❌ Bridge not available", file=sys.stderr)
+        sys.exit(1)
+    
+    plugins = bridge.get_all_plugins()
+    results = []
+    
+    print("🔍 Checking for plugin updates...")
+    print()
+    
+    for info in plugins:
+        plugin_id = info.manifest.id
+        current_version = info.manifest.version
+        
+        # Get repository/homepage from manifest
+        update_source = None
+        manifest_path = plugins_dir / plugin_id / "manifest.json"
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, 'r', encoding='utf-8') as f:
+                    manifest = json.load(f)
+                update_source = manifest.get('repository') or manifest.get('homepage')
+            except Exception:
+                pass
+        
+        # For now, we just report what we know
+        # In the future, this would query a registry/marketplace
+        result = {
+            "plugin_id": plugin_id,
+            "current_version": current_version,
+            "update_source": update_source,
+            "update_available": None,  # Unknown without registry
+            "latest_version": None,
+        }
+        results.append(result)
+        
+        if not as_json:
+            print(f"  {plugin_id}: v{current_version}")
+            if update_source:
+                print(f"     Source: {update_source}")
+            else:
+                print(f"     ⚠️ No update source configured")
+    
+    if as_json:
+        print(json.dumps({"plugins": results}, indent=2))
+    else:
+        print()
+        print("ℹ️ Automatic update checking requires a plugin registry.")
+        print("   Use 'jupiter plugins update <id> --source <url>' to update manually.")

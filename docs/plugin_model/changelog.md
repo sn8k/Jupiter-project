@@ -1,5 +1,25 @@
 # Changelog – Example Plugin (Modèle v2)
 
+## [0.4.0] – Conforme à plugins_architecture.md v0.6.0
+
+### Ajouté
+- Documentation des nouvelles fonctionnalités Bridge v2 complètes
+- Section Monitoring dans plugin.yaml (rate_limit, timeouts)
+- Section Governance dans plugin.yaml (feature_flags, protected)
+- Capabilities health intégré dans capabilities au lieu de healthcheck séparé
+- Documentation CLI complète (install, uninstall, reload, sign, verify, etc.)
+- Références aux nouveaux modules : notifications, usage_stats, error_report
+- Support du dry-run dans le cadre Settings
+- Support des logs centralisés multi-plugin
+- Documentation circuit breaker et rate limiting
+- Documentation permissions preview lors installation
+
+### Modifié
+- plugin.yaml : version 0.3.0 → 0.4.0
+- __init__.py : version 0.3.0 → 0.4.0
+- README.md : mise à jour complète pour v0.6.0
+- jupiter.version : ">=1.8.0,<3.0.0"
+
 ## [0.3.0] – 2025-12-03
 
 ### Ajouté (conforme à plugins_architecture.md v0.4.0)

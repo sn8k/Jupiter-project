@@ -1,0 +1,117 @@
+# Metrics Manager Plugin Manifest v2
+# Provides centralized metrics observation and management for Jupiter
+# Version: 1.0.2 - Fixed API URLs in WebUI panel
+
+id: metrics_manager
+name: Metrics Manager
+version: 1.0.2
+description: Centralized metrics observation, visualization, and management for Jupiter plugins and core components.
+type: tool
+jupiter_version: ">=1.8.0"
+
+# Optional metadata
+author:
+  name: Jupiter Team
+  url: https://github.com/sn8k/Jupiter-project
+license: MIT
+homepage: https://github.com/sn8k/Jupiter-project
+trust_level: community
+
+# Permissions (array format per schema)
+permissions:
+  - fs_read
+  - emit_events
+  - register_api
+  - register_ui
+
+# Capabilities
+capabilities:
+  metrics:
+    enabled: true
+    export_format: json
+  jobs:
+    enabled: true
+    max_concurrent: 2
+    timeout: 60
+  health_check:
+    enabled: true
+    interval: 30
+
+# Entrypoints
+entrypoints:
+  init: "__init__:init"
+  shutdown: "__init__:shutdown"
+  health: "__init__:health"
+  metrics: "__init__:metrics"
+
+# CLI contributions (none for this plugin)
+cli:
+  commands: []
+
+# API contributions
+api:
+  router: "server.api:router"
+  prefix: /metrics_manager
+  tags:
+    - metrics_manager
+    - monitoring
+
+# UI contributions
+ui:
+  panels:
+    - id: main
+      location: sidebar
+      route: /plugins/metrics_manager
+      title_key: plugin.metrics_manager.title
+      icon: "📊"
+      order: 30
+  assets:
+    js:
+      - web/panels/main.js
+  i18n:
+    path: web/lang
+    languages:
+      - en
+      - fr
+
+# Configuration
+config:
+  schema:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+        default: true
+      refresh_interval:
+        type: integer
+        default: 5000
+      history_size:
+        type: integer
+        default: 100
+      export_format:
+        type: string
+        enum:
+          - json
+          - prometheus
+        default: json
+      show_system_metrics:
+        type: boolean
+        default: true
+      show_plugin_metrics:
+        type: boolean
+        default: true
+      chart_type:
+        type: string
+        enum:
+          - line
+          - bar
+          - area
+        default: line
+  defaults:
+    enabled: true
+    refresh_interval: 5000
+    history_size: 100
+    export_format: json
+    show_system_metrics: true
+    show_plugin_metrics: true
+    chart_type: line

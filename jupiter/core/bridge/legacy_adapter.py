@@ -1,6 +1,11 @@
 """Legacy Plugin Adapter for Jupiter Bridge.
 
-Version: 0.1.0
+Version: 0.2.0
+
+.. deprecated:: 1.8.51
+    This module is deprecated and will be removed in Jupiter 2.0.0.
+    All plugins should now use the Bridge v2 manifest system with plugin.yaml.
+    See docs/PLUGIN_MIGRATION_GUIDE.md for migration instructions.
 
 This module provides backward compatibility for legacy plugins that use the
 old Plugin protocol (on_scan, on_analyze, configure) rather than the new
@@ -13,6 +18,9 @@ The adapter:
 - Registers legacy plugins with restrictive default permissions
 
 This allows gradual migration without breaking existing functionality.
+
+NOTE: All built-in plugins have been migrated to Bridge v2 (plugin.yaml).
+This adapter is now only needed for third-party legacy plugins.
 """
 
 from __future__ import annotations
@@ -21,6 +29,7 @@ import importlib
 import inspect
 import logging
 import sys
+import warnings
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Type, Protocol, runtime_checkable
@@ -33,7 +42,16 @@ from jupiter.core.bridge.exceptions import BridgeError
 
 logger = logging.getLogger(__name__)
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
+
+# Emit deprecation warning on import
+warnings.warn(
+    "The legacy_adapter module is deprecated and will be removed in Jupiter 2.0.0. "
+    "All plugins should use Bridge v2 manifests (plugin.yaml). "
+    "See docs/PLUGIN_MIGRATION_GUIDE.md for migration instructions.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
 class LegacyPluginError(BridgeError):
@@ -118,12 +136,21 @@ class LegacyUIPlugin(Protocol):
 def is_legacy_plugin(cls: Type[Any]) -> bool:
     """Check if a class is a legacy plugin.
     
+    .. deprecated:: 1.8.51
+        All built-in plugins now use Bridge v2 manifests.
+        This function will be removed in Jupiter 2.0.0.
+    
     Args:
         cls: The class to check.
         
     Returns:
         True if the class implements the legacy Plugin protocol.
     """
+    warnings.warn(
+        "is_legacy_plugin() is deprecated. Use Bridge v2 manifests instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     if not inspect.isclass(cls):
         return False
     
@@ -145,12 +172,21 @@ def is_legacy_plugin(cls: Type[Any]) -> bool:
 def is_legacy_ui_plugin(cls: Type[Any]) -> bool:
     """Check if a class is a legacy UI plugin.
     
+    .. deprecated:: 1.8.51
+        All built-in plugins now use Bridge v2 manifests.
+        This function will be removed in Jupiter 2.0.0.
+    
     Args:
         cls: The class to check.
         
     Returns:
         True if the class implements the legacy UIPlugin protocol.
     """
+    warnings.warn(
+        "is_legacy_ui_plugin() is deprecated. Use Bridge v2 manifests instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     if not is_legacy_plugin(cls):
         return False
     
@@ -268,6 +304,10 @@ class LegacyManifest:
 class LegacyPluginWrapper:
     """Wrapper that adapts a legacy plugin to a Bridge-compatible interface.
     
+    .. deprecated:: 1.8.51
+        This class is deprecated and will be removed in Jupiter 2.0.0.
+        All plugins should use Bridge v2 manifests (plugin.yaml).
+    
     This wrapper:
     - Holds a reference to the legacy plugin instance
     - Translates Bridge events to legacy hook calls
@@ -288,6 +328,11 @@ class LegacyPluginWrapper:
             manifest: The auto-generated manifest.
             legacy_instance: Instance of the legacy plugin class.
         """
+        warnings.warn(
+            "LegacyPluginWrapper is deprecated. Migrate to Bridge v2 manifests.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self._manifest = manifest
         self._legacy = legacy_instance
         self._config: Dict[str, Any] = {}
@@ -451,6 +496,11 @@ class LegacyPluginWrapper:
 class LegacyAdapter:
     """Adapter for detecting and loading legacy plugins.
     
+    .. deprecated:: 1.8.51
+        This class is deprecated and will be removed in Jupiter 2.0.0.
+        All built-in plugins now use Bridge v2 manifests (plugin.yaml).
+        See docs/PLUGIN_MIGRATION_GUIDE.md for migration instructions.
+    
     The LegacyAdapter scans the legacy plugins directory, detects plugins
     using the old protocol, wraps them with auto-generated manifests,
     and provides them to the Bridge for registration.
@@ -465,6 +515,13 @@ class LegacyAdapter:
     
     def __init__(self):
         """Initialize the legacy adapter."""
+        warnings.warn(
+            "LegacyAdapter is deprecated and will be removed in Jupiter 2.0.0. "
+            "All plugins should use Bridge v2 manifests (plugin.yaml). "
+            "See docs/PLUGIN_MIGRATION_GUIDE.md for migration.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self._discovered: Dict[str, LegacyPluginWrapper] = {}
         self._errors: Dict[str, str] = {}
         self._scan_count = 0
